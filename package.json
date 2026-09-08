@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev:frontend": "npm run dev --prefix frontend",
-    "dev:backend": "python scripts/dev-backend.py"
+    "dev:backend": "python scripts/dev-backend.py",
+    "migrate": "python scripts/migrate.py"
   }
 }

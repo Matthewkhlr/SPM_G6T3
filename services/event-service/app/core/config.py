@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    database_url: str = "sqlite:///./event.db"
+    database_url: str = "mysql+pymysql://connectsphere:connectsphere@localhost:3309/event"
     cors_origin: str = "http://localhost:5173"
     venue_service_url: str = "http://localhost:8003"
     equipment_service_url: str = "http://localhost:8004"

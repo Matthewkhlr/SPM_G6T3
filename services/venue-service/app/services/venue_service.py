@@ -7,15 +7,23 @@ from app.schemas.venue import VenueOut
 from shared.exceptions.http import not_found
 
 
+def _as_list(value) -> list:
+    if isinstance(value, list):
+        return value
+    if not value:
+        return []
+    return json.loads(value)
+
+
 def _to_out(row: VenueInfo) -> VenueOut:
     return VenueOut(
         venueId=row.venueId,
         name=row.name,
         location=row.location,
         capacity=row.capacity,
-        facilities=json.loads(row.facilities),
+        facilities=_as_list(row.facilities),
         accessibility=row.accessibility,
-        layouts=json.loads(row.layouts),
+        layouts=_as_list(row.layouts),
         operatingHours=row.operatingHours,
         turnaroundMinutes=row.turnaroundMinutes,
     )

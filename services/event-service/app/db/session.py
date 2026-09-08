@@ -22,6 +22,5 @@ def get_db():
 
 
 def init_db():
-    from app import models  # noqa: F401
-
-    Base.metadata.create_all(bind=engine)
+    """Schema is owned by Alembic. Kept as a no-op so existing imports stay stable."""
+    return
