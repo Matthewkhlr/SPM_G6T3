@@ -1,5 +1,8 @@
 import axiosClient from "./axiosClient";
 
-export const getUser = (userId) => axiosClient.get(`/users/${userId}`);
-export const updateUserProfile = (userId, data) => axiosClient.patch(`/users/${userId}`, data);
-export const getUserRole = (userId) => axiosClient.get(`/users/${userId}/role`);
+export const login = (username, password) =>
+  axiosClient.post("/users/login", { username, password });
+
+export const getMe = () => axiosClient.get("/users/me");
+
+export const getUsers = () => axiosClient.get("/users");
