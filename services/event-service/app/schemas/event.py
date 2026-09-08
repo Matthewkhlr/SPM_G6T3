@@ -8,7 +8,7 @@ class EventOut(BaseModel):
     eventName: str
     status: str
     registrationEnabled: bool
-    registrationOpensAt: datetime
-    registrationClosesAt: datetime
+    registrationOpensAt: datetime | None = None
+    registrationClosesAt: datetime | None = None
     capacity: int
     registeredCount: int = 0

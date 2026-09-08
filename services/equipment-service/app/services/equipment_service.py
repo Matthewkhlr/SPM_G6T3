@@ -12,8 +12,8 @@ def _status_for(db: Session, equipment_id: str) -> str:
         return "available"
     if any(unit.status == "maintenance" for unit in units):
         return "maintenance"
-    if any(unit.status == "reserved" for unit in units):
-        return "reserved"
+    if any(unit.status == "damaged" for unit in units):
+        return "damaged"
     return "available"
 
 
@@ -23,7 +23,7 @@ def list_equipment(db: Session) -> list[EquipmentOut]:
             equipmentId=row.equipmentId,
             name=row.name,
             category=row.category,
-            notes=row.notes,
+            notes=row.description,
             status=_status_for(db, row.equipmentId),
         )
         for row in db.query(EquipmentInfo).all()
@@ -38,6 +38,6 @@ def get_equipment(db: Session, equipment_id: str) -> EquipmentOut:
         equipmentId=row.equipmentId,
         name=row.name,
         category=row.category,
-        notes=row.notes,
+        notes=row.description,
         status=_status_for(db, equipment_id),
     )

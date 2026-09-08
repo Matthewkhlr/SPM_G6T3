@@ -64,9 +64,23 @@ services:
       - registration_data:/var/lib/mysql
       - ./mysql/init/registration.sql:/docker-entrypoint-initdb.d/01-registration.sql
 
+  notification-db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: connectsphere
+      MYSQL_DATABASE: notification
+      MYSQL_USER: connectsphere
+      MYSQL_PASSWORD: connectsphere
+    ports:
+      - "3312:3306"
+    volumes:
+      - notification_data:/var/lib/mysql
+      - ./mysql/init/notification.sql:/docker-entrypoint-initdb.d/01-notification.sql
+
 volumes:
   user_data:
   event_data:
   venue_data:
   equipment_data:
   registration_data:
+  notification_data:
