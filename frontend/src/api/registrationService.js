@@ -1,8 +1,7 @@
 import axiosClient from "./axiosClient";
 
-export const getRegistrationSettings = (eventId) => axiosClient.get(`/registrations/${eventId}`);
-export const registerAttendee = (data) => axiosClient.post("/registrations/attendees", data);
-export const getAttendeeRegistration = (registrationId) =>
-  axiosClient.get(`/registrations/attendees/${registrationId}`);
-export const updateAttendeeStatus = (registrationId, status) =>
-  axiosClient.patch(`/registrations/attendees/${registrationId}`, { status });
+export const getRegistrations = (eventId) =>
+  axiosClient.get("/registrations", { params: { eventId } });
+
+export const registerForEvent = (eventId, name, email) =>
+  axiosClient.post("/registrations", { eventId, name, email });
