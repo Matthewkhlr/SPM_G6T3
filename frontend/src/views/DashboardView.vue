@@ -41,11 +41,13 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { signOut } from 'firebase/auth'
 import AppLogo from '../components/shared/AppLogo.vue'
 import DashboardHome from '../features/dashboard/DashboardHome.vue'
 import VenueCatalogue from '../features/venue-catalogue/VenueCatalogue.vue'
 import BrowseEvents from '../features/browse-events/BrowseEvents.vue'
 import { roles } from '../config/roles.js'
+import { auth } from '../firebase.js'
 import { session, logoutSession } from '../store/session.js'
 
 const router = useRouter()
@@ -55,7 +57,8 @@ const activeTab = ref('Dashboard')
 const hasVenueTab = computed(() => currentData.value.tabs.includes('Venue Catalogue'))
 const hasEventsTab = computed(() => currentData.value.tabs.includes('Browse Events'))
 
-function logout() {
+async function logout() {
+  await signOut(auth)
   logoutSession()
   router.replace('/login')
 }

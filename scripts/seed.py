@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import create_engine, text
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from firebase_admin import auth as firebase_auth
+from shared.auth.tokens import get_firebase_app
 
 URLS = {
     "user": "mysql+pymysql://connectsphere:connectsphere@localhost:3307/user",
@@ -21,6 +28,18 @@ def _empty(conn, table: str) -> bool:
     return conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar() == 0
 
 
+def _ensure_firebase_user(email: str, password: str, display_name: str) -> str:
+    """Create the Firebase Auth account for a demo user, or fetch it if it already exists."""
+    app = get_firebase_app()
+    try:
+        record = firebase_auth.create_user(
+            email=email, password=password, display_name=display_name, app=app
+        )
+    except firebase_auth.EmailAlreadyExistsError:
+        record = firebase_auth.get_user_by_email(email, app=app)
+    return record.uid
+
+
 def seed_user() -> None:
     engine = create_engine(URLS["user"])
     now = datetime.utcnow()
@@ -33,34 +52,49 @@ def seed_user() -> None:
                 ),
                 {"id": "org-1", "name": "Apex Partners", "created_at": now},
             )
-        if _empty(conn, "users"):
-            users = [
-                ("u1", "organiser@connectsphere.com", "Alice Tan", "organiser", "org-1", None, "organiser123"),
-                ("u2", "coordinator@connectsphere.com", "Ben Lee", "coordinator", None, "Events", "coord123"),
-                ("u3", "venue@connectsphere.com", "Vinod Kumar", "venue", None, "Venues", "venue123"),
-                ("u4", "tech@connectsphere.com", "Tia Ho", "techsupport", None, "Technical Support", "tech123"),
-                ("u5", "attendee@connectsphere.com", "Amy Wong", "attendee", None, None, "attend123"),
-            ]
-            for user_id, email, name, role, org_id, department, password in users:
+
+        users = [
+            ("u1", "organiser@connectsphere.com", "Alice Tan", "organiser", "org-1", None, "organiser123"),
+            ("u2", "coordinator@connectsphere.com", "Ben Lee", "coordinator", None, "Events", "coord123"),
+            ("u3", "venue@connectsphere.com", "Vinod Kumar", "venue", None, "Venues", "venue123"),
+            ("u4", "tech@connectsphere.com", "Tia Ho", "techsupport", None, "Technical Support", "tech123"),
+            ("u5", "attendee@connectsphere.com", "Amy Wong", "attendee", None, None, "attend123"),
+        ]
+        for user_id, email, name, role, org_id, department, password in users:
+            firebase_uid = _ensure_firebase_user(email, password, name)
+            existing = conn.execute(
+                text("SELECT user_id FROM users WHERE email = :email"), {"email": email}
+            ).first()
+            if existing:
                 conn.execute(
                     text(
-                        "INSERT INTO users (user_id, email, display_name, role, organisation_id, "
-                        "department, phone, communication_preferences, firebase_uid, password_hash, "
-                        "created_at, updated_at) VALUES (:user_id, :email, :display_name, :role, "
-                        ":organisation_id, :department, NULL, NULL, NULL, :password_hash, :created_at, :updated_at)"
+                        "UPDATE users SET firebase_uid = :firebase_uid, password_hash = :password_hash "
+                        "WHERE email = :email"
                     ),
-                    {
-                        "user_id": user_id,
-                        "email": email,
-                        "display_name": name,
-                        "role": role,
-                        "organisation_id": org_id,
-                        "department": department,
-                        "password_hash": password,
-                        "created_at": now,
-                        "updated_at": now,
-                    },
+                    {"firebase_uid": firebase_uid, "password_hash": password, "email": email},
                 )
+                continue
+            conn.execute(
+                text(
+                    "INSERT INTO users (user_id, email, display_name, role, organisation_id, "
+                    "department, phone, communication_preferences, firebase_uid, password_hash, "
+                    "created_at, updated_at) VALUES (:user_id, :email, :display_name, :role, "
+                    ":organisation_id, :department, NULL, NULL, :firebase_uid, :password_hash, "
+                    ":created_at, :updated_at)"
+                ),
+                {
+                    "user_id": user_id,
+                    "email": email,
+                    "display_name": name,
+                    "role": role,
+                    "organisation_id": org_id,
+                    "department": department,
+                    "firebase_uid": firebase_uid,
+                    "password_hash": password,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
 
 
 def seed_event() -> None:

@@ -37,8 +37,8 @@ src/
     browse-events/
       BrowseEvents.vue      "Browse Events" tab (Attendee)
       events.data.js         its hardcoded data + eligibility rule logic
-  auth/                    Cross-cutting, not a tab — login credential check
-    users.data.js
+  auth/                    Cross-cutting, not a tab
+    users.data.js          Demo account reference shown on the login page
   store/                   Cross-cutting, not a tab — reactive session state
     session.js
   api/                     Thin axios wrappers — not microservices

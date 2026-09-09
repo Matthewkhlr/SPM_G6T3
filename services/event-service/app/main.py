@@ -1,8 +1,9 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.routers.event import router as event_router
+from shared.auth.deps import require_authenticated_user
 
 app = FastAPI(title="event-service")
 app.add_middleware(
@@ -19,4 +20,4 @@ def health():
     return {"service": "event-service", "status": "ok"}
 
 
-app.include_router(event_router)
+app.include_router(event_router, dependencies=[Depends(require_authenticated_user)])

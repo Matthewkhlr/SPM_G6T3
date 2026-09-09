@@ -64,8 +64,8 @@ Lightweight client record. Multiple event organisers may belong to the same orga
 | department | VARCHAR(255) nullable | Internal staff |
 | phone | VARCHAR(64) nullable | |
 | communication_preferences | JSON nullable | |
-| firebase_uid | VARCHAR(128) nullable | Auth later |
-| password_hash | VARCHAR(255) | Local demo until Firebase |
+| firebase_uid | VARCHAR(128) nullable | Links to the Firebase Auth account |
+| password_hash | VARCHAR(255) | Plaintext for now — hashing deferred |
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
 

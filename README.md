@@ -1,6 +1,6 @@
 # Event Platform
 
-Full-stack event management platform. Vue frontend, Python FastAPI microservices on the backend, MySQL per service. Firebase Authentication is the intended identity layer; local demo login still issues a JWT from `user-service` until Firebase is wired.
+Full-stack event management platform. Vue frontend, Python FastAPI microservices on the backend, MySQL per service. Firebase Authentication is the identity layer: the frontend signs in directly against Firebase, and every service independently verifies the resulting ID token.
 
 **Developers:** start here — [docs/architecture.md](docs/architecture.md) (file tree, ports, how to run frontend / backend / MySQL). Data model: [docs/data-model.md](docs/data-model.md).
 
@@ -34,7 +34,7 @@ frontend/src/api/
   notificationService.js
 ```
 
-`axiosClient.js` points at the API gateway (`http://localhost:8000`). Attach a Bearer token after login (`localStorage.idToken`), then swap that for Firebase `getIdToken()` in the interceptor.
+`axiosClient.js` points at the API gateway (`http://localhost:8000`) and attaches a Bearer token on every request via `auth.currentUser.getIdToken()`, which returns Firebase's cached ID token and transparently refreshes it once expired.
 
 ## Backend
 

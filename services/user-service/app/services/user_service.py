@@ -1,26 +1,26 @@
 from sqlalchemy.orm import Session
 
 from app.models.user import User
-from shared.auth.tokens import create_access_token
-from shared.exceptions.http import not_found, unauthorized
+from shared.exceptions.http import not_found
 
 
-def login(db: Session, username: str, password: str) -> tuple[str, User]:
-    if not username or not password:
-        raise unauthorized("Invalid email or password.")
-    user = db.query(User).filter(User.email == username).first()
-    if not user or user.password != password:
-        raise unauthorized("Invalid email or password.")
-    token = create_access_token(
-        {"sub": user.userId, "role": user.role, "name": user.userName, "email": user.email}
-    )
-    return token, user
+def get_by_firebase_claims(db: Session, uid: str, email: str | None) -> User:
+    """Resolve a verified Firebase token to a local user.
 
-
-def get_by_id(db: Session, user_id: str) -> User:
-    user = db.query(User).filter(User.userId == user_id).first()
+    Accounts are pre-seeded in this table before their matching Firebase
+    account exists, so the first successful login for an email links the
+    two by writing firebase_uid onto the existing row.
+    """
+    user = db.query(User).filter(User.firebaseUid == uid).first()
+    if user:
+        return user
+    if not email:
+        raise not_found("User not found")
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise not_found("User not found")
+    user.firebaseUid = uid
+    db.commit()
     return user
 
 

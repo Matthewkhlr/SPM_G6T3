@@ -17,17 +17,41 @@
         <p v-if="showErrors && !username" class="field-error">Email is required.</p>
 
         <label for="password">Password</label>
-        <input id="password" v-model="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+        <div class="password-field">
+          <input
+            id="password"
+            v-model="password"
+            :type="showPassword ? 'text' : 'password'"
+            placeholder="••••••••"
+            autocomplete="current-password"
+          />
+          <button
+            type="button"
+            class="password-toggle"
+            :aria-label="showPassword ? 'Hide password' : 'Show password'"
+            @click="showPassword = !showPassword"
+          >
+            <svg v-if="showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M3 12s3.6-7 9-7 9 7 9 7-3.6 7-9 7-9-7-9-7Z" stroke-linecap="round" stroke-linejoin="round" />
+              <circle cx="12" cy="12" r="3" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M3 3l18 18" stroke-linecap="round" />
+              <path
+                d="M10.6 5.2A9.8 9.8 0 0 1 12 5c5.4 0 9 7 9 7a14.5 14.5 0 0 1-3.1 3.8M6.6 6.6C4.6 8 3 12 3 12s3.6 7 9 7a8.6 8.6 0 0 0 3.4-.7M9.9 9.9a3 3 0 0 0 4.2 4.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
         <p v-if="showErrors && !password" class="field-error">Password is required.</p>
 
         <p v-if="authError" class="auth-error">{{ authError }}</p>
 
-        <button class="btn btn-solid submit-btn" type="submit">
-          Log in
+        <button class="btn btn-solid submit-btn" type="submit" :disabled="isSubmitting">
+          {{ isSubmitting ? 'Logging in…' : 'Log in' }}
         </button>
-
-        <p class="hint">No account? <span class="link">Sign up as Event Organiser</span></p>
-        <p class="tbd">Internal-staff account provisioning — TBD in customer Q&amp;A</p>
 
         <details class="demo-creds">
           <summary>Demo credentials (for markers/testing)</summary>
@@ -43,17 +67,22 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { signInWithEmailAndPassword } from 'firebase/auth'
 import AnimatedOrb from '../components/shared/AnimatedOrb.vue'
-import { users, findUser } from '../auth/users.data.js'
+import { auth } from '../firebase.js'
+import { users } from '../auth/users.data.js'
+import { getMe } from '../api/userService.js'
 import { loginSession } from '../store/session.js'
 
 const username = ref('')
 const password = ref('')
+const showPassword = ref(false)
 const showErrors = ref(false)
 const authError = ref('')
+const isSubmitting = ref(false)
 const router = useRouter()
 
-function submit() {
+async function submit() {
   authError.value = ''
 
   // Empty-field validation blocks submission (acceptance criterion).
@@ -62,15 +91,18 @@ function submit() {
     return
   }
 
-  const user = findUser(username.value, password.value)
-  if (!user) {
+  isSubmitting.value = true
+  try {
+    await signInWithEmailAndPassword(auth, username.value, password.value)
+    const { data: profile } = await getMe()
+    loginSession({ role: profile.role, name: profile.userName })
+    router.push('/app')
+  } catch {
     // Generic message on invalid credentials — does not reveal which field was wrong.
     authError.value = 'Invalid email or password.'
-    return
+  } finally {
+    isSubmitting.value = false
   }
-
-  loginSession(user)
-  router.push('/app')
 }
 </script>
 
@@ -153,6 +185,34 @@ function submit() {
   box-shadow: 0 0 0 3px rgba(124, 77, 255, .16);
 }
 
+.password-field { position: relative; display: flex; align-items: center; margin-bottom: 16px; }
+.password-field input { padding-right: 44px; margin-bottom: 0; }
+.password-toggle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 6px;
+  margin: auto 0;
+  height: 30px;
+  width: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 0;
+  color: #1A1A1A;
+  cursor: pointer;
+  transition: background .2s var(--ease-out);
+}
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  background: rgba(0, 0, 0, .08);
+}
+.password-toggle svg { width: 17px; height: 17px; }
+
 .submit-btn { width: 100%; padding: 14px; margin-top: 8px; }
 
 .field-error { color: #FF8A76; font-size: 11px; margin: -10px 0 12px; }
@@ -166,9 +226,6 @@ function submit() {
   background: rgba(255, 138, 118, .07);
 }
 
-.hint { font-size: 12px; text-align: center; color: var(--muted); margin-top: 18px; }
-.link { color: var(--iris-soft); cursor: pointer; }
-.tbd { font-size: 11px; text-align: center; color: rgba(203, 188, 240, .3); margin-top: 14px; }
 
 .demo-creds { margin-top: 22px; font-size: 11px; color: var(--muted); }
 .demo-creds summary { cursor: pointer; letter-spacing: .04em; }

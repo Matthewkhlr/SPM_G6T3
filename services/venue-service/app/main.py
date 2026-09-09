@@ -1,8 +1,9 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.routers.venue import router as venue_router
+from shared.auth.deps import require_authenticated_user
 
 app = FastAPI(title="venue-service")
 app.add_middleware(
@@ -19,4 +20,4 @@ def health():
     return {"service": "venue-service", "status": "ok"}
 
 
-app.include_router(venue_router)
+app.include_router(venue_router, dependencies=[Depends(require_authenticated_user)])

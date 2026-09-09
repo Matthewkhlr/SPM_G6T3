@@ -1,8 +1,8 @@
 import { reactive } from 'vue'
 
-// Front-end-only session stand-in. A real build would store a token (not the
-// role itself) and verify it against the server on every protected request —
-// this only guards client-side navigation.
+// Mirrors the signed-in user's backend profile (from GET /users/me), keyed
+// off Firebase's own auth state so a page refresh keeps the session — the
+// actual authorization check still happens server-side on every request.
 export const session = reactive({
   isAuthenticated: false,
   role: null,

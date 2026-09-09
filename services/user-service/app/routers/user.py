@@ -1,29 +1,16 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.user import LoginRequest, LoginResponse, UserPublic
+from app.schemas.user import UserPublic
 from app.services import user_service
-from shared.auth.tokens import verify_bearer_token
-from shared.exceptions.http import unauthorized
+from shared.auth.deps import require_authenticated_user
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-def current_user(authorization: str | None = Header(default=None), db: Session = Depends(get_db)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise unauthorized()
-    try:
-        payload = verify_bearer_token(authorization[7:])
-    except ValueError:
-        raise unauthorized("Invalid or expired token")
-    return user_service.get_by_id(db, payload["sub"])
-
-
-@router.post("/login", response_model=LoginResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)):
-    token, user = user_service.login(db, body.username, body.password)
-    return LoginResponse(token=token, user=UserPublic.model_validate(user))
+def current_user(claims: dict = Depends(require_authenticated_user), db: Session = Depends(get_db)):
+    return user_service.get_by_firebase_claims(db, claims["uid"], claims.get("email"))
 
 
 @router.get("/me", response_model=UserPublic)

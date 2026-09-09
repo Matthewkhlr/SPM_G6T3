@@ -1,8 +1,9 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.routers.equipment import router as equipment_router
+from shared.auth.deps import require_authenticated_user
 
 app = FastAPI(title="equipment-service")
 app.add_middleware(
@@ -19,4 +20,4 @@ def health():
     return {"service": "equipment-service", "status": "ok"}
 
 
-app.include_router(equipment_router)
+app.include_router(equipment_router, dependencies=[Depends(require_authenticated_user)])
