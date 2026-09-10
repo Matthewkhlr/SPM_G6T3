@@ -67,19 +67,16 @@ def seed_user() -> None:
             ).first()
             if existing:
                 conn.execute(
-                    text(
-                        "UPDATE users SET firebase_uid = :firebase_uid, password_hash = :password_hash "
-                        "WHERE email = :email"
-                    ),
-                    {"firebase_uid": firebase_uid, "password_hash": password, "email": email},
+                    text("UPDATE users SET firebase_uid = :firebase_uid WHERE email = :email"),
+                    {"firebase_uid": firebase_uid, "email": email},
                 )
                 continue
             conn.execute(
                 text(
                     "INSERT INTO users (user_id, email, display_name, role, organisation_id, "
-                    "department, phone, communication_preferences, firebase_uid, password_hash, "
+                    "department, phone, communication_preferences, firebase_uid, "
                     "created_at, updated_at) VALUES (:user_id, :email, :display_name, :role, "
-                    ":organisation_id, :department, NULL, NULL, :firebase_uid, :password_hash, "
+                    ":organisation_id, :department, NULL, NULL, :firebase_uid, "
                     ":created_at, :updated_at)"
                 ),
                 {
@@ -90,7 +87,6 @@ def seed_user() -> None:
                     "organisation_id": org_id,
                     "department": department,
                     "firebase_uid": firebase_uid,
-                    "password_hash": password,
                     "created_at": now,
                     "updated_at": now,
                 },

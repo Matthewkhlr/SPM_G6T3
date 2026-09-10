@@ -22,7 +22,6 @@ class User(Base):
         "communication_preferences", JSON, nullable=True
     )
     firebaseUid: Mapped[str | None] = mapped_column("firebase_uid", String(128), nullable=True)
-    password: Mapped[str] = mapped_column("password_hash", String(255))
     createdAt: Mapped[datetime] = mapped_column("created_at", DateTime, default=datetime.utcnow)
     updatedAt: Mapped[datetime] = mapped_column(
         "updated_at", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
