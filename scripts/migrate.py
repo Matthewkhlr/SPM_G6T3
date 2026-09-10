@@ -67,10 +67,22 @@ def upgrade(service: str, url: str) -> None:
     )
 
 
+def _require_deps() -> None:
+    try:
+        import alembic  # noqa: F401
+        import pymysql  # noqa: F401
+    except ImportError as exc:
+        raise SystemExit(
+            f"Missing dependency ({exc}). Activate the project venv, then run:\n"
+            "  pip install -r services/user-service/requirements.txt"
+        ) from exc
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Migrate ConnectSphere MySQL databases.")
     parser.add_argument("--no-seed", action="store_true", help="Skip demo data inserts.")
     args = parser.parse_args()
+    _require_deps()
 
     for service, url, port in SERVICES:
         print(f"waiting for {service} MySQL on :{port}")
