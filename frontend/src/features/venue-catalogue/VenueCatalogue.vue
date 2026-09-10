@@ -3,17 +3,19 @@
     <div class="venue-list">
       <div
         v-for="venue in venues"
-        :key="venue.id"
+        :key="venue.venueId"
         class="venue-row"
-        :class="{ active: selected?.id === venue.id }"
-        @click="selected = venue"
+        :class="{ active: selected?.venueId === venue.venueId }"
+        @click="selectVenue(venue.venueId)"
       >
         <div class="venue-name">{{ venue.name }}</div>
         <div class="venue-meta">{{ venue.location }} · Capacity {{ venue.capacity }}</div>
       </div>
     </div>
 
-    <div class="venue-detail" v-if="selected">
+    <div v-if="loading" class="venue-detail empty">Loading venues…</div>
+    <div v-else-if="error" class="venue-detail empty error">{{ error }}</div>
+    <div class="venue-detail" v-else-if="selected">
       <h3>{{ selected.name }}</h3>
       <dl>
         <dt>Location</dt><dd>{{ selected.location }}</dd>
@@ -25,15 +27,41 @@
         <dt>Turnaround needed</dt><dd>{{ selected.turnaroundMinutes }} minutes between bookings</dd>
       </dl>
     </div>
-    <div class="venue-detail empty" v-else>Select a venue to view its details.</div>
+    <div class="venue-detail empty" v-else-if="venues.length">Select a venue to view its details.</div>
+    <div class="venue-detail empty" v-else>No venues are currently available.</div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { venues } from './venues.data.js'
+import { onMounted, ref } from 'vue'
+import { getVenue, getVenues } from '../../api/venueService.js'
 
-const selected = ref(venues[0])
+const venues = ref([])
+const selected = ref(null)
+const loading = ref(true)
+const error = ref('')
+
+async function selectVenue(venueId) {
+  try {
+    error.value = ''
+    const { data } = await getVenue(venueId)
+    selected.value = data
+  } catch {
+    error.value = 'Unable to load this venue’s details. Please try again.'
+  }
+}
+
+onMounted(async () => {
+  try {
+    const { data } = await getVenues()
+    venues.value = data
+    if (data.length) await selectVenue(data[0].venueId)
+  } catch {
+    error.value = 'Unable to load venues. Please try again.'
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <style scoped>
@@ -69,6 +97,7 @@ const selected = ref(venues[0])
   padding: 26px;
 }
 .venue-detail.empty { display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.venue-detail.error { color: #FF8A76; }
 .venue-detail h3 { margin: 0 0 20px; font-size: 19px; font-weight: 500; }
 dl { margin: 0; display: grid; grid-template-columns: 150px 1fr; row-gap: 12px; }
 dt { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); align-self: center; }
