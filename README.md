@@ -94,6 +94,16 @@ shared/
 
 ## Run locally
 
+Create a venv and install Python deps first. Alembic / PyMySQL live in those requirements — `python scripts/migrate.py` will fail without them.
+
+```
+python -m venv .venv
+.venv\Scripts\activate
+# macOS / Linux: source .venv/bin/activate
+pip install -r services/user-service/requirements.txt
+# repeat for the other services' requirements.txt (or at least user-service, which includes Alembic)
+```
+
 Start MySQL (required), then migrate + seed so every teammate has the same schema:
 
 ```
@@ -115,12 +125,13 @@ cd ..
 python scripts/migrate.py
 ```
 
-When you change a model, generate a revision in that service, review it, and commit it:
+When you change a model, generate a revision from the **repo root** (this sets `DATABASE_URL` and `PYTHONPATH` for you — the Unix `DATABASE_URL=... alembic ...` one-liner does not work in Windows PowerShell):
 
 ```
-cd services/event-service
-DATABASE_URL=mysql+pymysql://connectsphere:connectsphere@localhost:3309/event alembic revision --autogenerate -m "describe the change"
+python scripts/revision.py event-service -m "describe the change"
 ```
+
+Replace `event-service` with the owning service folder (`user-service`, `venue-service`, …). Review the new file under `services/<service>/alembic/versions/`, then apply it with `python scripts/migrate.py --no-seed`.
 
 Frontend:
 
@@ -130,7 +141,7 @@ npm install
 npm run dev
 ```
 
-Backend (from repo root, after `pip install -r services/user-service/requirements.txt` in a venv — install each service's requirements, or at least one of them plus Alembic):
+Backend (from repo root, with the same venv already activated):
 
 ```
 python scripts/dev-backend.py

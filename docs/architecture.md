@@ -120,15 +120,12 @@ You author a new Alembic file. Teammates do **not** write SQL by hand.
 2. Generate a revision (example: venue DB):
 
 ```bash
-cd services/venue-service
-DATABASE_URL=mysql+pymysql://connectsphere:connectsphere@localhost:3308/venue \
-  alembic revision --autogenerate -m "add column foo to venues"
+python scripts/revision.py venue-service -m "add column foo to venues"
 ```
 
 3. Open the new file in `alembic/versions/`, check it looks right, then apply it locally:
 
 ```bash
-cd ../..   # repo root
 python scripts/migrate.py --no-seed
 ```
 
@@ -337,6 +334,7 @@ infra/
 |---|---|
 | `dev-backend.py` | uvicorn all services |
 | `migrate.py` | wait for MySQL → alembic upgrade → seed |
+| `revision.py` | `alembic revision --autogenerate` for one service (Windows-safe) |
 | `seed.py` | demo rows (called by migrate unless `--no-seed`) |
 
 ### `shared/`
@@ -376,9 +374,7 @@ shared/
 2. Generate a revision, review the file, commit it:
 
 ```bash
-cd services/venue-service
-DATABASE_URL=mysql+pymysql://connectsphere:connectsphere@localhost:3308/venue \
-  alembic revision --autogenerate -m "describe the change"
+python scripts/revision.py venue-service -m "describe the change"
 ```
 
 3. Teammates: `git pull` then `python scripts/migrate.py`.
