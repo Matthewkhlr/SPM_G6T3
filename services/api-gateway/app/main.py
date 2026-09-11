@@ -3,11 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.routing.proxy import router as proxy_router
+from shared.config import parse_origins
 
 app = FastAPI(title="api-gateway")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.cors_origin],
+    allow_origins=parse_origins(settings.cors_origin),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

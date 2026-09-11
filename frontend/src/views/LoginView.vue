@@ -93,13 +93,37 @@ async function submit() {
 
   isSubmitting.value = true
   try {
-    await signInWithEmailAndPassword(auth, username.value, password.value)
-    const { data: profile } = await getMe()
-    loginSession({ role: profile.role, name: profile.userName })
-    router.push('/app')
-  } catch {
-    // Generic message on invalid credentials — does not reveal which field was wrong.
-    authError.value = 'Invalid email or password.'
+    // Step 1 — Firebase. A failure here really is a credentials problem, and
+    // the message stays generic so it never reveals which field was wrong.
+    try {
+      await signInWithEmailAndPassword(auth, username.value, password.value)
+    } catch (err) {
+      console.error('[login] Firebase sign-in failed:', err.code, err.message)
+      authError.value =
+        err.code === 'auth/network-request-failed'
+          ? 'Could not reach the authentication service. Check your connection.'
+          : 'Invalid email or password.'
+      return
+    }
+
+    // Step 2 — our own backend. Folding this into the same "invalid password"
+    // message would be a lie: the credentials were already accepted above, so
+    // anything failing here is the API (down, CORS, no matching user row).
+    try {
+      const { data: profile } = await getMe()
+      loginSession({ role: profile.role, name: profile.userName })
+      router.push('/app')
+    } catch (err) {
+      console.error('[login] /users/me failed:', err.response?.status, err.message, err)
+      const status = err.response?.status
+      if (status === 404) {
+        authError.value = 'Signed in, but no ConnectSphere profile exists for this account.'
+      } else if (status) {
+        authError.value = `Signed in, but the server rejected the session (HTTP ${status}).`
+      } else {
+        authError.value = 'Signed in, but could not reach the server. Is the backend running?'
+      }
+    }
   } finally {
     isSubmitting.value = false
   }

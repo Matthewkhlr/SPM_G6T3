@@ -30,9 +30,10 @@
       <DashboardHome v-if="activeTab === 'Dashboard'" :cards="currentData.cards" />
       <VenueCatalogue v-else-if="activeTab === 'Venue Catalogue'" />
       <BrowseEvents v-else-if="activeTab === 'Browse Events'" />
+      <CreateEvent v-else-if="activeTab === 'New Request'" />
 
       <div class="not-built" v-else>
-        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }} are functional.
+        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }} are functional.
       </div>
     </main>
   </div>
@@ -46,6 +47,7 @@ import AppLogo from '../components/shared/AppLogo.vue'
 import DashboardHome from '../features/dashboard/DashboardHome.vue'
 import VenueCatalogue from '../features/venue-catalogue/VenueCatalogue.vue'
 import BrowseEvents from '../features/browse-events/BrowseEvents.vue'
+import CreateEvent from '../features/create-event/CreateEvent.vue'
 import { roles } from '../config/roles.js'
 import { auth } from '../firebase.js'
 import { session, logoutSession } from '../store/session.js'
@@ -56,6 +58,7 @@ const activeTab = ref('Dashboard')
 
 const hasVenueTab = computed(() => currentData.value.tabs.includes('Venue Catalogue'))
 const hasEventsTab = computed(() => currentData.value.tabs.includes('Browse Events'))
+const hasNewRequestTab = computed(() => currentData.value.tabs.includes('New Request'))
 
 async function logout() {
   await signOut(auth)

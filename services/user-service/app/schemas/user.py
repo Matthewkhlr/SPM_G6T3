@@ -6,6 +6,7 @@ class UserPublic(BaseModel):
     userName: str
     email: str
     role: str
+    organisationId: str | None = None
 
     class Config:
         from_attributes = True
