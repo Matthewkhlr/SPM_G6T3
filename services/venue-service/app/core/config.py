@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     database_url: str = "mysql+pymysql://connectsphere:connectsphere@localhost:3308/venue"
     # Comma-separated; browsers treat localhost and 127.0.0.1 as distinct origins.
     cors_origin: str = "http://localhost:5173,http://127.0.0.1:5173"
+    user_service_url: str = "http://localhost:8001"
 
 
 settings = Settings()

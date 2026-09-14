@@ -46,3 +46,15 @@ class EventOut(BaseModel):
     registrationClosesAt: datetime | None = None
     capacity: int
     registeredCount: int = 0
+
+
+class EventAssignmentCreate(BaseModel):
+    coordinatorId: str = Field(min_length=1)
+
+
+class EventAssignmentOut(BaseModel):
+    assignmentId: str
+    eventId: str
+    coordinatorId: str
+    assignedBy: str
+    assignedAt: datetime

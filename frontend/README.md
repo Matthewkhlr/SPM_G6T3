@@ -72,14 +72,18 @@ pattern — don't add it to `components/shared/`.
 - Empty email/password blocks submission with inline errors
 - Wrong credentials show one generic "Invalid email or password." message
 - Correct credentials create a session and route to `/app`
-- `/app` is guarded: no session redirects to `/login`. **This is a client-side
-  guard, not an HTTP 401** — a real backend must independently reject
-  unauthenticated API calls; front-end routing can always be bypassed by
-  calling the API directly.
-- Logout clears the session and replaces the history entry; the guard re-runs
-  on every navigation (including back/forward), so Back after logout bounces
-  to `/login` rather than showing the dashboard
-- Password input is masked
+- `/app` is guarded: no session redirects to `/login`. This client-side guard
+  is a UX nicety only — every backend service independently verifies the
+  Firebase ID token and returns 401 regardless of what the frontend does, so
+  the API is protected even if this guard is bypassed entirely (e.g. calling
+  the API directly with curl/Postman)
+- Already-signed-in users hitting `/login` are redirected straight back to `/app`
+- Logout signs out of Firebase, clears the session, and replaces the history
+  entry; the guard re-runs on every navigation (including back/forward), so
+  Back after logout bounces to `/login` rather than showing the dashboard
+- Any API call that gets a 401 (e.g. an expired/revoked token) forces a
+  client-side logout + redirect, so the app never sits silently broken
+- Password input is masked, with a show/hide toggle
 
 **Event Coordinator venue catalogue**
 - `features/venue-catalogue/` — list + detail panel showing location,

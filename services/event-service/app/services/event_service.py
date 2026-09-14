@@ -4,8 +4,9 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.models.event import Event
+from app.models.event_assignment import EventAssignment
 from app.orchestration.clients import registration_count
-from app.schemas.event import EventCreate, EventOut
+from app.schemas.event import EventAssignmentCreate, EventAssignmentOut, EventCreate, EventOut
 from shared.exceptions.http import not_found
 
 
@@ -72,3 +73,31 @@ def create_event(
     db.commit()
     db.refresh(row)
     return _to_out(row)
+
+
+def assign_coordinator(
+    db: Session, event_id: str, data: EventAssignmentCreate, assigned_by: str
+) -> EventAssignmentOut:
+    event = db.query(Event).filter(Event.eventId == event_id).first()
+    if not event:
+        raise not_found("Event not found")
+    now = datetime.utcnow()
+    row = EventAssignment(
+        assignmentId=str(uuid4()),
+        eventId=event_id,
+        coordinatorId=data.coordinatorId,
+        assignedBy=assigned_by,
+        assignedAt=now,
+    )
+    db.add(row)
+    event.coordinatorId = data.coordinatorId
+    event.updatedAt = now
+    db.commit()
+    db.refresh(row)
+    return EventAssignmentOut(
+        assignmentId=row.assignmentId,
+        eventId=row.eventId,
+        coordinatorId=row.coordinatorId,
+        assignedBy=row.assignedBy,
+        assignedAt=row.assignedAt,
+    )
