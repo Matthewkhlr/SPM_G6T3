@@ -10,13 +10,12 @@ Vue 3 frontend, FastAPI microservices, **one MySQL database per service**, local
 
 ```mermaid
 flowchart LR
-  Vue["Vue frontend :5173"] --> GW["api-gateway :8000"]
-  GW --> UserSvc["user-service :8001"]
-  GW --> EventSvc["event-service :8002"]
-  GW --> VenueSvc["venue-service :8003"]
-  GW --> EquipSvc["equipment-service :8004"]
-  GW --> RegSvc["registration-service :8005"]
-  GW --> NotifSvc["notification-service :8006"]
+  Vue["Vue frontend :5173"] --> UserSvc["user-service :8001"]
+  Vue --> EventSvc["event-service :8002"]
+  Vue --> VenueSvc["venue-service :8003"]
+  Vue --> EquipSvc["equipment-service :8004"]
+  Vue --> RegSvc["registration-service :8005"]
+  Vue --> NotifSvc["notification-service :8006"]
   UserSvc --> UserDB[("user-db :3307")]
   EventSvc --> EventDB[("event-db :3309")]
   VenueSvc --> VenueDB[("venue-db :3308")]
@@ -51,7 +50,6 @@ pip install -r services/venue-service/requirements.txt
 pip install -r services/equipment-service/requirements.txt
 pip install -r services/registration-service/requirements.txt
 pip install -r services/notification-service/requirements.txt
-pip install -r services/api-gateway/requirements.txt
 ```
 
 ---
@@ -183,7 +181,6 @@ Or `npm run dev:backend`. Starts all FastAPI apps with `--reload`:
 
 | Process | Port |
 |---|---|
-| api-gateway | 8000 |
 | user-service | 8001 |
 | event-service | 8002 |
 | venue-service | 8003 |
@@ -191,7 +188,7 @@ Or `npm run dev:backend`. Starts all FastAPI apps with `--reload`:
 | registration-service | 8005 |
 | notification-service | 8006 |
 
-Health check: `http://localhost:8001/health` (swap port per service). The browser and Vue should hit the **gateway** at `http://localhost:8000`.
+Health check: `http://localhost:8001/health` (swap port per service). The browser calls each service directly on its app port (8001–8006).
 
 `dev-backend.py` sets `PYTHONPATH` to the repo root so `import shared` works.
 
@@ -205,7 +202,7 @@ npm run dev
 
 Or from repo root: `npm run dev:frontend`. Vite defaults to **http://localhost:5173**.
 
-Axios base URL is `VITE_API_URL` or `http://localhost:8000`.
+Set an optional per-service URL with `VITE_USER_SERVICE_URL`, `VITE_EVENT_SERVICE_URL`, `VITE_VENUE_SERVICE_URL`, `VITE_EQUIPMENT_SERVICE_URL`, `VITE_REGISTRATION_SERVICE_URL`, or `VITE_NOTIFICATION_SERVICE_URL`. Local defaults are ports 8001–8006.
 
 ### Demo logins
 
@@ -267,7 +264,7 @@ frontend/
     ├── main.js
     ├── App.vue
     ├── firebase.js              placeholder — Auth later
-    ├── api/                     axios wrappers → gateway :8000
+    ├── api/                     axios wrappers → owning microservice
     │   ├── axiosClient.js
     │   ├── userService.js
     │   ├── eventService.js
@@ -309,8 +306,6 @@ services/<name>/
 ```
 
 `event-service` also has `app/orchestration/` — HTTP clients to other services (no cross-DB joins).
-
-`api-gateway` has no database. It verifies the bearer token and proxies to the services above.
 
 ### `infra/`
 
@@ -361,10 +356,9 @@ shared/
 `getEvent(eventId)`:
 
 1. Vue → `frontend/src/api/eventService.js`
-2. `GET /events/{id}` → **api-gateway :8000**
-3. Gateway → **event-service** router
-4. event-service reads `event` DB; registration count via HTTP to **registration-service**
-5. JSON back through the gateway to Vue
+2. `GET /events/{id}` → **event-service :8002**
+3. event-service verifies the Firebase token, reads `event` DB, and gets the registration count via HTTP to **registration-service**
+4. JSON returns directly to Vue
 
 ---
 

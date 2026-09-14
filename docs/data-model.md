@@ -19,13 +19,12 @@ Out of scope for this schema: programme/sessions, comments, documents, reports, 
 
 ```mermaid
 flowchart LR
-  Vue[Vue frontend] --> GW[api-gateway]
-  GW --> UserSvc[user-service]
-  GW --> EventSvc[event-service]
-  GW --> VenueSvc[venue-service]
-  GW --> EquipSvc[equipment-service]
-  GW --> RegSvc[registration-service]
-  GW --> NotifSvc[notification-service]
+  Vue[Vue frontend] --> UserSvc[user-service]
+  Vue --> EventSvc[event-service]
+  Vue --> VenueSvc[venue-service]
+  Vue --> EquipSvc[equipment-service]
+  Vue --> RegSvc[registration-service]
+  Vue --> NotifSvc[notification-service]
   UserSvc --> UserDB[(user-db :3307)]
   EventSvc --> EventDB[(event-db :3309)]
   VenueSvc --> VenueDB[(venue-db :3308)]

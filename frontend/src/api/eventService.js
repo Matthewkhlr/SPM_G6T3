@@ -1,4 +1,6 @@
-import axiosClient from "./axiosClient";
+import { createServiceClient } from "./axiosClient";
+
+const axiosClient = createServiceClient("event");
 
 export const getEvents = () => axiosClient.get("/events");
 

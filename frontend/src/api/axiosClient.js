@@ -2,40 +2,40 @@ import axios from "axios";
 import { auth } from "../firebase.js";
 import { logoutSession } from "../store/session.js";
 
-const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
-});
+const serviceUrls = {
+  user: import.meta.env.VITE_USER_SERVICE_URL || "http://localhost:8001",
+  event: import.meta.env.VITE_EVENT_SERVICE_URL || "http://localhost:8002",
+  venue: import.meta.env.VITE_VENUE_SERVICE_URL || "http://localhost:8003",
+  equipment: import.meta.env.VITE_EQUIPMENT_SERVICE_URL || "http://localhost:8004",
+  registration: import.meta.env.VITE_REGISTRATION_SERVICE_URL || "http://localhost:8005",
+  notification: import.meta.env.VITE_NOTIFICATION_SERVICE_URL || "http://localhost:8006",
+};
 
-axiosClient.interceptors.request.use(async (config) => {
-  // getIdToken() returns the cached token, refreshing it first if expired.
-  const token = await auth.currentUser?.getIdToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+export function createServiceClient(service) {
+  const client = axios.create({ baseURL: serviceUrls[service] });
 
-// A 401 here means the session is no longer valid server-side even though
-// the frontend thought it was (revoked token, expired refresh token, clock
-// skew, backend restart, ...). Force a clean logout rather than leaving the
-// user stuck on a page whose API calls silently keep failing.
-axiosClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      logoutSession();
-      try {
-        await auth.signOut();
-      } catch {
-        // already signed out — nothing to do
+  client.interceptors.request.use(async (config) => {
+    const token = await auth.currentUser?.getIdToken();
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  });
+
+  client.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+      if (error.response?.status === 401) {
+        logoutSession();
+        try {
+          await auth.signOut();
+        } catch {
+          // Already signed out.
+        }
+        const { default: router } = await import("../router/index.js");
+        if (router.currentRoute.value.name !== "login") router.replace("/login");
       }
-      const { default: router } = await import("../router/index.js");
-      if (router.currentRoute.value.name !== "login") {
-        router.replace("/login");
-      }
-    }
-    return Promise.reject(error);
-  }
-);
+      return Promise.reject(error);
+    },
+  );
 
-export default axiosClient;
+  return client;
+}
