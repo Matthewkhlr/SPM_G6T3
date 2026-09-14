@@ -34,7 +34,7 @@ frontend/src/api/
   notificationService.js
 ```
 
-`axiosClient.js` points at the API gateway (`http://localhost:8000`) and attaches a Bearer token on every request via `auth.currentUser.getIdToken()`, which returns Firebase's cached ID token and transparently refreshes it once expired.
+`axiosClient.js` creates authenticated clients for each microservice (ports 8001–8006), attaching a Firebase Bearer token to every request.
 
 ## Backend
 
@@ -42,7 +42,6 @@ Each microservice is an independent FastAPI app with its own MySQL database, Doc
 
 ```
 services/
-├── api-gateway/            # :8000  verifies tokens, forwards to services
 ├── user-service/          # :8001  user-db :3307
 ├── event-service/          # :8002  event-db :3309  (orchestrator)
 ├── venue-service/         # :8003  venue-db :3308
@@ -87,10 +86,9 @@ shared/
 ## Request flow — `getEvent(eventId)`
 
 1. Vue calls `getEvent(123)` → `frontend/src/api/eventService.js`
-2. Axios sends `GET /events/123` → **api-gateway** (verifies token)
-3. Gateway forwards to **event-service** → `services/event-service/app/routers/event.py`
-4. `event-service` queries its Event DB; registration counts come from **registration-service**
-5. Response flows back through the gateway → axios → Vue
+2. Axios sends `GET /events/123` directly to **event-service** (`:8002`)
+3. `event-service` verifies the Firebase token and queries its Event DB; registration counts come from **registration-service**
+4. Response returns directly to axios → Vue
 
 ## Run locally
 

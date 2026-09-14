@@ -1,13 +1,7 @@
-"""FastAPI dependency for enforcing authentication on a service's own routes.
+"""FastAPI dependency for enforcing authentication on service routes.
 
-Every request already passes through the API gateway, which verifies the
-Firebase ID token before proxying. This dependency exists so each service
-also verifies it independently — defense in depth, so a service is never
-unauthenticated just because it's reachable directly (e.g. its port is
-exposed in local dev, or the gateway is ever misconfigured/bypassed).
-
-This checks identity only (authentication). It does not check role or
-"relationship to a resource" — that's authorization, handled separately.
+The browser calls services directly, so every service validates the Firebase
+ID token it receives before serving protected endpoints.
 """
 from fastapi import Header
 

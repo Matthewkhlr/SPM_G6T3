@@ -7,7 +7,6 @@ ROOT = Path(__file__).resolve().parents[1]
 PYTHONPATH = str(ROOT)
 
 SERVICES = [
-    ("api-gateway", 8000),
     ("user-service", 8001),
     ("event-service", 8002),
     ("venue-service", 8003),
