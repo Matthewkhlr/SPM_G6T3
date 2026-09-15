@@ -12,14 +12,15 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+MYSQL_PORT = 3307
 
 SERVICES = [
-    ("user-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3307/user", 3307),
-    ("event-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3309/event", 3309),
-    ("venue-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3308/venue", 3308),
-    ("equipment-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3310/equipment", 3310),
-    ("registration-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3311/registration", 3311),
-    ("notification-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3312/notification", 3312),
+    ("user-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3307/user"),
+    ("event-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3307/event"),
+    ("venue-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3307/venue"),
+    ("equipment-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3307/equipment"),
+    ("registration-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3307/registration"),
+    ("notification-service", "mysql+pymysql://connectsphere:connectsphere@localhost:3307/notification"),
 ]
 
 
@@ -84,9 +85,11 @@ def main() -> None:
     args = parser.parse_args()
     _require_deps()
 
-    for service, url, port in SERVICES:
-        print(f"waiting for {service} MySQL on :{port}")
-        wait_for_port(port)
+    print(f"waiting for shared MySQL on :{MYSQL_PORT}")
+    wait_for_port(MYSQL_PORT)
+
+    for service, url in SERVICES:
+        print(f"checking {service} schema")
         wait_for_mysql(url)
         upgrade(service, url)
 

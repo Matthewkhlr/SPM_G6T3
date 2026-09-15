@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from migrate import SERVICES
 
-SERVICE_URLS = {name: url for name, url, _port in SERVICES}
+SERVICE_URLS = dict(SERVICES)
 
 
 def main() -> None:

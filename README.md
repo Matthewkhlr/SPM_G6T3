@@ -1,6 +1,6 @@
 # Event Platform
 
-Full-stack event management platform. Vue frontend, Python FastAPI microservices on the backend, MySQL per service. Firebase Authentication is the identity layer: the frontend signs in directly against Firebase, and every service independently verifies the resulting ID token.
+Full-stack event management platform. Vue frontend, Python FastAPI microservices on the backend, and one MySQL instance with a schema owned by each service. Firebase Authentication is the identity layer: the frontend signs in directly against Firebase, and every service independently verifies the resulting ID token.
 
 **Developers:** start here — [docs/architecture.md](docs/architecture.md) (file tree, ports, how to run frontend / backend / MySQL). Data model: [docs/data-model.md](docs/data-model.md).
 
@@ -38,16 +38,16 @@ frontend/src/api/
 
 ## Backend
 
-Each microservice is an independent FastAPI app with its own MySQL database, Dockerfile, and `requirements.txt`.
+Each microservice is an independent FastAPI app with its own MySQL schema, Dockerfile, and `requirements.txt`. The six schemas share one local MySQL instance, so they also share its availability and resource limits.
 
 ```
 services/
-├── user-service/          # :8001  user-db :3307
-├── event-service/          # :8002  event-db :3309  (orchestrator)
-├── venue-service/         # :8003  venue-db :3308
-├── equipment-service/     # :8004  equipment-db :3310
-├── registration-service/  # :8005  registration-db :3311
-└── notification-service/  # :8006  notification-db :3312
+├── user-service/          # :8001  schema: user
+├── event-service/         # :8002  schema: event (orchestrator)
+├── venue-service/         # :8003  schema: venue
+├── equipment-service/     # :8004  schema: equipment
+├── registration-service/  # :8005  schema: registration
+└── notification-service/  # :8006  schema: notification
 ```
 
 Every service with a database follows:
