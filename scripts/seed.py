@@ -16,11 +16,11 @@ from shared.auth.tokens import get_firebase_app
 
 URLS = {
     "user": "mysql+pymysql://connectsphere:connectsphere@localhost:3307/user",
-    "event": "mysql+pymysql://connectsphere:connectsphere@localhost:3309/event",
-    "venue": "mysql+pymysql://connectsphere:connectsphere@localhost:3308/venue",
-    "equipment": "mysql+pymysql://connectsphere:connectsphere@localhost:3310/equipment",
-    "registration": "mysql+pymysql://connectsphere:connectsphere@localhost:3311/registration",
-    "notification": "mysql+pymysql://connectsphere:connectsphere@localhost:3312/notification",
+    "event": "mysql+pymysql://connectsphere:connectsphere@localhost:3307/event",
+    "venue": "mysql+pymysql://connectsphere:connectsphere@localhost:3307/venue",
+    "equipment": "mysql+pymysql://connectsphere:connectsphere@localhost:3307/equipment",
+    "registration": "mysql+pymysql://connectsphere:connectsphere@localhost:3307/registration",
+    "notification": "mysql+pymysql://connectsphere:connectsphere@localhost:3307/notification",
 }
 
 

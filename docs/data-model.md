@@ -1,21 +1,23 @@
 # ConnectSphere Data Model
 
-Database-per-service relational model for the Week 12 core features. MySQL 8.4 runs locally in Docker Compose. Services never join across databases; they share IDs over HTTP. Cross-service keys (`event_id`, `user_id`, `venue_id`, `equipment_id`) are **logical foreign keys** only.
+Schema-per-service relational model for the Week 12 core features. One MySQL 8.4 instance runs locally in Docker Compose and contains six service-owned schemas. Services never join across schemas; they share IDs over HTTP. Cross-service keys (`event_id`, `user_id`, `venue_id`, `equipment_id`) are **logical foreign keys** only.
 
 Column names in MySQL are **snake_case**. API JSON stays **camelCase**. SQLAlchemy maps between them.
 
+Alembic migration heads define the deployed database structure. Status columns are plain `VARCHAR` fields; the listed values describe values currently written or reserved by the model, not database-enforced enums.
+
 Out of scope for this schema: programme/sessions, comments, documents, reports, technical-staff assignment.
 
-## Service to database
+## Service to schema
 
-| Service | Database | Host port |
+| Service | Schema | Host port |
 |---|---|---|
 | user-service | `user` | 3307 |
-| event-service | `event` | 3309 |
-| venue-service | `venue` | 3308 |
-| equipment-service | `equipment` | 3310 |
-| registration-service | `registration` | 3311 |
-| notification-service | `notification` | 3312 |
+| event-service | `event` | 3307 |
+| venue-service | `venue` | 3307 |
+| equipment-service | `equipment` | 3307 |
+| registration-service | `registration` | 3307 |
+| notification-service | `notification` | 3307 |
 
 ```mermaid
 flowchart LR
@@ -25,16 +27,15 @@ flowchart LR
   Vue --> EquipSvc[equipment-service]
   Vue --> RegSvc[registration-service]
   Vue --> NotifSvc[notification-service]
-  UserSvc --> UserDB[(user-db :3307)]
-  EventSvc --> EventDB[(event-db :3309)]
-  VenueSvc --> VenueDB[(venue-db :3308)]
-  EquipSvc --> EquipDB[(equipment-db :3310)]
-  RegSvc --> RegDB[(registration-db :3311)]
-  NotifSvc --> NotifDB[(notification-db :3312)]
-  EventSvc -->|"HTTP eventId"| VenueSvc
-  EventSvc -->|"HTTP eventId"| EquipSvc
-  EventSvc -->|"HTTP eventId"| RegSvc
-  EventSvc -->|"HTTP userId"| NotifSvc
+  UserSvc -->|"user schema"| MySQL[(MySQL :3307)]
+  EventSvc -->|"event schema"| MySQL
+  VenueSvc -->|"venue schema"| MySQL
+  EquipSvc -->|"equipment schema"| MySQL
+  RegSvc -->|"registration schema"| MySQL
+  NotifSvc -->|"notification schema"| MySQL
+  EventSvc -->|"HTTP identity"| UserSvc
+  EventSvc -->|"HTTP registration count"| RegSvc
+  RegSvc -->|"HTTP event eligibility"| EventSvc
 ```
 
 ---
@@ -64,9 +65,10 @@ Lightweight client record. Multiple event organisers may belong to the same orga
 | phone | VARCHAR(64) nullable | |
 | communication_preferences | JSON nullable | |
 | firebase_uid | VARCHAR(128) nullable | Links to the Firebase Auth account |
-| password_hash | VARCHAR(255) | Plaintext for now — hashing deferred |
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
+
+Authentication is handled by Firebase. The former `password_hash` column was removed by the current user-service migration head.
 
 **Roles** (stored values match the existing frontend session keys):
 
@@ -80,11 +82,11 @@ Lightweight client record. Multiple event organisers may belong to the same orga
 
 ## 2. event-service (`event`)
 
-Orchestrator. Owns the event request record, review, assignment, change requests, and status history.
+Owns the event request record, review, assignment, change requests, and status history. The current API creates and reads events, assigns coordinators, resolves organiser identity through user-service, and obtains registration counts from registration-service. Review, status-transition, edit, and change-request APIs are not implemented yet.
 
 ### events
 
-Draft vs submitted is `status`, not a separate table.
+Lifecycle state is stored in `status`, not a separate table.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -112,9 +114,9 @@ Draft vs submitted is `status`, not a separate table.
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
 
-**Event status:** `draft` | `submitted` | `under_review` | `clarification_requested` | `approved` | `planning` | `confirmed` | `rejected` | `cancelled` | `completed`
+**Event status:** the create API currently writes `created`; seed data also uses `planning` and `confirmed`. Other lifecycle values are not validated or transitioned by the current service.
 
-Ordinary edits (description, purpose) update `events` directly. Date, attendance, venue/equipment requirements go through `event_change_requests` after submit so existing bookings can be re-checked.
+New API-created events have `submitted_at = NULL`. Event editing, submission, and status-history writes are not currently implemented.
 
 ### event_reviews
 
@@ -126,6 +128,8 @@ Ordinary edits (description, purpose) update `events` directly. Date, attendance
 | action | VARCHAR(32) | `request_clarification` \| `approve` \| `reject` |
 | comment | TEXT | |
 | created_at | DATETIME | |
+
+The table exists in the deployed schema but currently has no router or service workflow.
 
 ### event_assignments
 
@@ -148,13 +152,15 @@ Coordinator assign / reassign history.
 | requested_by | VARCHAR(64) | Logical FK → users |
 | status | VARCHAR(32) | `pending` \| `approved` \| `rejected` \| `applied` |
 | summary | TEXT | |
-| proposed_changes | JSON | Field diffs |
+| proposed_changes | JSON nullable | Field diffs |
 | affects_venue | BOOLEAN | |
 | affects_equipment | BOOLEAN | |
 | affects_registration | BOOLEAN | |
 | reviewed_by | VARCHAR(64) nullable | |
 | reviewed_at | DATETIME nullable | |
 | created_at | DATETIME | |
+
+The table exists in the deployed schema but currently has no router or service workflow.
 
 ### event_status_history
 
@@ -168,13 +174,15 @@ Coordinator assign / reassign history.
 | note | TEXT | |
 | created_at | DATETIME | |
 
+Seed data writes initial history records; current API operations do not write status history.
+
 ---
 
 ## 3. venue-service (`venue`)
 
 ### venues
 
-JSON arrays (`facilities`, `layouts`) are filterable in MySQL 8 with `JSON_CONTAINS`.
+The current API lists and retrieves venues. JSON arrays (`facilities`, `layouts`) are stored in MySQL, but no filtering API currently uses `JSON_CONTAINS`.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -188,10 +196,11 @@ JSON arrays (`facilities`, `layouts`) are filterable in MySQL 8 with `JSON_CONTA
 | operating_hours | VARCHAR(255) | |
 | turnaround_minutes | INT | |
 | is_active | BOOLEAN | |
+| created_at | DATETIME | |
 
 ### venue_unavailability
 
-Needed by the availability calendar (maintenance, blocked periods).
+Stores maintenance and blocked periods.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -201,6 +210,9 @@ Needed by the availability calendar (maintenance, blocked periods).
 | ends_at | DATETIME | |
 | reason | TEXT | |
 | created_by | VARCHAR(64) | Logical FK → users |
+| created_at | DATETIME | |
+
+The table exists in the deployed schema but currently has no router or service workflow.
 
 ### venue_bookings
 
@@ -213,8 +225,8 @@ Needed by the availability calendar (maintenance, blocked periods).
 | status | VARCHAR(32) | `pending` \| `approved` \| `rejected` \| `cancelled` |
 | starts_at | DATETIME | Event window start |
 | ends_at | DATETIME | Event window end |
-| setup_starts_at | DATETIME | Window expanded by turnaround |
-| teardown_ends_at | DATETIME | Window expanded by turnaround |
+| setup_starts_at | DATETIME | Caller-supplied setup boundary |
+| teardown_ends_at | DATETIME | Caller-supplied teardown boundary |
 | requirements_snapshot | TEXT | |
 | decision_reason | TEXT nullable | |
 | reviewed_by | VARCHAR(64) nullable | |
@@ -223,9 +235,11 @@ Needed by the availability calendar (maintenance, blocked periods).
 
 Index: `(venue_id, starts_at, ends_at)`.
 
-**Conflict rule:** two rows for the same `venue_id` with status in (`pending`, `approved`) must not overlap on `[setup_starts_at, teardown_ends_at)`. Enforce in venue-service (query + transaction), not a cross-DB constraint.
+**Intended conflict rule:** two rows for the same `venue_id` with status in (`pending`, `approved`) should not overlap on `[setup_starts_at, teardown_ends_at)`.
 
-**Suitability rule** (application, not a table): `expected_attendance <= capacity`, required facilities ⊆ venue facilities, requested layout in supported layouts, requested window inside operating hours, no conflict.
+**Intended suitability rule:** `expected_attendance <= capacity`, required facilities ⊆ venue facilities, requested layout in supported layouts, requested window inside operating hours, no conflict.
+
+These conflict and suitability rules are intended constraints but are not enforced by the current implementation. Booking creation accepts caller-supplied setup and teardown times without deriving turnaround or checking overlap. The implemented review flow only transitions a pending booking to `approved` or `rejected`; cancellation is not implemented.
 
 ---
 
@@ -252,6 +266,8 @@ Quantity-based availability. Units exist so individual items can be marked damag
 | equipment_id | VARCHAR(64) | FK → equipment_info |
 | status | VARCHAR(32) | `available` \| `maintenance` \| `damaged` |
 
+The catalogue API derives one coarse equipment status: `maintenance` if any unit is under maintenance, otherwise `damaged` if any unit is damaged, otherwise `available`. Unit-management endpoints are not implemented.
+
 ### equipment_requests
 
 | Column | Type | Notes |
@@ -263,7 +279,7 @@ Quantity-based availability. Units exist so individual items can be marked damag
 | technical_requirements | TEXT | |
 | requested_by | VARCHAR(64) | Logical FK → users |
 | status | VARCHAR(32) | `pending` \| `approved` \| `rejected` \| `cancelled` |
-| starts_at | DATETIME | Copied from the event window |
+| starts_at | DATETIME | Caller-supplied request window |
 | ends_at | DATETIME | |
 | reviewed_by | VARCHAR(64) nullable | |
 | review_note | TEXT | |
@@ -271,7 +287,7 @@ Quantity-based availability. Units exist so individual items can be marked damag
 
 ### equipment_reservations
 
-Created when a request is approved. Released when the event is cancelled or the request is withdrawn.
+Created only when the explicit reserve endpoint is called for an approved request. Approval and reservation are separate operations in the current implementation.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -284,17 +300,17 @@ Created when a request is approved. Released when the event is cancelled or the 
 | ends_at | DATETIME | |
 | status | VARCHAR(32) | `active` \| `released` |
 
-**Availability:** `total_quantity - count(units in maintenance/damaged) - sum(active overlapping reservations)`.
+The current reserve operation prevents duplicate reservations for the same request, but does not calculate quantity/time-window availability. Releasing reservations, cancelling requests, and reacting to event cancellation are not implemented.
 
 ---
 
 ## 5. registration-service (`registration`)
 
-Event-service owns whether registration is enabled and the intended capacity/window. Registration-service owns actual sign-ups so capacity checks are transactional in one DB.
+Event-service currently supplies registration-enabled, capacity, and open/close values over HTTP. Registration-service stores registration windows and sign-ups, but only uses the presence of a window row as a local gate; eligibility values are read from event-service.
 
 ### registration_windows
 
-One per event, created when the event is confirmed / registration is enabled.
+One per event. Current seed data creates these rows; automatic creation when an event is confirmed is not implemented.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -308,23 +324,23 @@ One per event, created when the event is confirmed / registration is enabled.
 | Column | Type | Notes |
 |---|---|---|
 | attendee_registration_id | VARCHAR(64) PK | |
-| event_id | VARCHAR(64) | Logical FK → events |
+| event_id | VARCHAR(64) | FK → registration_windows; also a logical FK → events |
 | user_id | VARCHAR(64) nullable | Logical FK → users |
 | attendee_name | VARCHAR(255) | |
 | attendee_email | VARCHAR(255) | |
-| status | VARCHAR(32) | `registered` \| `withdrawn` \| `waitlisted` (enum reserved; waitlist UI is later) |
+| status | VARCHAR(32) | API writes `registered`; `withdrawn` and `waitlisted` are reserved |
 | created_at | DATETIME | |
 | withdrawn_at | DATETIME nullable | |
 
-Uniqueness of `(event_id, attendee_email)` among non-withdrawn rows is enforced in the application (MySQL cannot express a partial unique index the same way as PostgreSQL).
+The current application rejects a duplicate email among rows whose status is `registered`. There is no database unique constraint, withdrawal endpoint, or waitlist workflow.
 
-**Capacity rule:** `COUNT(status = registered) < capacity` inside a transaction.
+**Current capacity rule:** fetch the event over HTTP, require status `confirmed` and registration enabled, check the event’s open/close timestamps, then require the current count of `registered` rows to be below the event’s capacity. The check and insert are not protected by row locking, so concurrent requests can race.
 
 ---
 
 ## 6. notification-service (`notification`)
 
-Other services call notification-service over HTTP after a domain action; they do not write this table themselves.
+The schema contains persisted notification records, and seed data inserts one example. The current `POST /notifications` endpoint is an email stub accepting `to`, `subject`, and `body`; it prints the message and returns `queued`, but does not read or write this table. Domain-triggered persistence and read/mark-read APIs are not implemented.
 
 ### notifications
 
@@ -333,17 +349,19 @@ Other services call notification-service over HTTP after a domain action; they d
 | notification_id | VARCHAR(64) PK | |
 | user_id | VARCHAR(64) | Logical FK → users |
 | event_id | VARCHAR(64) nullable | Logical FK → events |
-| type | VARCHAR(64) | e.g. `event_submitted`, `clarification_requested`, `booking_approved` |
+| type | VARCHAR(64) | Unrestricted string; seed data uses `event_confirmed` |
 | title | VARCHAR(255) | |
 | body | TEXT | |
 | is_read | BOOLEAN | |
 | created_at | DATETIME | |
 
+Indexes: `user_id`; `created_at`.
+
 ---
 
 ## Logical ERD
 
-Logical model of the whole system (Crow’s foot). Cross-service keys are logical FKs — there is no physical `FOREIGN KEY` across MySQL containers. `users.role` is a disjoint subtype: `organiser` | `coordinator` | `venue` | `techsupport` | `attendee`.
+Logical model of the whole system (Crow’s foot). Cross-service keys are logical FKs — there is no physical `FOREIGN KEY` across service schemas. `users.role` is a disjoint subtype: `organiser` | `coordinator` | `venue` | `techsupport` | `attendee`.
 
 ```mermaid
 erDiagram
@@ -363,7 +381,6 @@ erDiagram
     string phone
     json communication_preferences
     string firebase_uid
-    string password_hash
     datetime created_at
     datetime updated_at
   }
@@ -583,4 +600,4 @@ erDiagram
 
 ## Schema ownership
 
-Alembic revisions under each service are the source of truth. Docker init SQL only creates empty databases. After `docker compose up -d`, run `python scripts/migrate.py` (upgrade + seed). Do not use `create_all()` as the schema path.
+Alembic revisions under each service are the source of truth. Docker init SQL only creates the six empty schemas and grants the application user access. After `docker compose up -d`, run `python scripts/migrate.py` (upgrade + seed). Do not use `create_all()` as the schema path.

@@ -4,7 +4,7 @@ Developer guide for the Event Planning and Venue Booking system. Data model (tab
 
 ## What you are looking at
 
-Vue 3 frontend, FastAPI microservices, **one MySQL database per service**, local Docker. Firebase is the intended auth layer later; local demo login still uses a JWT from `user-service`.
+Vue 3 frontend, FastAPI microservices, and **one shared MySQL instance with one schema per service**, running in local Docker. Firebase is the intended auth layer later; local demo login still uses a JWT from `user-service`.
 
 `frontend/src/api/*.js` are **not** microservices. They are axios wrappers. Business logic and databases live under `services/`. The two talk only over HTTP.
 
@@ -16,19 +16,19 @@ flowchart LR
   Vue --> EquipSvc["equipment-service :8004"]
   Vue --> RegSvc["registration-service :8005"]
   Vue --> NotifSvc["notification-service :8006"]
-  UserSvc --> UserDB[("user-db :3307")]
-  EventSvc --> EventDB[("event-db :3309")]
-  VenueSvc --> VenueDB[("venue-db :3308")]
-  EquipSvc --> EquipDB[("equipment-db :3310")]
-  RegSvc --> RegDB[("registration-db :3311")]
-  NotifSvc --> NotifDB[("notification-db :3312")]
+  UserSvc --> MySQL[("MySQL :3307")]
+  EventSvc --> MySQL
+  VenueSvc --> MySQL
+  EquipSvc --> MySQL
+  RegSvc --> MySQL
+  NotifSvc --> MySQL
   EventSvc -->|"HTTP"| VenueSvc
   EventSvc -->|"HTTP"| EquipSvc
   EventSvc -->|"HTTP"| RegSvc
   EventSvc -->|"HTTP"| NotifSvc
 ```
 
-There is **no repo-root `db/` folder**. Databases are Docker volumes. Schema is Alembic inside each service. `infra/` only starts empty MySQL containers.
+There is **no repo-root `db/` folder**. Database data is stored in one Docker volume. Each service owns its schema through its own Alembic migration tree. `infra/` starts one MySQL instance and creates the six empty schemas.
 
 Inter-service calls today are **HTTP**, not a message queue. A queue can be added later for notifications without changing the tables.
 
@@ -58,7 +58,7 @@ pip install -r services/notification-service/requirements.txt
 
 Think of three layers:
 
-1. **Docker** — starts empty MySQL *processes* (or reuses data you already have).
+1. **Docker** — starts the shared MySQL *process* (or reuses data you already have).
 2. **`python scripts/migrate.py`** — applies any *new* Alembic files, then seeds if tables were empty.
 3. **Backend / frontend** — the apps. They do not create tables.
 
@@ -81,7 +81,7 @@ cd ..
 python scripts/migrate.py
 ```
 
-Then start coding with backend + frontend (sections below). You now have containers, tables, and seed data.
+Then start coding with backend + frontend (sections below). You now have the MySQL container, tables, and seed data.
 
 ### B. You already cloned; you sit down to code (no schema change)
 
@@ -222,14 +222,16 @@ UI login still uses hardcoded `frontend/src/auth/users.data.js` until the login 
 
 ## Ports (MySQL)
 
-| Service | App | Database | DB port |
+All services connect to the same MySQL instance on host port `3307`, but each uses its own schema and independent `alembic_version` table.
+
+| Service | App | Schema | DB port |
 |---|---|---|---|
 | user-service | 8001 | `user` | 3307 |
-| event-service | 8002 | `event` | 3309 |
-| venue-service | 8003 | `venue` | 3308 |
-| equipment-service | 8004 | `equipment` | 3310 |
-| registration-service | 8005 | `registration` | 3311 |
-| notification-service | 8006 | `notification` | 3312 |
+| event-service | 8002 | `event` | 3307 |
+| venue-service | 8003 | `venue` | 3307 |
+| equipment-service | 8004 | `equipment` | 3307 |
+| registration-service | 8005 | `registration` | 3307 |
+| notification-service | 8006 | `notification` | 3307 |
 
 Credentials (local only): user `connectsphere`, password `connectsphere`. Example URL:
 
@@ -309,18 +311,13 @@ services/<name>/
 
 ### `infra/`
 
-Starts empty MySQL. Does **not** define tables.
+Starts one MySQL instance and creates empty service schemas. It does **not** define tables.
 
 ```
 infra/
 ├── docker-compose.yml
-└── mysql/init/              CREATE DATABASE IF NOT EXISTS … (first boot only)
-    ├── user.sql
-    ├── event.sql
-    ├── venue.sql
-    ├── equipment.sql
-    ├── registration.sql
-    └── notification.sql
+└── mysql/init/
+    └── schemas.sql          Creates all six schemas and grants (first boot only)
 ```
 
 ### `scripts/`
@@ -374,7 +371,9 @@ python scripts/revision.py venue-service -m "describe the change"
 3. Teammates: `git pull` then `python scripts/migrate.py`.
 4. Update [data-model.md](data-model.md) so the doc matches the code.
 
-Do not use `create_all()` to evolve tables. Do not put table DDL in `infra/mysql/init/` (those scripts only create empty databases).
+Do not use `create_all()` to evolve tables. Do not put table DDL in `infra/mysql/init/` (the init script only creates empty schemas and grants access).
+
+Because all schemas share one MySQL process and volume, an instance outage affects every service. Back up or restore individual service data with schema-scoped dumps when isolation is required.
 
 ---
 
