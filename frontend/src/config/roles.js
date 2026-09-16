@@ -32,7 +32,7 @@ export const roles = {
   },
   techsupport: {
     label: 'Technical Support Staff',
-    tabs: ['Dashboard', 'Equipment Catalogue', 'Reservations', 'My Assignments', 'Maintenance Status', 'Profile'],
+    tabs: ['Dashboard', 'Upcoming Events', 'Equipment Catalogue', 'Reservations', 'My Assignments', 'Maintenance Status', 'Profile'],
     cards: [
       { title: 'Equipment requests', sub: '2 requests pending review' },
       { title: 'Damaged / under maintenance', sub: '1 projector flagged unavailable' },

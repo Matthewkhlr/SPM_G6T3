@@ -31,6 +31,7 @@
       <VenueCatalogue v-else-if="activeTab === 'Venue Catalogue'" />
       <BrowseEvents v-else-if="activeTab === 'Browse Events'" />
       <CreateEvent v-else-if="activeTab === 'New Request'" />
+      <UpcomingEventsCalendar v-else-if="activeTab === 'Upcoming Events'"/>
 
       <div class="not-built" v-else>
         This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }} are functional.
