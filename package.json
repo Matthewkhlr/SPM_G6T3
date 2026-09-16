@@ -7,5 +7,9 @@
     "dev:frontend": "npm run dev --prefix frontend",
     "dev:backend": "python scripts/dev-backend.py",
     "migrate": "python scripts/migrate.py"
+  },
+  "dependencies": {
+    "@fullcalendar/vue3": "^7.1.0",
+    "temporal-polyfill": "^1.0.5"
   }
 }

@@ -42,3 +42,25 @@ def current_organiser(authorization: str | None) -> dict:
     if user.get("role") != "organiser":
         raise forbidden("Only event organisers can create events")
     return user
+
+def current_technical_support(authorization: str | None) -> dict:
+    if not authorization:
+        raise unauthorized()
+
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(
+                f"{settings.user_service_url}/users/me",
+                headers={"Authorization": authorization},
+            )
+    except httpx.HTTPError as exc:
+        raise unauthorized("Could not verify identity") from exc
+
+    if response.status_code != 200:
+        raise unauthorized("Could not verify identity")
+
+    user = response.json()
+    if user.get("role") != "techsupport":
+        raise forbidden("Only technical support staff can view upcoming events")
+
+    return user

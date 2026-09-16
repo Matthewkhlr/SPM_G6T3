@@ -26,6 +26,18 @@ def _to_out(row: Event) -> EventOut:
 def list_events(db: Session) -> list[EventOut]:
     return [_to_out(row) for row in db.query(Event).all()]
 
+def list_upcoming_events(db: Session) -> list[EventOut]:
+    now = datetime.utcnow()
+
+    rows = (
+        db.query(Event)
+        .filter(Event.proposedEndAt >= now)
+        .filter(Event.status.notin_(["rejected", "cancelled", "completed"]))
+        .order_by(Event.proposedStartAt.asc())
+        .all()
+    )
+
+    return [_to_out(row) for row in rows]
 
 def get_event(db: Session, event_id: str) -> EventOut:
     row = db.query(Event).filter(Event.eventId == event_id).first()

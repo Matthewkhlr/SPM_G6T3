@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.orchestration.clients import current_organiser
+from app.orchestration.clients import current_organiser, current_technical_support
 from app.schemas.event import EventAssignmentCreate, EventAssignmentOut, EventCreate, EventOut
 from app.services import event_service
 from shared.auth.roles import resolve_caller
@@ -27,6 +27,13 @@ def create_event(
         db, body, organiser["userId"], organiser.get("organisationId")
     )
 
+@router.get("/upcoming/technical", response_model=list[EventOut])
+def list_upcoming_events_for_technical_support(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+    ):
+    _technical_user = current_technical_support(authorization)
+    return event_service.list_upcoming_events(db)
 
 @router.get("/{event_id}", response_model=EventOut)
 def get_event(event_id: str, db: Session = Depends(get_db)):
