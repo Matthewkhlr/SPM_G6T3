@@ -52,6 +52,7 @@ import CreateEvent from '../features/create-event/CreateEvent.vue'
 import { roles } from '../config/roles.js'
 import { auth } from '../firebase.js'
 import { session, logoutSession } from '../store/session.js'
+import UpcomingEventsCalendar from '../features/event-calendar/EventCalendar.vue'
 
 const router = useRouter()
 const currentData = computed(() => roles[session.role])

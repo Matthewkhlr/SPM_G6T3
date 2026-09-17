@@ -1,28 +1,40 @@
-<script>
-  import FullCalendar from "@fullcalendar/vue3";
-  import themePlugin from "@fullcalendar/vue3/themes/monarch"; // YOUR THEME
-  import dayGridPlugin from "@fullcalendar/vue3/daygrid";
-  import interactionPlugin from "@fullcalendar/vue3/interaction";
+<script setup>
+import FullCalendar from '@fullcalendar/vue3'
+import themePlugin from '@fullcalendar/vue3/themes/monarch'
+import dayGridPlugin from '@fullcalendar/vue3/daygrid'
+import timeGridPlugin from '@fullcalendar/vue3/timegrid'
+import listPlugin from '@fullcalendar/vue3/list'
+import multiMonthPlugin from '@fullcalendar/vue3/multimonth'
 
-  // stylesheets
-  import '@fullcalendar/react/skeleton.css'; // ALWAYS NEED SKELETON
-  import '@fullcalendar/react/themes/monarch/theme.css'; // YOUR THEME
-  import '@fullcalendar/react/themes/monarch/palettes/purple.css'; // YOUR THEME'S PALETTE
+import '@fullcalendar/vue3/skeleton.css'
+import '@fullcalendar/vue3/themes/monarch/theme.css'
+import '@fullcalendar/vue3/themes/monarch/palettes/purple.css'
 
-  export default {
-    components: {
-      FullCalendar, // make the <FullCalendar> tag available
+const calendarOptions = {
+  colorScheme: 'light',
+  plugins: [
+    themePlugin,
+    dayGridPlugin,
+    timeGridPlugin,
+    listPlugin,
+    multiMonthPlugin,
+  ],
+  headerToolbar: {
+    start: 'add today prev,next title',
+    end: 'dayGridMonth,timeGridWeek,listWeek'
+  },
+  buttons: {
+    add: {
+      text: 'Add Event',
+      click() {
+        alert('handle add event...')
+      },
     },
-    data() {
-      return {
-        calendarOptions: {
-          plugins: [themePlugin, dayGridPlugin, interactionPlugin],
-          initialView: "dayGridMonth",
-        },
-      };
-    },
-  };
+  },
+  initialView: 'dayGridMonth',
+}
 </script>
+
 <template>
   <FullCalendar :options="calendarOptions" />
 </template>
