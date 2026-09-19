@@ -8,8 +8,7 @@
         <a href="#roles">Roles</a>
       </nav>
       <div class="actions">
-        <router-link to="/login" class="btn btn-ghost">Log in</router-link>
-        <router-link to="/login" class="btn btn-solid">Get started</router-link>
+        <router-link to="/login" class="btn btn-solid">Log in</router-link>
       </div>
     </header>
 
@@ -114,7 +113,7 @@
       <div class="cta-glow"></div>
       <h2>Bring every event into one view</h2>
       <p>Sign in with a demo role and walk the full coordination flow.</p>
-      <router-link to="/login" class="btn btn-solid hero-cta">Get started</router-link>
+      <router-link to="/login" class="btn btn-solid hero-cta">Log in</router-link>
     </section>
 
     <footer class="site-footer">

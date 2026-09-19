@@ -13,12 +13,17 @@ const router = createRouter({
   ]
 })
 
-// Client-side stand-in for "accessing a protected route without a session
-// redirects to login". A real backend would additionally return 401 on the
-// API call itself — this guard only covers front-end navigation.
+// Every request is also independently verified server-side (401 without a
+// valid Firebase token) — this guard only covers front-end navigation, so a
+// signed-out user never even sees a protected view render.
 router.beforeEach((to) => {
   if (to.meta.requiresAuth && !session.isAuthenticated) {
     return { name: 'login' }
+  }
+  // An already-signed-in user hitting /login goes straight back to their
+  // session instead of being shown the login form again.
+  if (to.name === 'login' && session.isAuthenticated) {
+    return { name: 'dashboard' }
   }
 })
 

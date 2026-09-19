@@ -1,5 +1,5 @@
 services:
-  user-db:
+  mysql:
     image: mysql:8.4
     environment:
       MYSQL_ROOT_PASSWORD: connectsphere
@@ -9,64 +9,8 @@ services:
     ports:
       - "3307:3306"
     volumes:
-      - user_data:/var/lib/mysql
-      - ./mysql/init/user.sql:/docker-entrypoint-initdb.d/01-user.sql
-
-  event-db:
-    image: mysql:8.4
-    environment:
-      MYSQL_ROOT_PASSWORD: connectsphere
-      MYSQL_DATABASE: event
-      MYSQL_USER: connectsphere
-      MYSQL_PASSWORD: connectsphere
-    ports:
-      - "3309:3306"
-    volumes:
-      - event_data:/var/lib/mysql
-      - ./mysql/init/event.sql:/docker-entrypoint-initdb.d/01-event.sql
-
-  venue-db:
-    image: mysql:8.4
-    environment:
-      MYSQL_ROOT_PASSWORD: connectsphere
-      MYSQL_DATABASE: venue
-      MYSQL_USER: connectsphere
-      MYSQL_PASSWORD: connectsphere
-    ports:
-      - "3308:3306"
-    volumes:
-      - venue_data:/var/lib/mysql
-      - ./mysql/init/venue.sql:/docker-entrypoint-initdb.d/01-venue.sql
-
-  equipment-db:
-    image: mysql:8.4
-    environment:
-      MYSQL_ROOT_PASSWORD: connectsphere
-      MYSQL_DATABASE: equipment
-      MYSQL_USER: connectsphere
-      MYSQL_PASSWORD: connectsphere
-    ports:
-      - "3310:3306"
-    volumes:
-      - equipment_data:/var/lib/mysql
-      - ./mysql/init/equipment.sql:/docker-entrypoint-initdb.d/01-equipment.sql
-
-  registration-db:
-    image: mysql:8.4
-    environment:
-      MYSQL_ROOT_PASSWORD: connectsphere
-      MYSQL_DATABASE: registration
-      MYSQL_USER: connectsphere
-      MYSQL_PASSWORD: connectsphere
-    ports:
-      - "3311:3306"
-    volumes:
-      - registration_data:/var/lib/mysql
-      - ./mysql/init/registration.sql:/docker-entrypoint-initdb.d/01-registration.sql
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init/schemas.sql:/docker-entrypoint-initdb.d/01-schemas.sql
 
 volumes:
-  user_data:
-  event_data:
-  venue_data:
-  equipment_data:
-  registration_data:
+  mysql_data:

@@ -30,9 +30,11 @@
       <DashboardHome v-if="activeTab === 'Dashboard'" :cards="currentData.cards" />
       <VenueCatalogue v-else-if="activeTab === 'Venue Catalogue'" />
       <BrowseEvents v-else-if="activeTab === 'Browse Events'" />
+      <CreateEvent v-else-if="activeTab === 'New Request'" />
+      <UpcomingEventsCalendar v-else-if="activeTab === 'Upcoming Events'"/>
 
       <div class="not-built" v-else>
-        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }} are functional.
+        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }} are functional.
       </div>
     </main>
   </div>
@@ -41,12 +43,16 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { signOut } from 'firebase/auth'
 import AppLogo from '../components/shared/AppLogo.vue'
 import DashboardHome from '../features/dashboard/DashboardHome.vue'
 import VenueCatalogue from '../features/venue-catalogue/VenueCatalogue.vue'
 import BrowseEvents from '../features/browse-events/BrowseEvents.vue'
+import CreateEvent from '../features/create-event/CreateEvent.vue'
 import { roles } from '../config/roles.js'
+import { auth } from '../firebase.js'
 import { session, logoutSession } from '../store/session.js'
+import UpcomingEventsCalendar from '../features/event-calendar/EventCalendar.vue'
 
 const router = useRouter()
 const currentData = computed(() => roles[session.role])
@@ -54,8 +60,10 @@ const activeTab = ref('Dashboard')
 
 const hasVenueTab = computed(() => currentData.value.tabs.includes('Venue Catalogue'))
 const hasEventsTab = computed(() => currentData.value.tabs.includes('Browse Events'))
+const hasNewRequestTab = computed(() => currentData.value.tabs.includes('New Request'))
 
-function logout() {
+async function logout() {
+  await signOut(auth)
   logoutSession()
   router.replace('/login')
 }

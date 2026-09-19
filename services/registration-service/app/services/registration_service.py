@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.attendee_registration import AttendeeRegistration
+from app.models.registration_window import RegistrationWindow
 from shared.exceptions.http import conflict, not_found
 
 
@@ -26,8 +27,12 @@ def eligibility(event: dict, registered_count: int) -> tuple[bool, str | None]:
         return False, "This event has not been confirmed yet."
     if not event.get("registrationEnabled"):
         return False, "Registration has not been enabled for this event."
-    opens = datetime.fromisoformat(str(event["registrationOpensAt"]).replace("Z", ""))
-    closes = datetime.fromisoformat(str(event["registrationClosesAt"]).replace("Z", ""))
+    opens_raw = event.get("registrationOpensAt")
+    closes_raw = event.get("registrationClosesAt")
+    if not opens_raw or not closes_raw:
+        return False, "Registration has not been enabled for this event."
+    opens = datetime.fromisoformat(str(opens_raw).replace("Z", ""))
+    closes = datetime.fromisoformat(str(closes_raw).replace("Z", ""))
     if now < opens:
         return False, f"Registration opens {opens.date()}."
     if now > closes:
@@ -38,13 +43,23 @@ def eligibility(event: dict, registered_count: int) -> tuple[bool, str | None]:
 
 
 def list_for_event(db: Session, event_id: str) -> list[AttendeeRegistration]:
-    return db.query(AttendeeRegistration).filter(AttendeeRegistration.eventId == event_id).all()
+    return (
+        db.query(AttendeeRegistration)
+        .filter(
+            AttendeeRegistration.eventId == event_id,
+            AttendeeRegistration.status == "registered",
+        )
+        .all()
+    )
 
 
 def register(db: Session, event_id: str, name: str, email: str, user_id: str | None) -> AttendeeRegistration:
     if not name or not email:
         raise conflict("Name and email are required.")
     event = _event(event_id)
+    window = db.query(RegistrationWindow).filter(RegistrationWindow.eventId == event_id).first()
+    if not window:
+        raise conflict("Registration is not open for this event.")
     existing = list_for_event(db, event_id)
     ok, reason = eligibility(event, len(existing))
     if not ok:
@@ -58,6 +73,7 @@ def register(db: Session, event_id: str, name: str, email: str, user_id: str | N
         attendeeName=name,
         attendeeEmail=email,
         userId=user_id,
+        status="registered",
         createdAt=datetime.utcnow(),
     )
     db.add(row)

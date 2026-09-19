@@ -1,7 +1,6 @@
-import axiosClient from "./axiosClient";
+import { createServiceClient } from "./axiosClient";
 
-export const login = (username, password) =>
-  axiosClient.post("/users/login", { username, password });
+const axiosClient = createServiceClient("user");
 
 export const getMe = () => axiosClient.get("/users/me");
 

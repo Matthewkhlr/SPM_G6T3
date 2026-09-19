@@ -9,3 +9,4 @@ __pycache__/
 venv/
 *.db
 .pytest_cache/
+*firebase-adminsdk*.json

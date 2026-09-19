@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class UserPublic(BaseModel):
@@ -6,16 +6,7 @@ class UserPublic(BaseModel):
     userName: str
     email: str
     role: str
+    organisationId: str | None = None
 
     class Config:
         from_attributes = True
-
-
-class LoginRequest(BaseModel):
-    username: str = Field(description="Email used as username in the Vue demo")
-    password: str
-
-
-class LoginResponse(BaseModel):
-    token: str
-    user: UserPublic

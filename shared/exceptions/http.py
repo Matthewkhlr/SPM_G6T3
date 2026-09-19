@@ -15,3 +15,7 @@ def not_found(message: str = "Not found") -> HTTPException:
 
 def conflict(message: str) -> HTTPException:
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message)
+
+
+def service_unavailable(message: str = "Service temporarily unavailable") -> HTTPException:
+    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=message)

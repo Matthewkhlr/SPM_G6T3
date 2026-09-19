@@ -9,7 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fullcalendar/vue3": "^7.1.0",
     "axios": "^1.7.9",
+    "firebase": "^12.18.0",
+    "temporal-polyfill": "^1.0.5",
     "vue": "^3.4.21",
     "vue-router": "^4.3.0"
   },

@@ -1,2 +1,2 @@
-from .registration import Registration
 from .attendee_registration import AttendeeRegistration
+from .registration_window import RegistrationWindow

@@ -1,4 +1,6 @@
-import axiosClient from "./axiosClient";
+import { createServiceClient } from "./axiosClient";
+
+const axiosClient = createServiceClient("registration");
 
 export const getRegistrations = (eventId) =>
   axiosClient.get("/registrations", { params: { eventId } });
