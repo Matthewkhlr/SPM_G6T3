@@ -35,6 +35,16 @@ def list_upcoming_events_for_technical_support(
     _technical_user = current_technical_support(authorization)
     return event_service.list_upcoming_events(db)
 
+@router.get("/all", response_model=list[EventOut])
+def list_all_events(db: Session = Depends(get_db)):
+    return event_service.list_all_events(db)
+
+
+@router.get("/confirmed", response_model=list[EventOut])
+def list_confirmed_events(db: Session = Depends(get_db)):
+    return event_service.list_confirmed_events(db)
+
+
 @router.get("/{event_id}", response_model=EventOut)
 def get_event(event_id: str, db: Session = Depends(get_db)):
     return event_service.get_event(db, event_id)

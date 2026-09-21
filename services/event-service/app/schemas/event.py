@@ -41,6 +41,8 @@ class EventOut(BaseModel):
     eventId: str
     eventName: str
     status: str
+    proposedStartAt: datetime
+    proposedEndAt: datetime
     registrationEnabled: bool
     registrationOpensAt: datetime | None = None
     registrationClosesAt: datetime | None = None

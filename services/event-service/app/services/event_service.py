@@ -15,6 +15,8 @@ def _to_out(row: Event) -> EventOut:
         eventId=row.eventId,
         eventName=row.eventName,
         status=row.status,
+        proposedStartAt=row.proposedStartAt,
+        proposedEndAt=row.proposedEndAt,
         registrationEnabled=row.registrationEnabled,
         registrationOpensAt=row.registrationOpensAt,
         registrationClosesAt=row.registrationClosesAt,
@@ -25,6 +27,33 @@ def _to_out(row: Event) -> EventOut:
 
 def list_events(db: Session) -> list[EventOut]:
     return [_to_out(row) for row in db.query(Event).all()]
+
+def list_all_events(db: Session) -> list[EventOut]:
+    """Every event except rejected ones."""
+    rows = (
+        db.query(Event)
+        .filter(Event.status != "rejected")
+        .order_by(Event.proposedStartAt.asc())
+        .all()
+    )
+    return [_to_out(row) for row in rows]
+
+
+def list_confirmed_events(db: Session) -> list[EventOut]:
+    """Only events that have been confirmed.
+
+    NOTE: no transition in this service currently sets status to
+    "confirmed" - create_event() only ever sets "created". This will return
+    an empty list until an approval workflow exists that writes that status.
+    """
+    rows = (
+        db.query(Event)
+        .filter(Event.status == "confirmed")
+        .order_by(Event.proposedStartAt.asc())
+        .all()
+    )
+    return [_to_out(row) for row in rows]
+
 
 def list_upcoming_events(db: Session) -> list[EventOut]:
     now = datetime.utcnow()
