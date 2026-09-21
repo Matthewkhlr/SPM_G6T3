@@ -4,6 +4,12 @@ const axiosClient = createServiceClient("event");
 
 export const getEvents = () => axiosClient.get("/events");
 
+// All events except rejected ones.
+export const getAllEvents = () => axiosClient.get("/events/all");
+
+// Only events with status "confirmed".
+export const getConfirmedEvents = () => axiosClient.get("/events/confirmed");
+
 export const getEvent = (eventId) => axiosClient.get(`/events/${eventId}`);
 
 // organiserId is not sent — the backend takes it from the bearer token.
