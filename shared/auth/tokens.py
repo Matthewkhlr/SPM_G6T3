@@ -45,6 +45,9 @@ def get_firebase_app() -> firebase_admin.App:
 def verify_firebase_token(token: str) -> dict:
     """Verify a Firebase ID token, returning its decoded claims (uid, email, ...)."""
     try:
-        return firebase_auth.verify_id_token(token, app=get_firebase_app())
+        # Local clocks can sit a few seconds behind Google's token iat.
+        return firebase_auth.verify_id_token(
+            token, app=get_firebase_app(), clock_skew_seconds=60
+        )
     except Exception as exc:
         raise ValueError("Invalid or expired token") from exc
