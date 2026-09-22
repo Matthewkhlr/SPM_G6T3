@@ -32,6 +32,7 @@
       <BrowseEvents v-else-if="activeTab === 'Browse Events'" />
       <CreateEvent v-else-if="activeTab === 'New Request'" />
       <UpcomingEventsCalendar v-else-if="activeTab === 'Upcoming Events'"/>
+      <ReviewQueue v-else-if="activeTab === 'Review Queue'" />
 
       <div class="not-built" v-else>
         This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }} are functional.
@@ -53,6 +54,7 @@ import { roles } from '../config/roles.js'
 import { auth } from '../firebase.js'
 import { session, logoutSession } from '../store/session.js'
 import UpcomingEventsCalendar from '../features/event-calendar/EventCalendar.vue'
+import ReviewQueue from '../features/review-queue/ReviewQueue.vue'
 
 const router = useRouter()
 const currentData = computed(() => roles[session.role])

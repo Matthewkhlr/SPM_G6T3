@@ -50,6 +50,10 @@ class EventOut(BaseModel):
     registeredCount: int = 0
 
 
+class EventDecision(BaseModel):
+    reason: str | None = None
+
+
 class EventAssignmentCreate(BaseModel):
     coordinatorId: str = Field(min_length=1)
 

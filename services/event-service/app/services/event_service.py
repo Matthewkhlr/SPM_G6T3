@@ -5,9 +5,24 @@ from sqlalchemy.orm import Session
 
 from app.models.event import Event
 from app.models.event_assignment import EventAssignment
+from app.models.event_status_history import EventStatusHistory
 from app.orchestration.clients import registration_count
 from app.schemas.event import EventAssignmentCreate, EventAssignmentOut, EventCreate, EventOut
-from shared.exceptions.http import not_found
+from shared.exceptions.http import conflict, not_found
+
+# Full intended event lifecycle. The status column is a free VARCHAR(32) with
+# no DB-level enum, so this is documentation for future transitions, not an
+# enforced constraint. Only submitted -> approved/rejected is wired up today.
+EVENT_STATUSES = (
+    "draft",
+    "submitted",
+    "approved",
+    "rejected",
+    "preparing",
+    "prepared",
+    "confirmed",
+    "completed",
+)
 
 
 def _to_out(row: Event) -> EventOut:
@@ -80,9 +95,8 @@ def create_event(
 ) -> EventOut:
     """Create an event request.
 
-    New events start at "created". Saving-as-draft and submitting for
-    coordinator review are separate transitions to be built later — those are
-    what will stamp submitted_at and write event_status_history rows.
+    There is no separate draft-save flow yet, so a created event request is
+    immediately "submitted" for coordinator review.
     """
     now = datetime.utcnow()
     row = Event(
@@ -105,8 +119,8 @@ def create_event(
         registrationOpensAt=data.registrationOpensAt,
         registrationClosesAt=data.registrationClosesAt,
         capacity=data.capacity,
-        status="created",
-        submittedAt=None,
+        status="submitted",
+        submittedAt=now,
         createdAt=now,
         updatedAt=now,
     )
@@ -142,3 +156,39 @@ def assign_coordinator(
         assignedBy=row.assignedBy,
         assignedAt=row.assignedAt,
     )
+
+
+def _record_status_change(db: Session, event: Event, to_status: str, changed_by: str, note: str = "") -> None:
+    db.add(
+        EventStatusHistory(
+            historyId=str(uuid4()),
+            eventId=event.eventId,
+            fromStatus=event.status,
+            toStatus=to_status,
+            changedBy=changed_by,
+            note=note,
+            createdAt=datetime.utcnow(),
+        )
+    )
+
+
+def _decide_event(db: Session, event_id: str, coordinator_id: str, new_status: str, reason: str) -> EventOut:
+    event = db.query(Event).filter(Event.eventId == event_id).first()
+    if not event:
+        raise not_found("Event not found")
+    if event.status != "submitted":
+        raise conflict(f"Event is already {event.status}")
+    _record_status_change(db, event, new_status, coordinator_id, reason)
+    event.status = new_status
+    event.updatedAt = datetime.utcnow()
+    db.commit()
+    db.refresh(event)
+    return _to_out(event)
+
+
+def approve_event(db: Session, event_id: str, coordinator_id: str) -> EventOut:
+    return _decide_event(db, event_id, coordinator_id, "approved", "")
+
+
+def reject_event(db: Session, event_id: str, coordinator_id: str, reason: str = "") -> EventOut:
+    return _decide_event(db, event_id, coordinator_id, "rejected", reason)

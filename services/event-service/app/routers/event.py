@@ -4,7 +4,13 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 from app.orchestration.clients import current_organiser, current_technical_support
-from app.schemas.event import EventAssignmentCreate, EventAssignmentOut, EventCreate, EventOut
+from app.schemas.event import (
+    EventAssignmentCreate,
+    EventAssignmentOut,
+    EventCreate,
+    EventDecision,
+    EventOut,
+)
 from app.services import event_service
 from shared.auth.roles import resolve_caller
 
@@ -48,6 +54,28 @@ def list_confirmed_events(db: Session = Depends(get_db)):
 @router.get("/{event_id}", response_model=EventOut)
 def get_event(event_id: str, db: Session = Depends(get_db)):
     return event_service.get_event(db, event_id)
+
+
+@router.post("/{event_id}/approve", response_model=EventOut)
+def approve_event(
+    event_id: str,
+    body: EventDecision,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return event_service.approve_event(db, event_id, caller["userId"])
+
+
+@router.post("/{event_id}/reject", response_model=EventOut)
+def reject_event(
+    event_id: str,
+    body: EventDecision,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return event_service.reject_event(db, event_id, caller["userId"], body.reason or "")
 
 
 @router.post("/{event_id}/assign-coordinator", response_model=EventAssignmentOut, status_code=201)
