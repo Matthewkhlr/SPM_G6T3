@@ -211,10 +211,17 @@ Shown on the login screen. Seeded in MySQL and listed in `Test Data/credentials-
 | Email | Password | Role |
 |---|---|---|
 | organiser@connectsphere.com | organiser123 | Event Organiser |
+| organiser2@connectsphere.com | organiser456 | Event Organiser |
+| organiser3@connectsphere.com | organiser789 | Event Organiser |
+| organiser4@connectsphere.com | organiser000 | Event Organiser |
 | coordinator@connectsphere.com | coord123 | Event Coordinator |
+| coordinator2@connectsphere.com | coord456 | Event Coordinator |
 | venue@connectsphere.com | venue123 | Venue Staff |
+| venue2@connectsphere.com | venue456 | Venue Staff |
 | tech@connectsphere.com | tech123 | Technical Support |
+| tech2@connectsphere.com | tech456 | Technical Support |
 | attendee@connectsphere.com | attend123 | Attendee |
+| attendee2@connectsphere.com | attend456 | Attendee |
 
 Login uses Firebase plus `GET /users/me`. `frontend/src/auth/users.data.js` is the on-screen demo list only.
 
