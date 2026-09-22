@@ -89,8 +89,8 @@ def create_venue(
     responses=error_responses(403, 404, 503),
 )
 def update_venue(
-    venue_id: str = Path(..., description="Venue id, e.g. `v1`."),
     body: VenueUpdate,
+    venue_id: str = Path(..., description="Venue id, e.g. `v1`."),
     authorization: str | None = Depends(forwarded_bearer),
     db: Session = Depends(get_db),
 ):

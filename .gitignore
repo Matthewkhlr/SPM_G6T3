@@ -10,3 +10,5 @@ venv/
 *.db
 .pytest_cache/
 *firebase-adminsdk*.json
+playwright-report/
+test-results/

@@ -206,7 +206,7 @@ Set an optional per-service URL with `VITE_USER_SERVICE_URL`, `VITE_EVENT_SERVIC
 
 ### Demo logins
 
-Shown on the login screen. Seeded in MySQL to match:
+Shown on the login screen. Seeded in MySQL and listed in `Test Data/credentials-valid.txt`:
 
 | Email | Password | Role |
 |---|---|---|
@@ -216,7 +216,7 @@ Shown on the login screen. Seeded in MySQL to match:
 | tech@connectsphere.com | tech123 | Technical Support |
 | attendee@connectsphere.com | attend123 | Attendee |
 
-UI login still uses hardcoded `frontend/src/auth/users.data.js` until the login screen is wired to `user-service`. Catalogue / browse-events screens still use co-located `.data.js` files until they import `src/api/*`.
+Login uses Firebase plus `GET /users/me`. `frontend/src/auth/users.data.js` is the on-screen demo list only.
 
 ---
 
@@ -250,8 +250,10 @@ SPM_G6T3/
 ├── shared/                   Python used by every backend service
 ├── infra/                    Docker Compose — local MySQL only
 ├── scripts/                  migrate, seed, start all backends
-├── docs/                     architecture, data model, ERD
-├── package.json              npm run dev:frontend / dev:backend / migrate
+├── Test Data/                shared acceptance-test credentials
+├── e2e/                      Playwright browser and API acceptance tests
+├── docs/                     architecture, API, data model, testing
+├── package.json              development and acceptance-test commands
 └── README.md
 ```
 
@@ -326,6 +328,7 @@ infra/
 |---|---|
 | `dev-backend.py` | uvicorn all services |
 | `migrate.py` | wait for MySQL → alembic upgrade → seed |
+| `prepare-acceptance-tests.py` | start MySQL, migrate, and seed before Playwright |
 | `revision.py` | `alembic revision --autogenerate` for one service (Windows-safe) |
 | `seed.py` | demo rows (called by migrate unless `--no-seed`) |
 
@@ -347,6 +350,7 @@ shared/
 | `architecture.md` | this file |
 | `api.md` | OpenAPI / Swagger index (ports, auth, role gates) |
 | `data-model.md` | tables, enums, conflict/capacity rules, ERD |
+| `testing/` | How to run SPM-43 / SPM-45 and the AC-to-spec map |
 
 ---
 
