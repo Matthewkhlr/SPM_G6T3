@@ -243,76 +243,92 @@ def seed_event() -> None:
             )
 
 
+def _hours(days: list[str], opens: str, closes: str) -> list[dict]:
+    return [{"day": d, "opens": opens, "closes": closes} for d in days]
+
+
+def _layouts(pairs: list[tuple[str, int]]) -> list[dict]:
+    return [{"name": name, "capacity": cap} for name, cap in pairs]
+
+
+WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+ALL_DAYS = WEEKDAYS + ["Sat", "Sun"]
+
+
 def seed_venue() -> None:
     engine = create_engine(URLS["venue"])
     now = datetime.utcnow()
     with engine.begin() as conn:
         if not _empty(conn, "venues"):
             return
+        # "location" is the building/complex name, "address" is the full
+        # street address with postal code, and "floor" is separate again --
+        # three distinct fields, not the same string repeated three times.
         venues = [
             (
-                "v1",
-                "Marina Hall A",
-                "3 Harbourfront Ave, Level 2",
-                300,
+                "v1", "MH-A", "Marina Hall A", "HarbourFront Centre",
+                "1 HarbourFront Walk, Singapore 098585", "2",
+                "ConnectSphere's largest multipurpose hall.",
                 ["Projector", "PA system", "Video-conferencing", "Stage"],
-                "Wheelchair accessible, accessible restrooms nearby",
-                ["Theatre", "Classroom", "Banquet"],
-                "Mon–Sun, 8:00 AM – 10:00 PM",
+                ["Wheelchair accessible", "Accessible restrooms nearby"],
+                _layouts([("Theatre", 300), ("Classroom", 180), ("Banquet", 220)]),
+                _hours(ALL_DAYS, "08:00", "22:00"),
                 60,
             ),
             (
-                "v2",
-                "Riverside Room 204",
-                "3 Harbourfront Ave, Level 2",
-                80,
+                "v2", "RS-204", "Riverside Room 204", "HarbourFront Centre",
+                "1 HarbourFront Walk, Singapore 098585", "2",
+                "Mid-sized meeting room.",
                 ["Projector", "Whiteboard"],
-                "Wheelchair accessible",
-                ["Boardroom", "Classroom"],
-                "Mon–Sat, 8:00 AM – 8:00 PM",
+                ["Wheelchair accessible"],
+                _layouts([("Boardroom", 20), ("Classroom", 80)]),
+                _hours(WEEKDAYS + ["Sat"], "08:00", "20:00"),
                 30,
             ),
             (
-                "v3",
-                "Exhibition Hall B",
-                "12 Convention Way",
-                500,
+                "v3", "EH-B", "Exhibition Hall B", "Suntec Singapore Convention & Exhibition Centre",
+                "1 Raffles Boulevard, Singapore 039593", "1",
+                "Large exhibition space with loading dock access.",
                 ["Loading dock", "PA system", "Booth power points"],
-                "Wheelchair accessible, accessible restrooms nearby",
-                ["Exhibition", "Theatre"],
-                "Mon–Sun, 7:00 AM – 11:00 PM",
+                ["Wheelchair accessible", "Accessible restrooms nearby"],
+                _layouts([("Exhibition", 500), ("Theatre", 350)]),
+                _hours(ALL_DAYS, "07:00", "23:00"),
                 120,
             ),
             (
-                "v4",
-                "Skyline Boardroom",
-                "3 Harbourfront Ave, Level 18",
-                20,
+                "v4", "SB-18", "Skyline Boardroom", "One Raffles Place",
+                "1 Raffles Place, Singapore 048616", "18",
+                "Executive boardroom with skyline views.",
                 ["Video-conferencing", "Smart TV"],
-                "Wheelchair accessible",
-                ["Boardroom"],
-                "Mon–Fri, 8:00 AM – 6:00 PM",
+                ["Wheelchair accessible"],
+                _layouts([("Boardroom", 20)]),
+                _hours(WEEKDAYS, "08:00", "18:00"),
                 15,
             ),
         ]
         for row in venues:
             conn.execute(
                 text(
-                    "INSERT INTO venues (venue_id, name, location, capacity, facilities, accessibility, "
-                    "layouts, operating_hours, turnaround_minutes, is_active, created_at) VALUES ("
-                    ":venue_id, :name, :location, :capacity, :facilities, :accessibility, :layouts, "
-                    ":operating_hours, :turnaround_minutes, 1, :created_at)"
+                    "INSERT INTO venues (venue_id, code, name, location, address, floor, description, "
+                    "facilities, accessibility, layouts, operating_hours, turnaround_minutes, "
+                    "is_active, created_at) VALUES ("
+                    ":venue_id, :code, :name, :location, :address, :floor, :description, "
+                    ":facilities, :accessibility, :layouts, :operating_hours, :turnaround_minutes, 1, "
+                    ":created_at)"
                 ),
                 {
                     "venue_id": row[0],
-                    "name": row[1],
-                    "location": row[2],
-                    "capacity": row[3],
-                    "facilities": json.dumps(row[4]),
-                    "accessibility": row[5],
-                    "layouts": json.dumps(row[6]),
-                    "operating_hours": row[7],
-                    "turnaround_minutes": row[8],
+                    "code": row[1],
+                    "name": row[2],
+                    "location": row[3],
+                    "address": row[4],
+                    "floor": row[5],
+                    "description": row[6],
+                    "facilities": json.dumps(row[7]),
+                    "accessibility": json.dumps(row[8]),
+                    "layouts": json.dumps(row[9]),
+                    "operating_hours": json.dumps(row[10]),
+                    "turnaround_minutes": row[11],
                     "created_at": now,
                 },
             )

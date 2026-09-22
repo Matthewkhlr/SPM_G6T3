@@ -55,7 +55,11 @@ import { session, logoutSession } from '../store/session.js'
 import UpcomingEventsCalendar from '../features/event-calendar/EventCalendar.vue'
 
 const router = useRouter()
-const currentData = computed(() => roles[session.role])
+// session.role is briefly null during logout (logoutSession() runs before
+// the router finishes navigating away from this still-mounted view), so
+// this falls back to an empty role rather than crashing on
+// "Cannot read properties of undefined" for that one render.
+const currentData = computed(() => roles[session.role] ?? { tabs: [], cards: [], label: '' })
 const activeTab = ref('Dashboard')
 
 const hasVenueTab = computed(() => currentData.value.tabs.includes('Venue Catalogue'))
