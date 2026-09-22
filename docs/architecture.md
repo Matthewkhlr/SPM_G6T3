@@ -188,7 +188,7 @@ Or `npm run dev:backend`. Starts all FastAPI apps with `--reload`:
 | registration-service | 8005 |
 | notification-service | 8006 |
 
-Health check: `http://localhost:8001/health` (swap port per service). The browser calls each service directly on its app port (8001–8006).
+Health check: `http://localhost:8001/health` (swap port per service). Interactive API docs: `http://localhost:8001/docs` (swap port). Index of all six specs: [api.md](api.md). The browser calls each service directly on its app port (8001–8006).
 
 `dev-backend.py` sets `PYTHONPATH` to the repo root so `import shared` works.
 
@@ -334,6 +334,7 @@ infra/
 ```
 shared/
 ├── auth/tokens.py      demo JWT; Firebase verify stub
+├── openapi.py          FastAPI titles, Swagger Bearer auth, error examples
 ├── schemas/
 ├── exceptions/
 └── logging/
@@ -344,6 +345,7 @@ shared/
 | File | Purpose |
 |---|---|
 | `architecture.md` | this file |
+| `api.md` | OpenAPI / Swagger index (ports, auth, role gates) |
 | `data-model.md` | tables, enums, conflict/capacity rules, ERD |
 
 ---
