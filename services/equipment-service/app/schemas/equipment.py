@@ -1,14 +1,26 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EquipmentOut(BaseModel):
     equipmentId: str
     name: str
     category: str
-    status: str
+    status: str = Field(description="Derived from unit rows: `available`, `maintenance`, or `damaged`.")
     notes: str
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "equipmentId": "eq1",
+                "name": "Projector PX-200",
+                "category": "display",
+                "status": "available",
+                "notes": "Includes HDMI + VGA adapters",
+            }
+        }
+    )
 
 
 class EquipmentRequestCreate(BaseModel):
@@ -19,10 +31,27 @@ class EquipmentRequestCreate(BaseModel):
     startsAt: datetime
     endsAt: datetime
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "eventId": "e1",
+                "equipmentId": "eq1",
+                "quantity": 1,
+                "technicalRequirements": "HDMI to the lectern.",
+                "startsAt": "2026-10-06T08:00:00",
+                "endsAt": "2026-10-06T18:00:00",
+            }
+        }
+    )
+
 
 class EquipmentRequestReview(BaseModel):
     approve: bool
     reviewNote: str = ""
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"approve": True, "reviewNote": "Stock is free that day."}}
+    )
 
 
 class EquipmentRequestOut(BaseModel):
@@ -32,12 +61,31 @@ class EquipmentRequestOut(BaseModel):
     quantity: int
     technicalRequirements: str
     requestedBy: str
-    status: str
+    status: str = Field(description="`pending`, `approved`, `rejected`, or `reserved`.")
     startsAt: datetime
     endsAt: datetime
     reviewedBy: str | None
     reviewNote: str
     createdAt: datetime
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "requestId": "req-1",
+                "eventId": "e1",
+                "equipmentId": "eq1",
+                "quantity": 1,
+                "technicalRequirements": "HDMI to the lectern.",
+                "requestedBy": "u2",
+                "status": "pending",
+                "startsAt": "2026-10-06T08:00:00",
+                "endsAt": "2026-10-06T18:00:00",
+                "reviewedBy": None,
+                "reviewNote": "",
+                "createdAt": "2026-09-20T10:00:00",
+            }
+        }
+    )
 
 
 class EquipmentReservationOut(BaseModel):
@@ -49,3 +97,18 @@ class EquipmentReservationOut(BaseModel):
     startsAt: datetime
     endsAt: datetime
     status: str
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "reservationId": "rsv-1",
+                "requestId": "req-1",
+                "eventId": "e1",
+                "equipmentId": "eq1",
+                "quantity": 1,
+                "startsAt": "2026-10-06T08:00:00",
+                "endsAt": "2026-10-06T18:00:00",
+                "status": "reserved",
+            }
+        }
+    )

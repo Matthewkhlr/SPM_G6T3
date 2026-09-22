@@ -6,10 +6,19 @@
   "scripts": {
     "dev:frontend": "npm run dev --prefix frontend",
     "dev:backend": "python scripts/dev-backend.py",
-    "migrate": "python scripts/migrate.py"
+    "migrate": "python scripts/migrate.py",
+    "test:prepare": "python3 scripts/prepare-acceptance-tests.py",
+    "test:acceptance": "npm run test:prepare && playwright test",
+    "test:acceptance:ui": "npm run test:prepare && playwright test --ui",
+    "test:spm43": "npm run test:prepare && playwright test e2e/spm43.spec.js",
+    "test:spm45": "npm run test:prepare && playwright test e2e/spm45-api.spec.js e2e/spm45-ui.contract.spec.js"
   },
   "dependencies": {
     "@fullcalendar/vue3": "^7.1.0",
     "temporal-polyfill": "^1.0.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "dotenv": "^17.2.2"
   }
 }

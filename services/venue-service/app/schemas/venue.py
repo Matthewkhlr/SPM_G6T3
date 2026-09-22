@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class OperatingHours(BaseModel):
@@ -35,6 +35,31 @@ class VenueOut(BaseModel):
     operatingHours: list[OperatingHours]
     turnaroundMinutes: int
     isActive: bool
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "venueId": "v1",
+                "code": "MH-A",
+                "name": "Marina Hall A",
+                "location": "HarbourFront Centre",
+                "address": "1 HarbourFront Walk, Singapore 098585",
+                "floor": "2",
+                "description": "ConnectSphere's largest multipurpose hall.",
+                "capacity": 300,
+                "facilities": ["Projector", "PA system", "Video-conferencing", "Stage"],
+                "accessibility": ["Wheelchair accessible", "Accessible restrooms nearby"],
+                "layouts": [
+                    {"name": "Theatre", "capacity": 300},
+                    {"name": "Classroom", "capacity": 180},
+                    {"name": "Banquet", "capacity": 220},
+                ],
+                "operatingHours": [{"day": "Mon", "opens": "08:00", "closes": "22:00"}],
+                "turnaroundMinutes": 60,
+                "isActive": True,
+            }
+        }
+    )
 
 
 class VenueCreate(BaseModel):
@@ -75,6 +100,21 @@ class VenueActivityLogOut(BaseModel):
     changes: dict
     createdAt: datetime
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "logId": "log-1",
+                "venueId": "v1",
+                "action": "updated",
+                "changedBy": "u3",
+                "changedByName": "Carol Venue",
+                "changedByRole": "venue",
+                "changes": {"turnaroundMinutes": {"old": 45, "new": 60}},
+                "createdAt": "2026-09-20T10:00:00",
+            }
+        }
+    )
+
 
 class VenueBookingCreate(BaseModel):
     venueId: str
@@ -85,9 +125,25 @@ class VenueBookingCreate(BaseModel):
     teardownEndsAt: datetime
     requirementsSnapshot: str = ""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "venueId": "v1",
+                "eventId": "e1",
+                "startsAt": "2026-10-06T09:00:00",
+                "endsAt": "2026-10-06T17:00:00",
+                "setupStartsAt": "2026-10-06T08:00:00",
+                "teardownEndsAt": "2026-10-06T18:00:00",
+                "requirementsSnapshot": "Theatre layout, wheelchair access, PA system.",
+            }
+        }
+    )
+
 
 class VenueBookingDecision(BaseModel):
-    reason: str | None = None
+    reason: str | None = Field(default=None, description="Optional note stored on the booking.")
+
+    model_config = ConfigDict(json_schema_extra={"example": {"reason": "Hall A is free that day."}})
 
 
 class VenueBookingOut(BaseModel):
@@ -95,7 +151,7 @@ class VenueBookingOut(BaseModel):
     venueId: str
     eventId: str
     requestedBy: str
-    status: str
+    status: str = Field(description="`pending`, `approved`, or `rejected`.")
     startsAt: datetime
     endsAt: datetime
     setupStartsAt: datetime
@@ -105,3 +161,24 @@ class VenueBookingOut(BaseModel):
     reviewedBy: str | None
     reviewedAt: datetime | None
     createdAt: datetime
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "bookingId": "bk-1",
+                "venueId": "v1",
+                "eventId": "e1",
+                "requestedBy": "u2",
+                "status": "pending",
+                "startsAt": "2026-10-06T09:00:00",
+                "endsAt": "2026-10-06T17:00:00",
+                "setupStartsAt": "2026-10-06T08:00:00",
+                "teardownEndsAt": "2026-10-06T18:00:00",
+                "requirementsSnapshot": "Theatre layout, wheelchair access, PA system.",
+                "decisionReason": None,
+                "reviewedBy": None,
+                "reviewedAt": None,
+                "createdAt": "2026-09-20T10:00:00",
+            }
+        }
+    )
