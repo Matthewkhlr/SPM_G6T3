@@ -85,6 +85,14 @@ export function newEquipmentPayload(label = `AUTO-EQ-${Date.now()}`) {
   }
 }
 
+export function draftNamePayload(name = `AUTO-DRAFT-${Date.now()}`) {
+  return { eventName: name }
+}
+
+export function completeRequestPayload(name = `AUTO-REQUEST-${Date.now()}`, extras = {}) {
+  return { ...newEventPayload(name), registrationEnabled: extras.registrationEnabled ?? false, ...extras }
+}
+
 export function newEventPayload(name = `AUTO-EVENT-${Date.now()}`) {
   const start = new Date(Date.now() + 40 * DAY)
   start.setUTCHours(10, 0, 0, 0)
@@ -107,6 +115,8 @@ export function newEventPayload(name = `AUTO-EVENT-${Date.now()}`) {
 }
 
 export const EVENT_PROPOSED_DATE_NEAR_DAYS = 14
+
+export const EVENT_REMINDER_LEAD_DAYS = 7
 
 export const serviceUrls = {
   user: process.env.VITE_USER_SERVICE_URL || 'http://127.0.0.1:8001',

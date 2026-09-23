@@ -255,6 +255,185 @@
 | SPM-78 | Release on confirmed requires reason and notifies | TC-SPM78-AC04 | `e2e/spm78.spec.js` | Automated |
 | SPM-78 | Release returns arrangement to needing attention | TC-SPM78-AC05 | `e2e/spm78.spec.js` | Automated |
 | SPM-78 | Adjustments logged with old and new quantity | TC-SPM78-AC06 | `e2e/spm78.spec.js` | Automated |
+| SPM-14 | Missing required fields listed and blocked | TC-SPM14-AC01 | `e2e/spm14.spec.js` | Automated |
+| SPM-14 | Submit moves to Submitted and the queue | TC-SPM14-AC02 | `e2e/spm14.spec.js` | Automated |
+| SPM-14 | Confirmation names event and reference | TC-SPM14-AC03 | `e2e/spm14.spec.js` | Automated |
+| SPM-14 | Submitted is not directly editable | TC-SPM14-AC04 | `e2e/spm14.spec.js` | Automated |
+| SPM-14 | Second submit refused | TC-SPM14-AC05 | `e2e/spm14.spec.js` | Automated |
+| SPM-14 | Submit notifies ConnectSphere | TC-SPM14-AC06 | `e2e/spm14.spec.js` | Automated |
+| SPM-14 | No minimum notice period | TC-SPM14-AC07 | `e2e/spm14.spec.js` | Automated |
+| SPM-79 | Save draft with name only | TC-SPM79-AC01 | `e2e/spm79.spec.js` | Automated |
+| SPM-79 | Reopen and edit keeps prior values | TC-SPM79-AC02 | `e2e/spm79.spec.js` | Automated |
+| SPM-79 | Drafts labelled and excluded from the queue | TC-SPM79-AC03 | `e2e/spm79.spec.js` | Automated |
+| SPM-79 | Draft captures the published fields | TC-SPM79-AC04 | `e2e/spm79.spec.js` | Automated |
+| SPM-79 | Unsaved navigation warns | TC-SPM79-AC05 | `e2e/spm79.spec.js` | Automated |
+| SPM-79 | Internal users cannot see a draft | TC-SPM79-AC06 | `e2e/spm79.spec.js` | Automated |
+| SPM-80 | Published layout or no preference | TC-SPM80-AC01 | `e2e/spm80.spec.js` | Automated |
+| SPM-80 | Location and catalogue facilities | TC-SPM80-AC02 | `e2e/spm80.spec.js` | Automated |
+| SPM-80 | Accessibility list plus note | TC-SPM80-AC03 | `e2e/spm80.spec.js` | Automated |
+| SPM-80 | Equipment lines from the catalogue | TC-SPM80-AC04 | `e2e/spm80.spec.js` | Automated |
+| SPM-80 | Invalid quantity rejected | TC-SPM80-AC05 | `e2e/spm80.spec.js` | Automated |
+| SPM-80 | Duplicate type edits the existing line | TC-SPM80-AC06 | `e2e/spm80.spec.js` | Automated |
+| SPM-80 | Coordinator sees requirements unchanged | TC-SPM80-AC07 | `e2e/spm80.spec.js` | Automated |
+| SPM-81 | Registration-needed indicator required | TC-SPM81-AC01 | `e2e/spm81.spec.js` | Automated |
+| SPM-81 | Optional period and capacity | TC-SPM81-AC02 | `e2e/spm81.spec.js` | Automated |
+| SPM-81 | Blank period still submits, flagged outstanding | TC-SPM81-AC03 | `e2e/spm81.spec.js` | Automated |
+| SPM-81 | Close not after open rejected | TC-SPM81-AC04 | `e2e/spm81.spec.js` | Automated |
+| SPM-81 | Close after event start rejected | TC-SPM81-AC05 | `e2e/spm81.spec.js` | Automated |
+| SPM-81 | Capacity above attendance warns | TC-SPM81-AC06 | `e2e/spm81.spec.js` | Automated |
+| SPM-81 | No registration UI when not needed | TC-SPM81-AC07 | `e2e/spm81.spec.js` | Automated |
+| SPM-82 | Missing required fields listed and blocked | TC-SPM82-AC01 | `e2e/spm82.spec.js` | Automated |
+| SPM-82 | Submit moves to Submitted and the queue | TC-SPM82-AC02 | `e2e/spm82.spec.js` | Automated |
+| SPM-82 | Confirmation names event and reference | TC-SPM82-AC03 | `e2e/spm82.spec.js` | Automated |
+| SPM-82 | Submitted is not directly editable | TC-SPM82-AC04 | `e2e/spm82.spec.js` | Automated |
+| SPM-82 | Second submit refused | TC-SPM82-AC05 | `e2e/spm82.spec.js` | Automated |
+| SPM-82 | Submit notifies ConnectSphere | TC-SPM82-AC06 | `e2e/spm82.spec.js` | Automated |
+| SPM-82 | No minimum notice period | TC-SPM82-AC07 | `e2e/spm82.spec.js` | Automated |
+| SPM-83 | Discard only in Draft | TC-SPM83-AC01 | `e2e/spm83.spec.js` | Automated |
+| SPM-83 | Discard confirmation names the event | TC-SPM83-AC02 | `e2e/spm83.spec.js` | Automated |
+| SPM-83 | Discarded draft leaves the list | TC-SPM83-AC03 | `e2e/spm83.spec.js` | Automated |
+| SPM-83 | Non-draft discard is 403 | TC-SPM83-AC04 | `e2e/spm83.spec.js` | Automated |
+| SPM-83 | Discard written to the activity log | TC-SPM83-AC05 | `e2e/spm83.spec.js` | Automated |
+| SPM-85 | Coordinator sees current, proposed, and reason | TC-SPM85-AC01 | `e2e/spm85.spec.js` | Automated |
+| SPM-85 | Impact names venue, equipment, registration | TC-SPM85-AC02 | `e2e/spm85.spec.js` | Automated |
+| SPM-85 | Date/time/layout re-runs suitability | TC-SPM85-AC03 | `e2e/spm85.spec.js` | Automated |
+| SPM-85 | Over-capacity names both figures | TC-SPM85-AC04 | `e2e/spm85.spec.js` | Automated |
+| SPM-85 | Extra equipment availability reported | TC-SPM85-AC05 | `e2e/spm85.spec.js` | Automated |
+| SPM-85 | Accept applies values and notifies | TC-SPM85-AC06 | `e2e/spm85.spec.js` | Automated |
+| SPM-85 | Decline requires reason, event untouched | TC-SPM85-AC07 | `e2e/spm85.spec.js` | Automated |
+| SPM-85 | Partial accept is a decline plus narrower ask | TC-SPM85-AC08 | `e2e/spm85.spec.js` | Automated |
+| SPM-85 | Decision written to the activity log | TC-SPM85-AC09 | `e2e/spm85.spec.js` | Automated |
+| SPM-86 | Significant change flags arrangements | TC-SPM86-AC01 | `e2e/spm86.spec.js` | Automated |
+| SPM-86 | Flag visible on event, readiness, calendar, queues | TC-SPM86-AC02 | `e2e/spm86.spec.js` | Automated |
+| SPM-86 | Venue and technical staff notified | TC-SPM86-AC03 | `e2e/spm86.spec.js` | Automated |
+| SPM-86 | Booking re-checked, not silently moved | TC-SPM86-AC04 | `e2e/spm86.spec.js` | Automated |
+| SPM-86 | Venue staff re-confirm in one action | TC-SPM86-AC05 | `e2e/spm86.spec.js` | Automated |
+| SPM-86 | Unsuitable booking released, search again | TC-SPM86-AC06 | `e2e/spm86.spec.js` | Automated |
+| SPM-86 | Extra equipment flagged, not reserved | TC-SPM86-AC07 | `e2e/spm86.spec.js` | Automated |
+| SPM-86 | Not presented as fully confirmed | TC-SPM86-AC08 | `e2e/spm86.spec.js` | Automated |
+| SPM-86 | Registered attendees notified | TC-SPM86-AC09 | `e2e/spm86.spec.js` | Automated |
+| SPM-86 | All re-verified restores presentation | TC-SPM86-AC10 | `e2e/spm86.spec.js` | Automated |
+| SPM-87 | Reschedule Approved, Planning, or Confirmed | TC-SPM87-AC01 | `e2e/spm87.spec.js` | Automated |
+| SPM-87 | Preview venue and equipment at the new period | TC-SPM87-AC02 | `e2e/spm87.spec.js` | Automated |
+| SPM-87 | Carry booking when free and suitable | TC-SPM87-AC03 | `e2e/spm87.spec.js` | Automated |
+| SPM-87 | Unavailable venue: proceed or abandon | TC-SPM87-AC04 | `e2e/spm87.spec.js` | Automated |
+| SPM-87 | Old period released only after apply | TC-SPM87-AC05 | `e2e/spm87.spec.js` | Automated |
+| SPM-87 | Equipment shortfalls flagged, not dropped | TC-SPM87-AC06 | `e2e/spm87.spec.js` | Automated |
+| SPM-87 | Organiser, staff, and attendees notified | TC-SPM87-AC07 | `e2e/spm87.spec.js` | Automated |
+| SPM-87 | Registration close brought forward | TC-SPM87-AC08 | `e2e/spm87.spec.js` | Automated |
+| SPM-87 | Reschedule written to the activity log | TC-SPM87-AC09 | `e2e/spm87.spec.js` | Automated |
+| SPM-88 | Organiser and coordinator can cancel | TC-SPM88-AC01 | `e2e/spm88.spec.js` | Automated |
+| SPM-88 | Reason required, immediate, no approval | TC-SPM88-AC02 | `e2e/spm88.spec.js` | Automated |
+| SPM-88 | Confirmation states releases and notifies | TC-SPM88-AC03 | `e2e/spm88.spec.js` | Automated |
+| SPM-88 | Cancelled is terminal | TC-SPM88-AC04 | `e2e/spm88.spec.js` | Automated |
+| SPM-88 | Venue bookings released | TC-SPM88-AC05 | `e2e/spm88.spec.js` | Automated |
+| SPM-88 | Equipment reservations released | TC-SPM88-AC06 | `e2e/spm88.spec.js` | Automated |
+| SPM-88 | Registration closes, attendees notified | TC-SPM88-AC07 | `e2e/spm88.spec.js` | Automated |
+| SPM-88 | Coordinator and staff notified | TC-SPM88-AC08 | `e2e/spm88.spec.js` | Automated |
+| SPM-88 | Failed release blocks cancellation | TC-SPM88-AC09 | `e2e/spm88.spec.js` | Automated |
+| SPM-88 | History remains and is logged | TC-SPM88-AC10 | `e2e/spm88.spec.js` | Automated |
+| SPM-88 | Pending change request closed | TC-SPM88-AC11 | `e2e/spm88.spec.js` | Automated |
+| SPM-106 | Raise CR on allowed statuses | TC-SPM106-AC01 | `e2e/spm106.spec.js` | Automated |
+| SPM-106 | Current, proposed, and reason required | TC-SPM106-AC02 | `e2e/spm106.spec.js` | Automated |
+| SPM-106 | Published changeable fields | TC-SPM106-AC03 | `e2e/spm106.spec.js` | Automated |
+| SPM-106 | Pending visible to both sides | TC-SPM106-AC04 | `e2e/spm106.spec.js` | Automated |
+| SPM-106 | Only one pending CR | TC-SPM106-AC05 | `e2e/spm106.spec.js` | Automated |
+| SPM-106 | Organiser can withdraw | TC-SPM106-AC06 | `e2e/spm106.spec.js` | Automated |
+| SPM-106 | Organiser notified of the decision | TC-SPM106-AC07 | `e2e/spm106.spec.js` | Automated |
+| SPM-106 | Drafts have no change-request action | TC-SPM106-AC08 | `e2e/spm106.spec.js` | Automated |
+| SPM-106 | Terminal events cannot raise a CR | TC-SPM106-AC09 | `e2e/spm106.spec.js` | Automated |
+| SPM-106 | Confirmed details stay confirmed while pending | TC-SPM106-AC10 | `e2e/spm106.spec.js` | Automated |
+| SPM-11 | Registration succeeds only for confirmed, enabled, in-period events with a place | TC-SPM11-AC01 | `e2e/spm11.spec.js` | Automated |
+| SPM-11 | Mandatory fields block submit with inline validation | TC-SPM11-AC02 | `e2e/spm11.spec.js` | Automated |
+| SPM-11 | Success confirms event, date, time, venue, and notifies | TC-SPM11-AC03 | `e2e/spm11.spec.js` | Automated |
+| SPM-11 | Remaining places drop by one immediately | TC-SPM11-AC04 | `e2e/spm11.spec.js` | Automated |
+| SPM-11 | Second registration refused; existing shown | TC-SPM11-AC05 | `e2e/spm11.spec.js` | Automated |
+| SPM-11 | Full event refuses registration and is shown as full | TC-SPM11-AC06 | `e2e/spm11.spec.js` | Automated |
+| SPM-11 | Outside the period is refused with the period stated | TC-SPM11-AC07 | `e2e/spm11.spec.js` | Automated |
+| SPM-11 | Last-place race: exactly one succeeds | TC-SPM11-AC08 | `e2e/spm11.spec.js` | Automated |
+| SPM-11 | Server enforces the same rules without the UI | TC-SPM11-AC09 | `e2e/spm11.spec.js` | Automated |
+| SPM-11 | Capacity notifies organiser and assigned coordinator | TC-SPM11-AC10 | `e2e/spm11.spec.js` | Automated |
+| SPM-12 | Withdraw only from own current registration | TC-SPM12-AC01 | `e2e/spm12.spec.js` | Automated |
+| SPM-12 | Withdraw while not started, completed, or cancelled | TC-SPM12-AC02 | `e2e/spm12.spec.js` | Automated |
+| SPM-12 | Confirm dialog names the event | TC-SPM12-AC03 | `e2e/spm12.spec.js` | Automated |
+| SPM-12 | Status becomes withdrawn; record kept | TC-SPM12-AC04 | `e2e/spm12.spec.js` | Automated |
+| SPM-12 | Place released immediately | TC-SPM12-AC05 | `e2e/spm12.spec.js` | Automated |
+| SPM-12 | Attendee confirmation and notification | TC-SPM12-AC06 | `e2e/spm12.spec.js` | Automated |
+| SPM-12 | Re-register after withdraw succeeds | TC-SPM12-AC07 | `e2e/spm12.spec.js` | Automated |
+| SPM-12 | Withdraw unavailable after start, complete, or cancel | TC-SPM12-AC08 | `e2e/spm12.spec.js` | Automated |
+| SPM-12 | Organiser and coordinator see the withdrawal | TC-SPM12-AC09 | `e2e/spm12.spec.js` | Automated |
+| SPM-89 | Organiser and assigned coordinator see that event only | TC-SPM89-AC01 | `e2e/spm89.spec.js` | Automated |
+| SPM-89 | List shows name, supplied information, time, and status | TC-SPM89-AC02 | `e2e/spm89.spec.js` | Automated |
+| SPM-89 | Summary of capacity, registered, withdrawn, remaining | TC-SPM89-AC03 | `e2e/spm89.spec.js` | Automated |
+| SPM-89 | Withdrawn rows distinguished and filterable | TC-SPM89-AC04 | `e2e/spm89.spec.js` | Automated |
+| SPM-89 | Other roles blocked on the server | TC-SPM89-AC05 | `e2e/spm89.spec.js` | Automated |
+| SPM-89 | No list when registration is not enabled | TC-SPM89-AC06 | `e2e/spm89.spec.js` | Automated |
+| SPM-89 | Empty state shows capacity and period | TC-SPM89-AC07 | `e2e/spm89.spec.js` | Automated |
+| SPM-90 | Assigned coordinator sets period and capacity through Confirmed | TC-SPM90-AC01 | `e2e/spm90.spec.js` | Automated |
+| SPM-90 | Close after open and not after event start | TC-SPM90-AC02 | `e2e/spm90.spec.js` | Automated |
+| SPM-90 | Over-venue-capacity warns with both figures | TC-SPM90-AC03 | `e2e/spm90.spec.js` | Automated |
+| SPM-90 | Capacity below registered count refused | TC-SPM90-AC04 | `e2e/spm90.spec.js` | Automated |
+| SPM-90 | Turning registration off warns, confirms, and notifies | TC-SPM90-AC05 | `e2e/spm90.spec.js` | Automated |
+| SPM-90 | Organiser sees settings and is notified | TC-SPM90-AC06 | `e2e/spm90.spec.js` | Automated |
+| SPM-90 | Settings changes written to the activity log | TC-SPM90-AC07 | `e2e/spm90.spec.js` | Automated |
+| SPM-91 | Browse shows confirmed, enabled, in-period events | TC-SPM91-AC01 | `e2e/spm91.spec.js` | Automated |
+| SPM-91 | Card fields include venue and remaining places | TC-SPM91-AC02 | `e2e/spm91.spec.js` | Automated |
+| SPM-91 | Detail shows description, access, close, remaining | TC-SPM91-AC03 | `e2e/spm91.spec.js` | Automated |
+| SPM-91 | Full events shown as full, register unavailable | TC-SPM91-AC04 | `e2e/spm91.spec.js` | Automated |
+| SPM-91 | Non-open statuses never appear; direct read refused | TC-SPM91-AC05 | `e2e/spm91.spec.js` | Automated |
+| SPM-91 | Closed or unopened periods excluded | TC-SPM91-AC06 | `e2e/spm91.spec.js` | Automated |
+| SPM-91 | Search by name; filter by category and date | TC-SPM91-AC07 | `e2e/spm91.spec.js` | Automated |
+| SPM-91 | No coordinator, notes, org, or other attendees | TC-SPM91-AC08 | `e2e/spm91.spec.js` | Automated |
+| SPM-91 | Empty state when none are open | TC-SPM91-AC09 | `e2e/spm91.spec.js` | Automated |
+| SPM-92 | Own registrations with event facts and status | TC-SPM92-AC01 | `e2e/spm92.spec.js` | Automated |
+| SPM-92 | Upcoming first, then past | TC-SPM92-AC02 | `e2e/spm92.spec.js` | Automated |
+| SPM-92 | Details come from the current event record | TC-SPM92-AC03 | `e2e/spm92.spec.js` | Automated |
+| SPM-92 | Cancelled events marked cancelled | TC-SPM92-AC04 | `e2e/spm92.spec.js` | Automated |
+| SPM-92 | Changed date, time, or venue is flagged | TC-SPM92-AC05 | `e2e/spm92.spec.js` | Automated |
+| SPM-92 | Open a registration to withdraw when permitted | TC-SPM92-AC06 | `e2e/spm92.spec.js` | Automated |
+| SPM-92 | Only own registrations; no other attendee identity | TC-SPM92-AC07 | `e2e/spm92.spec.js` | Automated |
+| SPM-92 | Empty state points at browsing events | TC-SPM92-AC08 | `e2e/spm92.spec.js` | Automated |
+| SPM-105 | Organiser and assigned coordinator see that event only | TC-SPM105-AC01 | `e2e/spm105.spec.js` | Automated |
+| SPM-105 | List shows name, supplied information, time, and status | TC-SPM105-AC02 | `e2e/spm105.spec.js` | Automated |
+| SPM-105 | Summary plus withdrawn filter | TC-SPM105-AC03 | `e2e/spm105.spec.js` | Automated |
+| SPM-105 | Other roles blocked on the server | TC-SPM105-AC04 | `e2e/spm105.spec.js` | Automated |
+| SPM-105 | No list when registration is not enabled | TC-SPM105-AC05 | `e2e/spm105.spec.js` | Automated |
+| SPM-105 | Empty state shows capacity and period | TC-SPM105-AC06 | `e2e/spm105.spec.js` | Automated |
+| SPM-6 | Organiser reply notifies the assigned coordinator | TC-SPM06-AC01 | `e2e/spm06.spec.js` | Automated |
+| SPM-6 | Notification names the event and includes the response | TC-SPM06-AC02 | `e2e/spm06.spec.js` | Automated |
+| SPM-6 | No notify before reply; clarification stays outstanding | TC-SPM06-AC03 | `e2e/spm06.spec.js` | Automated |
+| SPM-6 | Late reply still notifies and flags review is over | TC-SPM06-AC04 | `e2e/spm06.spec.js` | Automated |
+| SPM-93 | One notification service creates records | TC-SPM93-AC01 | `e2e/spm93.spec.js` | Automated |
+| SPM-93 | Record fields: recipient, trigger, event, message, link, time, read | TC-SPM93-AC02 | `e2e/spm93.spec.js` | Automated |
+| SPM-93 | Recipients from event relationships, not role alone | TC-SPM93-AC03 | `e2e/spm93.spec.js` | Automated |
+| SPM-93 | Triggers declare relationships and are registered | TC-SPM93-AC04 | `e2e/spm93.spec.js` | Automated |
+| SPM-93 | Actor excluded from their own action | TC-SPM93-AC05 | `e2e/spm93.spec.js` | Automated |
+| SPM-93 | One notification per recipient per occurrence | TC-SPM93-AC06 | `e2e/spm93.spec.js` | Automated |
+| SPM-93 | Attendees receive only attendee-visible triggers | TC-SPM93-AC07 | `e2e/spm93.spec.js` | Automated |
+| SPM-93 | Messages name the event in plain language | TC-SPM93-AC08 | `e2e/spm93.spec.js` | Automated |
+| SPM-93 | Delivery failure does not block the action | TC-SPM93-AC09 | `e2e/spm93.spec.js` | Automated |
+| SPM-93 | Notifications persist after complete or cancel | TC-SPM93-AC10 | `e2e/spm93.spec.js` | Automated |
+| SPM-93 | Coverage of resolution, actor, dedupe, attendee scope, failure | TC-SPM93-AC11 | `e2e/spm93.spec.js` | Automated |
+| SPM-94 | Unread count on every screen updates after a read | TC-SPM94-AC01 | `e2e/spm94.spec.js` | Automated |
+| SPM-94 | Newest first; unread visually distinct | TC-SPM94-AC02 | `e2e/spm94.spec.js` | Automated |
+| SPM-94 | Open marks read and navigates | TC-SPM94-AC03 | `e2e/spm94.spec.js` | Automated |
+| SPM-94 | Mark one, mark all, filter unread | TC-SPM94-AC04 | `e2e/spm94.spec.js` | Automated |
+| SPM-94 | Stale access shows a clear message | TC-SPM94-AC05 | `e2e/spm94.spec.js` | Automated |
+| SPM-94 | Own notifications only, server enforced | TC-SPM94-AC06 | `e2e/spm94.spec.js` | Automated |
+| SPM-94 | Empty inbox state | TC-SPM94-AC07 | `e2e/spm94.spec.js` | Automated |
+| SPM-94 | List loads a page at a time | TC-SPM94-AC08 | `e2e/spm94.spec.js` | Automated |
+| SPM-95 | Daily check selects in-lead-time events with outstanding work | TC-SPM95-AC01 | `e2e/spm95.spec.js` | Automated |
+| SPM-95 | Assigned coordinator notified with outstanding items | TC-SPM95-AC02 | `e2e/spm95.spec.js` | Automated |
+| SPM-95 | Venue and equipment outstanding notify those staff | TC-SPM95-AC03 | `e2e/spm95.spec.js` | Automated |
+| SPM-95 | Lead time from one configuration | TC-SPM95-AC04 | `e2e/spm95.spec.js` | Automated |
+| SPM-95 | One reminder per event per occasion | TC-SPM95-AC05 | `e2e/spm95.spec.js` | Automated |
+| SPM-95 | Ready, completed, cancelled, rejected produce none | TC-SPM95-AC06 | `e2e/spm95.spec.js` | Automated |
+| SPM-95 | Unassigned approaching event goes to triage | TC-SPM95-AC07 | `e2e/spm95.spec.js` | Automated |
+| SPM-95 | Check can be run on demand | TC-SPM95-AC08 | `e2e/spm95.spec.js` | Automated |
+| SPM-51 | Firebase credentials never committed | TC-SPM51-AC01 | `e2e/spm51.spec.js` | Automated |
+| SPM-51 | Every service verifies the Firebase token | TC-SPM51-AC02 | `e2e/spm51.spec.js` | Automated |
+| SPM-51 | One Firebase identity maps to one user row | TC-SPM51-AC03 | `e2e/spm51.spec.js` | Automated |
+| SPM-51 | Invalid, expired, and tampered tokens reject the same way | TC-SPM51-AC04 | `e2e/spm51.spec.js` | Automated |
 
 A case is Pass only when every active test for that ID passes. A skipped
 UI contract or assignment-gate check keeps the case Blocked even if the
