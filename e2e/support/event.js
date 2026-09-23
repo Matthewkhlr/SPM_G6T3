@@ -25,6 +25,21 @@ export async function createSubmittedEvent(accountId = 'EO-01', name) {
   return submitted.body
 }
 
+export async function createNameOnlyDraft(accountId = 'EO-01', name) {
+  const created = await eventApi('POST', '', accountId, { eventName: name })
+  expect(created.status, JSON.stringify(created.body)).toBe(201)
+  expect(created.body.status).toMatch(/draft|created/i)
+  return created.body
+}
+
+export async function submitEvent(eventId, accountId = 'EO-01') {
+  return eventApi('POST', `/${eventId}/submit`, accountId)
+}
+
+export async function raiseChangeRequest(eventId, accountId, body) {
+  return eventApi('POST', `/${eventId}/change-requests`, accountId, body)
+}
+
 export async function assignCoordinator(eventId, coordinatorId, assignedBy = 'EC-01') {
   const result = await eventApi(
     'POST',
