@@ -7,8 +7,14 @@ from app.models.event import Event
 from app.models.event_assignment import EventAssignment
 from app.models.event_status_history import EventStatusHistory
 from app.orchestration.clients import registration_count
-from app.schemas.event import EventAssignmentCreate, EventAssignmentOut, EventCreate, EventOut
-from shared.exceptions.http import conflict, not_found
+from app.schemas.event import (
+    EventAssignmentCreate,
+    EventAssignmentOut,
+    EventCreate,
+    EventDraftUpsert,
+    EventOut,
+)
+from shared.exceptions.http import conflict, forbidden, not_found
 
 # Full intended event lifecycle. The status column is a free VARCHAR(32) with
 # no DB-level enum, so this is documentation for future transitions, not an
@@ -30,8 +36,14 @@ def _to_out(row: Event) -> EventOut:
         eventId=row.eventId,
         eventName=row.eventName,
         status=row.status,
+        purpose=row.purpose,
+        description=row.description,
+        category=row.category,
         proposedStartAt=row.proposedStartAt,
         proposedEndAt=row.proposedEndAt,
+        expectedAttendance=row.expectedAttendance,
+        venueRequirements=row.venueRequirements,
+        equipmentRequirements=row.equipmentRequirements,
         registrationEnabled=row.registrationEnabled,
         registrationOpensAt=row.registrationOpensAt,
         registrationClosesAt=row.registrationClosesAt,
@@ -41,13 +53,15 @@ def _to_out(row: Event) -> EventOut:
 
 
 def list_events(db: Session) -> list[EventOut]:
-    return [_to_out(row) for row in db.query(Event).all()]
+    """Every event except drafts — a draft is only visible to its own organiser."""
+    rows = db.query(Event).filter(Event.status != "draft").all()
+    return [_to_out(row) for row in rows]
 
 def list_all_events(db: Session) -> list[EventOut]:
-    """Every event except rejected ones."""
+    """Every event except rejected ones and drafts."""
     rows = (
         db.query(Event)
-        .filter(Event.status != "rejected")
+        .filter(Event.status.notin_(["rejected", "draft"]))
         .order_by(Event.proposedStartAt.asc())
         .all()
     )
@@ -76,7 +90,7 @@ def list_upcoming_events(db: Session) -> list[EventOut]:
     rows = (
         db.query(Event)
         .filter(Event.proposedEndAt >= now)
-        .filter(Event.status.notin_(["rejected", "cancelled", "completed"]))
+        .filter(Event.status.notin_(["rejected", "cancelled", "completed", "draft"]))
         .order_by(Event.proposedStartAt.asc())
         .all()
     )
@@ -93,10 +107,9 @@ def get_event(db: Session, event_id: str) -> EventOut:
 def create_event(
     db: Session, data: EventCreate, organiser_id: str, organisation_id: str | None
 ) -> EventOut:
-    """Create an event request.
+    """Create and immediately submit an event request.
 
-    There is no separate draft-save flow yet, so a created event request is
-    immediately "submitted" for coordinator review.
+    For saving an incomplete request instead, see create_draft().
     """
     now = datetime.utcnow()
     row = Event(
@@ -128,6 +141,106 @@ def create_event(
     db.commit()
     db.refresh(row)
     return _to_out(row)
+
+
+def create_draft(
+    db: Session, data: EventDraftUpsert, organiser_id: str, organisation_id: str | None
+) -> EventOut:
+    now = datetime.utcnow()
+    row = Event(
+        eventId=str(uuid4()),
+        organiserId=organiser_id,
+        organisationId=organisation_id,
+        coordinatorId=None,
+        eventName=data.eventName,
+        purpose=data.purpose,
+        description=data.description,
+        category=data.category,
+        proposedStartAt=data.proposedStartAt,
+        proposedEndAt=data.proposedEndAt,
+        expectedAttendance=data.expectedAttendance or 0,
+        venueRequirements=data.venueRequirements,
+        accessibilityNeeds="",
+        equipmentRequirements=data.equipmentRequirements,
+        layoutPreference=None,
+        registrationEnabled=False,
+        registrationOpensAt=None,
+        registrationClosesAt=None,
+        capacity=0,
+        status="draft",
+        submittedAt=None,
+        createdAt=now,
+        updatedAt=now,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _to_out(row)
+
+
+def _get_own_draft(db: Session, event_id: str, organiser_id: str) -> Event:
+    event = db.query(Event).filter(Event.eventId == event_id).first()
+    if not event:
+        raise not_found("Event not found")
+    if event.organiserId != organiser_id:
+        raise forbidden("You do not have permission to edit this event")
+    if event.status != "draft":
+        raise conflict(f"Event is already {event.status}")
+    return event
+
+
+def update_draft(db: Session, event_id: str, data: EventDraftUpsert, organiser_id: str) -> EventOut:
+    event = _get_own_draft(db, event_id, organiser_id)
+    event.eventName = data.eventName
+    event.purpose = data.purpose
+    event.description = data.description
+    event.category = data.category
+    event.proposedStartAt = data.proposedStartAt
+    event.proposedEndAt = data.proposedEndAt
+    event.expectedAttendance = data.expectedAttendance or 0
+    event.venueRequirements = data.venueRequirements
+    event.equipmentRequirements = data.equipmentRequirements
+    event.updatedAt = datetime.utcnow()
+    db.commit()
+    db.refresh(event)
+    return _to_out(event)
+
+
+def submit_draft(db: Session, event_id: str, data: EventCreate, organiser_id: str) -> EventOut:
+    event = _get_own_draft(db, event_id, organiser_id)
+    now = datetime.utcnow()
+    event.eventName = data.eventName
+    event.purpose = data.purpose
+    event.description = data.description
+    event.category = data.category
+    event.proposedStartAt = data.proposedStartAt
+    event.proposedEndAt = data.proposedEndAt
+    event.expectedAttendance = data.expectedAttendance
+    event.venueRequirements = data.venueRequirements
+    event.accessibilityNeeds = data.accessibilityNeeds
+    event.equipmentRequirements = data.equipmentRequirements
+    event.layoutPreference = data.layoutPreference
+    event.registrationEnabled = data.registrationEnabled
+    event.registrationOpensAt = data.registrationOpensAt
+    event.registrationClosesAt = data.registrationClosesAt
+    event.capacity = data.capacity
+    _record_status_change(db, event, "submitted", organiser_id)
+    event.status = "submitted"
+    event.submittedAt = now
+    event.updatedAt = now
+    db.commit()
+    db.refresh(event)
+    return _to_out(event)
+
+
+def list_my_drafts(db: Session, organiser_id: str) -> list[EventOut]:
+    rows = (
+        db.query(Event)
+        .filter(Event.organiserId == organiser_id, Event.status == "draft")
+        .order_by(Event.updatedAt.desc())
+        .all()
+    )
+    return [_to_out(row) for row in rows]
 
 
 def assign_coordinator(

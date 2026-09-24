@@ -9,7 +9,7 @@
           :key="tab"
           class="nav-item"
           :class="{ active: activeTab === tab }"
-          @click="activeTab = tab"
+          @click="selectTab(tab)"
         >
           {{ tab }}
         </div>
@@ -33,6 +33,7 @@
       <CreateEvent v-else-if="activeTab === 'New Request'" />
       <UpcomingEventsCalendar v-else-if="activeTab === 'Upcoming Events'"/>
       <ReviewQueue v-else-if="activeTab === 'Review Queue'" />
+      <DraftsList v-else-if="activeTab === 'Drafts'" @edit-draft="activeTab = 'New Request'" />
 
       <div class="not-built" v-else>
         This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }} are functional.
@@ -55,6 +56,8 @@ import { auth } from '../firebase.js'
 import { session, logoutSession } from '../store/session.js'
 import UpcomingEventsCalendar from '../features/event-calendar/EventCalendar.vue'
 import ReviewQueue from '../features/review-queue/ReviewQueue.vue'
+import DraftsList from '../features/drafts/DraftsList.vue'
+import { draftEditor } from '../store/draftEditor.js'
 
 const router = useRouter()
 const currentData = computed(() => roles[session.role])
@@ -63,6 +66,16 @@ const activeTab = ref('Dashboard')
 const hasVenueTab = computed(() => currentData.value.tabs.includes('Venue Catalogue'))
 const hasEventsTab = computed(() => currentData.value.tabs.includes('Browse Events'))
 const hasNewRequestTab = computed(() => currentData.value.tabs.includes('New Request'))
+
+function selectTab(tab) {
+  if (tab === activeTab.value) return
+  // The New Request form isn't a route, so this click is the only place that
+  // can intercept an in-app "navigate away" while it has unsaved changes.
+  if (draftEditor.isDirty && !window.confirm('You have unsaved changes. Leave without saving?')) {
+    return
+  }
+  activeTab.value = tab
+}
 
 async function logout() {
   await signOut(auth)

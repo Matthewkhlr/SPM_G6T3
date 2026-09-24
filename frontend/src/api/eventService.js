@@ -20,3 +20,13 @@ export const approveEvent = (eventId, reason) =>
 
 export const rejectEvent = (eventId, reason) =>
   axiosClient.post(`/events/${eventId}/reject`, { reason });
+
+// Draft-stage requests — only eventName is required on save (see EventDraftUpsert).
+export const saveDraft = (draft) => axiosClient.post("/events/drafts", draft);
+
+export const updateDraft = (eventId, draft) => axiosClient.put(`/events/${eventId}/draft`, draft);
+
+export const getMyDrafts = () => axiosClient.get("/events/drafts/mine");
+
+// Finalizes an existing draft into a fully-validated submitted request (same event id).
+export const submitDraft = (eventId, event) => axiosClient.post(`/events/${eventId}/submit`, event);

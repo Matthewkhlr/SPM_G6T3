@@ -9,6 +9,7 @@ from app.schemas.event import (
     EventAssignmentOut,
     EventCreate,
     EventDecision,
+    EventDraftUpsert,
     EventOut,
 )
 from app.services import event_service
@@ -32,6 +33,47 @@ def create_event(
     return event_service.create_event(
         db, body, organiser["userId"], organiser.get("organisationId")
     )
+
+@router.post("/drafts", response_model=EventOut, status_code=201)
+def create_draft(
+    body: EventDraftUpsert,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    organiser = current_organiser(authorization)
+    return event_service.create_draft(db, body, organiser["userId"], organiser.get("organisationId"))
+
+
+@router.get("/drafts/mine", response_model=list[EventOut])
+def list_my_drafts(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    organiser = current_organiser(authorization)
+    return event_service.list_my_drafts(db, organiser["userId"])
+
+
+@router.put("/{event_id}/draft", response_model=EventOut)
+def update_draft(
+    event_id: str,
+    body: EventDraftUpsert,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    organiser = current_organiser(authorization)
+    return event_service.update_draft(db, event_id, body, organiser["userId"])
+
+
+@router.post("/{event_id}/submit", response_model=EventOut)
+def submit_draft(
+    event_id: str,
+    body: EventCreate,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    organiser = current_organiser(authorization)
+    return event_service.submit_draft(db, event_id, body, organiser["userId"])
+
 
 @router.get("/upcoming/technical", response_model=list[EventOut])
 def list_upcoming_events_for_technical_support(
