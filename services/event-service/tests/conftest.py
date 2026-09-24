@@ -7,7 +7,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app import models  # noqa: F401 — registers every model on Base.metadata
+from app.dao.event_assignment_dao import EventAssignmentDAO
+from app.dao.event_dao import EventDAO
+from app.dao.event_status_history_dao import EventStatusHistoryDAO
 from app.db.session import Base
+from app.services.event_service import EventService
 
 
 @pytest.fixture()
@@ -24,3 +28,13 @@ def db_session(monkeypatch):
         yield session
     finally:
         session.close()
+
+
+@pytest.fixture()
+def event_service(db_session):
+    return EventService(
+        db_session,
+        EventDAO(db_session),
+        EventAssignmentDAO(db_session),
+        EventStatusHistoryDAO(db_session),
+    )

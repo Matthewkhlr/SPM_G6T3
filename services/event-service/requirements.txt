@@ -9,3 +9,4 @@ cryptography==44.0.0
 alembic==1.14.1
 firebase-admin==6.6.0
 python-dotenv==1.0.1
+pytest==9.1.1

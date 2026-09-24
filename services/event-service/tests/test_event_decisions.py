@@ -5,10 +5,9 @@ from fastapi import HTTPException
 
 from app.models.event_status_history import EventStatusHistory
 from app.schemas.event import EventCreate
-from app.services import event_service
 
 
-def make_event(db_session, **overrides):
+def make_event(event_service, **overrides):
     now = datetime.utcnow()
     data = EventCreate(
         eventName="Q3 Partner Summit",
@@ -17,7 +16,7 @@ def make_event(db_session, **overrides):
         proposedEndAt=now + timedelta(days=7, hours=3),
         **overrides,
     )
-    return event_service.create_event(db_session, data, organiser_id="u-organiser", organisation_id="org-1")
+    return event_service.create_event(data, organiser_id="u-organiser", organisation_id="org-1")
 
 
 def history_rows(db_session, event_id):
@@ -28,15 +27,15 @@ def history_rows(db_session, event_id):
     )
 
 
-def test_create_event_starts_submitted(db_session):
-    created = make_event(db_session)
+def test_create_event_starts_submitted(event_service):
+    created = make_event(event_service)
     assert created.status == "submitted"
 
 
-def test_approve_event_moves_to_approved_and_records_history(db_session):
-    created = make_event(db_session)
+def test_approve_event_moves_to_approved_and_records_history(event_service, db_session):
+    created = make_event(event_service)
 
-    result = event_service.approve_event(db_session, created.eventId, coordinator_id="u-coordinator")
+    result = event_service.approve_event(created.eventId, coordinator_id="u-coordinator")
 
     assert result.status == "approved"
     rows = history_rows(db_session, created.eventId)
@@ -46,11 +45,11 @@ def test_approve_event_moves_to_approved_and_records_history(db_session):
     assert rows[0].changedBy == "u-coordinator"
 
 
-def test_reject_event_moves_to_rejected_and_records_reason(db_session):
-    created = make_event(db_session)
+def test_reject_event_moves_to_rejected_and_records_reason(event_service, db_session):
+    created = make_event(event_service)
 
     result = event_service.reject_event(
-        db_session, created.eventId, coordinator_id="u-coordinator", reason="Venue unavailable"
+        created.eventId, coordinator_id="u-coordinator", reason="Venue unavailable"
     )
 
     assert result.status == "rejected"
@@ -61,22 +60,22 @@ def test_reject_event_moves_to_rejected_and_records_reason(db_session):
     assert rows[0].note == "Venue unavailable"
 
 
-def test_approve_event_already_decided_conflicts_and_leaves_event_unmutated(db_session):
-    created = make_event(db_session)
-    event_service.approve_event(db_session, created.eventId, coordinator_id="u-coordinator")
+def test_approve_event_already_decided_conflicts_and_leaves_event_unmutated(event_service, db_session):
+    created = make_event(event_service)
+    event_service.approve_event(created.eventId, coordinator_id="u-coordinator")
 
     with pytest.raises(HTTPException) as exc_info:
-        event_service.approve_event(db_session, created.eventId, coordinator_id="u-coordinator-2")
+        event_service.approve_event(created.eventId, coordinator_id="u-coordinator-2")
 
     assert exc_info.value.status_code == 409
     # Still approved from the first call, no second history row.
-    result = event_service.get_event(db_session, created.eventId)
+    result = event_service.get_event(created.eventId)
     assert result.status == "approved"
     assert len(history_rows(db_session, created.eventId)) == 1
 
 
-def test_reject_event_on_missing_event_raises_404(db_session):
+def test_reject_event_on_missing_event_raises_404(event_service):
     with pytest.raises(HTTPException) as exc_info:
-        event_service.reject_event(db_session, "does-not-exist", coordinator_id="u-coordinator")
+        event_service.reject_event("does-not-exist", coordinator_id="u-coordinator")
 
     assert exc_info.value.status_code == 404
