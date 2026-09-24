@@ -55,7 +55,7 @@ def create_event(
 @router.post("/drafts", response_model=EventOut, status_code=201)
 def create_draft(
     body: EventDraftUpsert,
-    authorization: str | None = Header(default=None),
+    authorization: str | None = Depends(forwarded_bearer),
     db: Session = Depends(get_db),
 ):
     organiser = current_organiser(authorization)
@@ -64,7 +64,7 @@ def create_draft(
 
 @router.get("/drafts/mine", response_model=list[EventOut])
 def list_my_drafts(
-    authorization: str | None = Header(default=None),
+    authorization: str | None = Depends(forwarded_bearer),
     db: Session = Depends(get_db),
 ):
     organiser = current_organiser(authorization)
@@ -75,7 +75,7 @@ def list_my_drafts(
 def update_draft(
     event_id: str,
     body: EventDraftUpsert,
-    authorization: str | None = Header(default=None),
+    authorization: str | None = Depends(forwarded_bearer),
     db: Session = Depends(get_db),
 ):
     organiser = current_organiser(authorization)
@@ -86,7 +86,7 @@ def update_draft(
 def submit_draft(
     event_id: str,
     body: EventCreate,
-    authorization: str | None = Header(default=None),
+    authorization: str | None = Depends(forwarded_bearer),
     db: Session = Depends(get_db),
 ):
     organiser = current_organiser(authorization)
@@ -140,7 +140,7 @@ def get_event(
 def approve_event(
     event_id: str,
     body: EventDecision,
-    authorization: str | None = Header(default=None),
+    authorization: str | None = Depends(forwarded_bearer),
     db: Session = Depends(get_db),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
@@ -151,7 +151,7 @@ def approve_event(
 def reject_event(
     event_id: str,
     body: EventDecision,
-    authorization: str | None = Header(default=None),
+    authorization: str | None = Depends(forwarded_bearer),
     db: Session = Depends(get_db),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
