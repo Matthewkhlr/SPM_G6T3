@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class EventCreate(BaseModel):
@@ -25,7 +25,7 @@ class EventCreate(BaseModel):
     registrationEnabled: bool = False
     registrationOpensAt: datetime | None = None
     registrationClosesAt: datetime | None = None
-    capacity: int = Field(default=0, ge=0)
+    capacity: int = Field(default=0, ge=0, description="Intended registration cap.")
 
     @model_validator(mode="after")
     def check_windows(self):
@@ -35,6 +35,28 @@ class EventCreate(BaseModel):
         if opens and closes and closes <= opens:
             raise ValueError("registrationClosesAt must be after registrationOpensAt")
         return self
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "eventName": "AI in Events Summit",
+                "purpose": "Share AI practices for event operations.",
+                "description": "A one-day summit for ConnectSphere clients.",
+                "category": "conference",
+                "proposedStartAt": "2026-10-06T09:00:00",
+                "proposedEndAt": "2026-10-06T17:00:00",
+                "expectedAttendance": 120,
+                "venueRequirements": "Large hall with stage and video-conferencing.",
+                "accessibilityNeeds": "Wheelchair access required.",
+                "equipmentRequirements": "Projector and PA system.",
+                "layoutPreference": "Theatre",
+                "registrationEnabled": True,
+                "registrationOpensAt": "2026-09-17T00:00:00",
+                "registrationClosesAt": "2026-10-03T23:59:59",
+                "capacity": 120,
+            }
+        }
+    )
 
 
 class EventOut(BaseModel):
@@ -53,7 +75,26 @@ class EventOut(BaseModel):
     registrationOpensAt: datetime | None = None
     registrationClosesAt: datetime | None = None
     capacity: int
-    registeredCount: int = 0
+    registeredCount: int = Field(
+        default=0, description="Live count from registration-service; 0 if that service is down."
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "eventId": "e1",
+                "eventName": "AI in Events Summit",
+                "status": "confirmed",
+                "proposedStartAt": "2026-10-06T09:00:00",
+                "proposedEndAt": "2026-10-06T17:00:00",
+                "registrationEnabled": True,
+                "registrationOpensAt": "2026-09-17T00:00:00",
+                "registrationClosesAt": "2026-10-03T23:59:59",
+                "capacity": 3,
+                "registeredCount": 1,
+            }
+        }
+    )
 
 
 class EventDecision(BaseModel):
@@ -85,7 +126,9 @@ class EventDraftUpsert(BaseModel):
 
 
 class EventAssignmentCreate(BaseModel):
-    coordinatorId: str = Field(min_length=1)
+    coordinatorId: str = Field(min_length=1, examples=["u2"])
+
+    model_config = ConfigDict(json_schema_extra={"example": {"coordinatorId": "u2"}})
 
 
 class EventAssignmentOut(BaseModel):
@@ -94,3 +137,15 @@ class EventAssignmentOut(BaseModel):
     coordinatorId: str
     assignedBy: str
     assignedAt: datetime
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "assignmentId": "asgn-e1",
+                "eventId": "e1",
+                "coordinatorId": "u2",
+                "assignedBy": "u2",
+                "assignedAt": "2026-09-02T10:00:00",
+            }
+        }
+    )

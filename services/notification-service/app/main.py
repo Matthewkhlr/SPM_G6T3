@@ -1,24 +1,27 @@
-from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends
 
 from app.core.config import settings
 from app.routers.notification import router as notification_router
 from shared.auth.deps import require_authenticated_user
 from shared.config import parse_origins
+from shared.openapi import create_service_app
 
-app = FastAPI(title="notification-service")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=parse_origins(settings.cors_origin),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+app = create_service_app(
+    service_id="notification-service",
+    title="Notification Service",
+    description="""
+Queues an email notification.
+
+Delivery is currently a stub: the payload is logged and the response status is `queued`. Rows may also exist in the notification schema from seed data.
+""",
+    port=8006,
+    cors_origins=parse_origins(settings.cors_origin),
+    tags_metadata=[
+        {
+            "name": "notifications",
+            "description": "Queue an outbound email notification.",
+        }
+    ],
 )
-
-
-@app.get("/health")
-def health():
-    return {"service": "notification-service", "status": "ok"}
-
 
 app.include_router(notification_router, dependencies=[Depends(require_authenticated_user)])
