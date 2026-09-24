@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.dao.attendee_registration_dao import AttendeeRegistrationDAO
+from app.dao.registration_window_dao import RegistrationWindowDAO
 from app.db.session import get_db
 from app.schemas.registration import AttendeeOut, RegisterRequest
-from app.services import registration_service
+from app.services.registration_service import RegistrationService
+from shared.auth.deps import forwarded_bearer
 from shared.openapi import error_responses
 
 router = APIRouter(
@@ -11,6 +14,10 @@ router = APIRouter(
     tags=["registrations"],
     responses=error_responses(401),
 )
+
+
+def get_registration_service(db: Session = Depends(get_db)) -> RegistrationService:
+    return RegistrationService(db, AttendeeRegistrationDAO(db), RegistrationWindowDAO(db))
 
 
 @router.get(
@@ -21,9 +28,9 @@ router = APIRouter(
 )
 def list_registrations(
     eventId: str = Query(..., description="Event id, e.g. `e1`."),
-    db: Session = Depends(get_db),
+    service: RegistrationService = Depends(get_registration_service),
 ):
-    rows = registration_service.list_for_event(db, eventId)
+    rows = service.list_for_event(eventId)
     return [
         AttendeeOut(
             attendeeRegistrationId=row.attendeeRegistrationId,
@@ -46,8 +53,12 @@ def list_registrations(
     ),
     responses=error_responses(404, 409),
 )
-def register(body: RegisterRequest, db: Session = Depends(get_db)):
-    row = registration_service.register(db, body.eventId, body.name, body.email, None)
+def register(
+    body: RegisterRequest,
+    authorization: str | None = Depends(forwarded_bearer),
+    service: RegistrationService = Depends(get_registration_service),
+):
+    row = service.register(body.eventId, body.name, body.email, None, authorization)
     return AttendeeOut(
         attendeeRegistrationId=row.attendeeRegistrationId,
         eventId=row.eventId,

@@ -5,15 +5,19 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.dao.attendee_registration_dao import AttendeeRegistrationDAO
+from app.dao.registration_window_dao import RegistrationWindowDAO
 from app.models.attendee_registration import AttendeeRegistration
-from app.models.registration_window import RegistrationWindow
 from shared.exceptions.http import conflict, not_found
 
 
-def _event(event_id: str) -> dict:
+def _event(event_id: str, authorization: str | None) -> dict:
     try:
         with httpx.Client(timeout=5.0) as client:
-            response = client.get(f"{settings.event_service_url}/events/{event_id}")
+            response = client.get(
+                f"{settings.event_service_url}/events/{event_id}",
+                headers={"Authorization": authorization} if authorization else {},
+            )
     except httpx.HTTPError as exc:
         raise not_found("Event not found") from exc
     if response.status_code != 200:
@@ -42,41 +46,46 @@ def eligibility(event: dict, registered_count: int) -> tuple[bool, str | None]:
     return True, None
 
 
-def list_for_event(db: Session, event_id: str) -> list[AttendeeRegistration]:
-    return (
-        db.query(AttendeeRegistration)
-        .filter(
-            AttendeeRegistration.eventId == event_id,
-            AttendeeRegistration.status == "registered",
+class RegistrationService:
+    def __init__(
+        self,
+        db: Session,
+        registration_dao: AttendeeRegistrationDAO,
+        window_dao: RegistrationWindowDAO,
+    ):
+        self.db = db
+        self.registration_dao = registration_dao
+        self.window_dao = window_dao
+
+    def list_for_event(self, event_id: str) -> list[AttendeeRegistration]:
+        return self.registration_dao.list_for_event(event_id)
+
+    def register(
+        self, event_id: str, name: str, email: str, user_id: str | None, authorization: str | None = None
+    ) -> AttendeeRegistration:
+        if not name or not email:
+            raise conflict("Name and email are required.")
+        event = _event(event_id, authorization)
+        window = self.window_dao.get_for_event(event_id)
+        if not window:
+            raise conflict("Registration is not open for this event.")
+        existing = self.list_for_event(event_id)
+        ok, reason = eligibility(event, len(existing))
+        if not ok:
+            raise conflict(reason)
+        duplicate = next((row for row in existing if row.attendeeEmail.lower() == email.lower()), None)
+        if duplicate:
+            raise conflict("This email is already registered for the event.")
+        row = AttendeeRegistration(
+            attendeeRegistrationId=str(uuid4()),
+            eventId=event_id,
+            attendeeName=name,
+            attendeeEmail=email,
+            userId=user_id,
+            status="registered",
+            createdAt=datetime.utcnow(),
         )
-        .all()
-    )
-
-
-def register(db: Session, event_id: str, name: str, email: str, user_id: str | None) -> AttendeeRegistration:
-    if not name or not email:
-        raise conflict("Name and email are required.")
-    event = _event(event_id)
-    window = db.query(RegistrationWindow).filter(RegistrationWindow.eventId == event_id).first()
-    if not window:
-        raise conflict("Registration is not open for this event.")
-    existing = list_for_event(db, event_id)
-    ok, reason = eligibility(event, len(existing))
-    if not ok:
-        raise conflict(reason)
-    duplicate = next((row for row in existing if row.attendeeEmail.lower() == email.lower()), None)
-    if duplicate:
-        raise conflict("This email is already registered for the event.")
-    row = AttendeeRegistration(
-        attendeeRegistrationId=str(uuid4()),
-        eventId=event_id,
-        attendeeName=name,
-        attendeeEmail=email,
-        userId=user_id,
-        status="registered",
-        createdAt=datetime.utcnow(),
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return row
+        self.registration_dao.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return row

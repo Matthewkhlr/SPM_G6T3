@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [event-service, venue-service, equipment-service]
+        service: [event-service, venue-service, equipment-service, registration-service]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
