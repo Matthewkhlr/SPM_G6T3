@@ -62,11 +62,15 @@ class EventCreate(BaseModel):
 class EventOut(BaseModel):
     eventId: str
     eventName: str
-    status: str = Field(
-        description="Create API writes `created`. Seed data also uses `planning` and `confirmed`."
-    )
-    proposedStartAt: datetime
-    proposedEndAt: datetime
+    status: str
+    purpose: str
+    description: str
+    category: str | None = None
+    proposedStartAt: datetime | None = None
+    proposedEndAt: datetime | None = None
+    expectedAttendance: int
+    venueRequirements: str
+    equipmentRequirements: str
     registrationEnabled: bool
     registrationOpensAt: datetime | None = None
     registrationClosesAt: datetime | None = None
@@ -91,6 +95,34 @@ class EventOut(BaseModel):
             }
         }
     )
+
+
+class EventDecision(BaseModel):
+    reason: str | None = None
+
+
+class EventDraftUpsert(BaseModel):
+    """Fields an organiser can save at draft stage — only eventName is required.
+
+    Everything else may be omitted or left blank; a draft is, by definition,
+    incomplete. Only checks that don't reject a partial draft run here.
+    """
+
+    eventName: str = Field(min_length=1, max_length=255)
+    purpose: str = ""
+    description: str = ""
+    category: str | None = None
+    proposedStartAt: datetime | None = None
+    proposedEndAt: datetime | None = None
+    expectedAttendance: int | None = Field(default=None, ge=0)
+    venueRequirements: str = ""
+    equipmentRequirements: str = ""
+
+    @model_validator(mode="after")
+    def check_windows(self):
+        if self.proposedStartAt and self.proposedEndAt and self.proposedEndAt <= self.proposedStartAt:
+            raise ValueError("proposedEndAt must be after proposedStartAt")
+        return self
 
 
 class EventAssignmentCreate(BaseModel):

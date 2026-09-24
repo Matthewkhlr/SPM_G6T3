@@ -1,8 +1,8 @@
 <template>
   <div class="create-event">
-    <!-- Success state — the created event, straight from the API response -->
+    <!-- Success state — the created/submitted event, straight from the API response -->
     <div v-if="created" class="result-card">
-      <h3>Event request created</h3>
+      <h3>Event request submitted</h3>
       <p>
         <strong>{{ created.eventName }}</strong> was saved as a
         <span class="status-pill">{{ created.status }}</span>.
@@ -13,8 +13,10 @@
 
     <form v-else class="form-card" @submit.prevent="submit">
       <p class="form-intro">
-        Fields marked <span class="req">*</span> are required.
+        Fields marked <span class="req">*</span> are required to submit — save a draft any time
+        with just an event name.
       </p>
+      <p v-if="editingEventId" class="draft-banner">Editing a saved draft.</p>
 
       <label for="eventName">Event name <span class="req">*</span></label>
       <input
@@ -86,8 +88,18 @@
       />
 
       <p v-if="error" class="form-error">{{ error }}</p>
+      <p v-if="draftError" class="form-error">{{ draftError }}</p>
+      <p v-if="draftSavedMessage" class="draft-saved">{{ draftSavedMessage }}</p>
 
       <div class="form-actions">
+        <button
+          class="btn btn-outline"
+          type="button"
+          :disabled="!form.eventName || draftSaving"
+          @click="saveAsDraft"
+        >
+          {{ draftSaving ? 'Saving draft…' : 'Save as draft' }}
+        </button>
         <button class="btn btn-solid" type="submit" :disabled="saving">
           {{ saving ? 'Saving…' : 'Create event request' }}
         </button>
@@ -97,8 +109,9 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
-import { createEvent } from '../../api/eventService.js'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { createEvent, getEvent, saveDraft, submitDraft, updateDraft } from '../../api/eventService.js'
+import { consumeEditingId, setDirty } from '../../store/draftEditor.js'
 
 const categories = ['conference', 'workshop', 'networking', 'meeting']
 
@@ -116,11 +129,29 @@ function blankForm() {
   }
 }
 
+// datetime-local inputs need "YYYY-MM-DDTHH:mm"; the API returns full ISO
+// strings (or null, for a draft that never got that far).
+function toInputDatetime(iso) {
+  return iso ? iso.slice(0, 16) : ''
+}
+
+// The reverse: an empty input must become null, not "", to satisfy the
+// backend's Optional[datetime] draft schema.
+function toPayloadDatetime(value) {
+  return value || null
+}
+
 const form = reactive(blankForm())
 const submitted = ref(false)
 const saving = ref(false)
 const error = ref('')
 const created = ref(null)
+
+const editingEventId = ref(null)
+const draftSaving = ref(false)
+const draftSavedMessage = ref('')
+const draftError = ref('')
+const lastSaved = ref('')
 
 const isValidAttendance = computed(
   () => typeof form.expectedAttendance === 'number' && form.expectedAttendance >= 0
@@ -141,11 +172,76 @@ const isValid = computed(
     isValidAttendance.value
 )
 
+const isDirty = computed(() => JSON.stringify(form) !== lastSaved.value)
+watch(isDirty, (value) => setDirty(value), { immediate: true })
+
+function markSaved() {
+  lastSaved.value = JSON.stringify(form)
+}
+
+function populateFormFromEvent(data) {
+  form.eventName = data.eventName || ''
+  form.purpose = data.purpose || ''
+  form.description = data.description || ''
+  form.category = data.category ?? null
+  form.proposedStartAt = toInputDatetime(data.proposedStartAt)
+  form.proposedEndAt = toInputDatetime(data.proposedEndAt)
+  form.expectedAttendance = data.expectedAttendance ?? null
+  form.venueRequirements = data.venueRequirements || ''
+  form.equipmentRequirements = data.equipmentRequirements || ''
+}
+
+function buildPayload() {
+  return {
+    eventName: form.eventName,
+    purpose: form.purpose,
+    description: form.description,
+    category: form.category,
+    proposedStartAt: toPayloadDatetime(form.proposedStartAt),
+    proposedEndAt: toPayloadDatetime(form.proposedEndAt),
+    expectedAttendance: form.expectedAttendance,
+    venueRequirements: form.venueRequirements,
+    equipmentRequirements: form.equipmentRequirements
+  }
+}
+
+function handleBeforeUnload(event) {
+  if (isDirty.value) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+
 function startAnother() {
   Object.assign(form, blankForm())
   submitted.value = false
   error.value = ''
   created.value = null
+  editingEventId.value = null
+  draftSavedMessage.value = ''
+  draftError.value = ''
+  markSaved()
+}
+
+async function saveAsDraft() {
+  draftError.value = ''
+  draftSavedMessage.value = ''
+  if (!form.eventName) return // Save as draft is disabled without a name (AC1); nothing else is required.
+
+  draftSaving.value = true
+  try {
+    const { data } = editingEventId.value
+      ? await updateDraft(editingEventId.value, buildPayload())
+      : await saveDraft(buildPayload())
+    editingEventId.value = data.eventId
+    markSaved()
+    draftSavedMessage.value = 'Draft saved.'
+  } catch (err) {
+    const detail = err.response?.data?.detail
+    draftError.value = typeof detail === 'string' ? detail : 'Could not save the draft. Please try again.'
+  } finally {
+    draftSaving.value = false
+  }
 }
 
 async function submit() {
@@ -157,18 +253,11 @@ async function submit() {
 
   saving.value = true
   try {
-    const { data } = await createEvent({
-      eventName: form.eventName,
-      purpose: form.purpose,
-      description: form.description,
-      category: form.category,
-      proposedStartAt: form.proposedStartAt,
-      proposedEndAt: form.proposedEndAt,
-      expectedAttendance: form.expectedAttendance,
-      venueRequirements: form.venueRequirements,
-      equipmentRequirements: form.equipmentRequirements
-    })
+    const { data } = editingEventId.value
+      ? await submitDraft(editingEventId.value, buildPayload())
+      : await createEvent(buildPayload())
     created.value = data
+    markSaved()
   } catch (err) {
     const detail = err.response?.data?.detail
     error.value =
@@ -179,6 +268,26 @@ async function submit() {
     saving.value = false
   }
 }
+
+onMounted(async () => {
+  const id = consumeEditingId()
+  if (id) {
+    try {
+      const { data } = await getEvent(id)
+      populateFormFromEvent(data)
+      editingEventId.value = id
+    } catch (err) {
+      draftError.value = 'Could not load the draft. Please try again.'
+    }
+  }
+  markSaved()
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  setDirty(false)
+})
 </script>
 
 <style scoped>
@@ -194,7 +303,16 @@ async function submit() {
   padding: 26px 28px;
 }
 
-.form-intro { font-size: 13px; line-height: 1.7; color: var(--muted); margin: 0 0 22px; }
+.form-intro { font-size: 13px; line-height: 1.7; color: var(--muted); margin: 0 0 14px; }
+.draft-banner {
+  font-size: 12px;
+  color: var(--halo);
+  background: rgba(124, 77, 255, .12);
+  border: 1px dashed rgba(167, 139, 250, .35);
+  border-radius: 9px;
+  padding: 8px 12px;
+  margin: 0 0 18px;
+}
 .req { color: var(--iris-soft); }
 
 label {
@@ -243,9 +361,18 @@ select option { background: #150A30; color: var(--text); }
   padding: 11px 14px;
   margin: 4px 0 16px;
 }
+.draft-saved {
+  color: var(--halo);
+  font-size: 13px;
+  background: rgba(124, 77, 255, .1);
+  border: 1px solid rgba(167, 139, 250, .3);
+  border-radius: 9px;
+  padding: 11px 14px;
+  margin: 4px 0 16px;
+}
 
-.form-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
-.btn-solid:disabled { opacity: .55; cursor: progress; transform: none; box-shadow: none; }
+.form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 6px; }
+.btn:disabled { opacity: .55; cursor: progress; transform: none; box-shadow: none; }
 
 .result-card h3 { margin: 0 0 14px; font-size: 18px; font-weight: 500; }
 .result-card p { font-size: 14px; line-height: 1.7; color: var(--body); margin: 0 0 10px; }
@@ -264,5 +391,6 @@ select option { background: #150A30; color: var(--text); }
 
 @media (max-width: 560px) {
   .row { flex-direction: column; gap: 0; }
+  .form-actions { flex-direction: column-reverse; }
 }
 </style>
