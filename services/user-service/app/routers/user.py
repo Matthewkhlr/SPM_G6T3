@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.dao.user_dao import UserDAO
 from app.db.session import get_db
 from app.schemas.user import UserPublic
-from app.services import user_service
+from app.services.user_service import UserService
 from shared.auth.deps import require_authenticated_user
 from shared.openapi import error_responses
 
@@ -14,8 +15,15 @@ router = APIRouter(
 )
 
 
-def current_user(claims: dict = Depends(require_authenticated_user), db: Session = Depends(get_db)):
-    return user_service.get_by_firebase_claims(db, claims["uid"], claims.get("email"))
+def get_user_service(db: Session = Depends(get_db)) -> UserService:
+    return UserService(db, UserDAO(db))
+
+
+def current_user(
+    claims: dict = Depends(require_authenticated_user),
+    service: UserService = Depends(get_user_service),
+):
+    return service.get_by_firebase_claims(claims["uid"], claims.get("email"))
 
 
 @router.get(
@@ -35,5 +43,5 @@ def me(user=Depends(current_user)):
     summary="List users",
     description="Full user directory. Any authenticated user can call this.",
 )
-def list_users(db: Session = Depends(get_db), _user=Depends(current_user)):
-    return user_service.list_users(db)
+def list_users(service: UserService = Depends(get_user_service), _user=Depends(current_user)):
+    return service.list_users()

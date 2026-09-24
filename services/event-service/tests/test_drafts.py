@@ -5,12 +5,11 @@ from fastapi import HTTPException
 
 from app.models.event_status_history import EventStatusHistory
 from app.schemas.event import EventCreate, EventDraftUpsert
-from app.services import event_service
 
 
-def make_draft(db_session, organiser_id="u-organiser", **overrides):
+def make_draft(event_service, organiser_id="u-organiser", **overrides):
     data = EventDraftUpsert(eventName="Q3 Partner Summit", **overrides)
-    return event_service.create_draft(db_session, data, organiser_id=organiser_id, organisation_id="org-1")
+    return event_service.create_draft(data, organiser_id=organiser_id, organisation_id="org-1")
 
 
 def full_event_payload(**overrides):
@@ -28,8 +27,8 @@ def full_event_payload(**overrides):
     return EventCreate(**defaults)
 
 
-def test_create_draft_with_only_event_name_succeeds(db_session):
-    created = make_draft(db_session)
+def test_create_draft_with_only_event_name_succeeds(event_service):
+    created = make_draft(event_service)
 
     assert created.status == "draft"
     assert created.eventName == "Q3 Partner Summit"
@@ -38,8 +37,8 @@ def test_create_draft_with_only_event_name_succeeds(db_session):
     assert created.expectedAttendance == 0
 
 
-def test_update_draft_preserves_fields_not_touched_by_a_later_save(db_session):
-    created = make_draft(db_session, purpose="Initial purpose", venueRequirements="Needs a stage")
+def test_update_draft_preserves_fields_not_touched_by_a_later_save(event_service):
+    created = make_draft(event_service, purpose="Initial purpose", venueRequirements="Needs a stage")
 
     # Simulate reopening the draft: the "form" is loaded with everything
     # previously entered, the organiser changes only one field, and the full
@@ -49,40 +48,40 @@ def test_update_draft_preserves_fields_not_touched_by_a_later_save(db_session):
         purpose="Updated purpose",
         venueRequirements="Needs a stage",
     )
-    updated = event_service.update_draft(db_session, created.eventId, resend, organiser_id="u-organiser")
+    updated = event_service.update_draft(created.eventId, resend, organiser_id="u-organiser")
 
     assert updated.purpose == "Updated purpose"
     assert updated.venueRequirements == "Needs a stage"
     assert updated.status == "draft"
 
 
-def test_update_draft_by_different_organiser_is_forbidden(db_session):
-    created = make_draft(db_session, organiser_id="u-organiser")
+def test_update_draft_by_different_organiser_is_forbidden(event_service):
+    created = make_draft(event_service, organiser_id="u-organiser")
 
     with pytest.raises(HTTPException) as exc_info:
         event_service.update_draft(
-            db_session, created.eventId, EventDraftUpsert(eventName="Hijacked"), organiser_id="u-someone-else"
+            created.eventId, EventDraftUpsert(eventName="Hijacked"), organiser_id="u-someone-else"
         )
 
     assert exc_info.value.status_code == 403
 
 
-def test_update_draft_on_already_submitted_event_conflicts(db_session):
-    created = make_draft(db_session)
-    event_service.submit_draft(db_session, created.eventId, full_event_payload(), organiser_id="u-organiser")
+def test_update_draft_on_already_submitted_event_conflicts(event_service):
+    created = make_draft(event_service)
+    event_service.submit_draft(created.eventId, full_event_payload(), organiser_id="u-organiser")
 
     with pytest.raises(HTTPException) as exc_info:
         event_service.update_draft(
-            db_session, created.eventId, EventDraftUpsert(eventName="Too late"), organiser_id="u-organiser"
+            created.eventId, EventDraftUpsert(eventName="Too late"), organiser_id="u-organiser"
         )
 
     assert exc_info.value.status_code == 409
 
 
-def test_submit_draft_moves_to_submitted_and_records_history(db_session):
-    created = make_draft(db_session)
+def test_submit_draft_moves_to_submitted_and_records_history(event_service, db_session):
+    created = make_draft(event_service)
 
-    result = event_service.submit_draft(db_session, created.eventId, full_event_payload(), organiser_id="u-organiser")
+    result = event_service.submit_draft(created.eventId, full_event_payload(), organiser_id="u-organiser")
 
     assert result.status == "submitted"
     rows = (
@@ -109,18 +108,18 @@ def test_submit_draft_rejects_incomplete_payload():
         )
 
 
-def test_list_my_drafts_returns_only_the_callers_own_drafts(db_session):
-    mine = make_draft(db_session, organiser_id="u-organiser")
-    make_draft(db_session, organiser_id="u-other")
+def test_list_my_drafts_returns_only_the_callers_own_drafts(event_service):
+    mine = make_draft(event_service, organiser_id="u-organiser")
+    make_draft(event_service, organiser_id="u-other")
 
-    drafts = event_service.list_my_drafts(db_session, organiser_id="u-organiser")
+    drafts = event_service.list_my_drafts(organiser_id="u-organiser")
 
     assert [d.eventId for d in drafts] == [mine.eventId]
 
 
-def test_draft_does_not_appear_in_any_general_listing(db_session):
-    make_draft(db_session)
+def test_draft_does_not_appear_in_any_general_listing(event_service):
+    make_draft(event_service)
 
-    assert event_service.list_events(db_session) == []
-    assert event_service.list_all_events(db_session) == []
-    assert event_service.list_upcoming_events(db_session) == []
+    assert event_service.list_events() == []
+    assert event_service.list_all_events() == []
+    assert event_service.list_upcoming_events() == []

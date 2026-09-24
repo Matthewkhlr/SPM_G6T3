@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.dao.venue_activity_log_dao import VenueActivityLogDAO
+from app.dao.venue_booking_dao import VenueBookingDAO
+from app.dao.venue_dao import VenueDAO
 from app.db.session import get_db
 from app.schemas.venue import (
     VenueActivityLogOut,
@@ -12,7 +15,7 @@ from app.schemas.venue import (
     VenueOut,
     VenueUpdate,
 )
-from app.services import venue_service
+from app.services.venue_service import VenueService
 from shared.auth.deps import forwarded_bearer
 from shared.auth.roles import resolve_caller
 from shared.openapi import error_responses
@@ -29,6 +32,10 @@ router = APIRouter(
 CATALOGUE_READER_ROLES = {"coordinator", "venue", "techsupport"}
 
 
+def get_venue_service(db: Session = Depends(get_db)) -> VenueService:
+    return VenueService(db, VenueDAO(db), VenueActivityLogDAO(db), VenueBookingDAO(db))
+
+
 @router.get(
     "",
     response_model=list[VenueOut],
@@ -42,10 +49,10 @@ CATALOGUE_READER_ROLES = {"coordinator", "venue", "techsupport"}
 def list_venues(
     includeRetired: bool = Query(False, description="Include retired venues in the list."),
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: VenueService = Depends(get_venue_service),
 ):
     resolve_caller(authorization, settings.user_service_url, allowed_roles=CATALOGUE_READER_ROLES)
-    return venue_service.list_venues(db, include_retired=includeRetired)
+    return service.list_venues(include_retired=includeRetired)
 
 
 @router.get(
@@ -58,10 +65,10 @@ def list_venues(
 def get_venue(
     venue_id: str = Path(..., description="Venue id, e.g. `v1`."),
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: VenueService = Depends(get_venue_service),
 ):
     resolve_caller(authorization, settings.user_service_url, allowed_roles=CATALOGUE_READER_ROLES)
-    return venue_service.get_venue(db, venue_id)
+    return service.get_venue(venue_id)
 
 
 @router.post(
@@ -75,10 +82,10 @@ def get_venue(
 def create_venue(
     body: VenueCreate,
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: VenueService = Depends(get_venue_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"venue"})
-    return venue_service.create_venue(db, body, caller)
+    return service.create_venue(body, caller)
 
 
 @router.patch(
@@ -92,10 +99,10 @@ def update_venue(
     body: VenueUpdate,
     venue_id: str = Path(..., description="Venue id, e.g. `v1`."),
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: VenueService = Depends(get_venue_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"venue"})
-    return venue_service.update_venue(db, venue_id, body, caller)
+    return service.update_venue(venue_id, body, caller)
 
 
 @router.post(
@@ -114,10 +121,10 @@ def retire_venue(
         False, description="Required if confirmed upcoming bookings would be affected."
     ),
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: VenueService = Depends(get_venue_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"venue"})
-    return venue_service.retire_venue(db, venue_id, caller, confirm)
+    return service.retire_venue(venue_id, caller, confirm)
 
 
 @router.get(
@@ -130,10 +137,10 @@ def retire_venue(
 def get_venue_activity_log(
     venue_id: str = Path(..., description="Venue id, e.g. `v1`."),
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: VenueService = Depends(get_venue_service),
 ):
     resolve_caller(authorization, settings.user_service_url, allowed_roles=CATALOGUE_READER_ROLES)
-    return venue_service.get_activity_log(db, venue_id)
+    return service.get_activity_log(venue_id)
 
 
 @router.post(
@@ -147,10 +154,10 @@ def get_venue_activity_log(
 def create_booking(
     body: VenueBookingCreate,
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: VenueService = Depends(get_venue_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
-    return venue_service.create_booking(db, body, caller["userId"])
+    return service.create_booking(body, caller["userId"])
 
 
 @router.post(
@@ -164,10 +171,10 @@ def approve_booking(
     body: VenueBookingDecision,
     booking_id: str = Path(..., description="Booking id returned by create booking."),
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: VenueService = Depends(get_venue_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"venue"})
-    return venue_service.approve_booking(db, booking_id, caller["userId"], body.reason)
+    return service.approve_booking(booking_id, caller["userId"], body.reason)
 
 
 @router.post(
@@ -181,7 +188,7 @@ def reject_booking(
     body: VenueBookingDecision,
     booking_id: str = Path(..., description="Booking id returned by create booking."),
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: VenueService = Depends(get_venue_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"venue"})
-    return venue_service.reject_booking(db, booking_id, caller["userId"], body.reason)
+    return service.reject_booking(booking_id, caller["userId"], body.reason)
