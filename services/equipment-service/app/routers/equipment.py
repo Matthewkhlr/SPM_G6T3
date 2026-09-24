@@ -4,11 +4,17 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 from app.schemas.equipment import (
+    EquipmentActivityLogOut,
+    EquipmentAvailabilityIn,
+    EquipmentAvailabilityOut,
+    EquipmentCreate,
     EquipmentOut,
+    EquipmentQuantityReserve,
     EquipmentRequestCreate,
     EquipmentRequestOut,
     EquipmentRequestReview,
     EquipmentReservationOut,
+    EquipmentUpdate,
 )
 from app.services import equipment_service
 from shared.auth.deps import forwarded_bearer
@@ -32,6 +38,55 @@ def list_equipment(db: Session = Depends(get_db)):
     return equipment_service.list_equipment(db)
 
 
+def _technical_support(authorization: str | None) -> dict:
+    return resolve_caller(authorization, settings.user_service_url, allowed_roles={"techsupport"})
+
+
+@router.post(
+    "",
+    response_model=EquipmentOut,
+    status_code=201,
+    summary="Add an equipment type",
+    description="Technical support only.",
+    responses=error_responses(403, 409, 422, 503),
+)
+def create_equipment(
+    body: EquipmentCreate,
+    authorization: str | None = Depends(forwarded_bearer),
+    db: Session = Depends(get_db),
+):
+    caller = _technical_support(authorization)
+    return equipment_service.create_equipment(db, body, caller)
+
+
+@router.post(
+    "/availability",
+    response_model=EquipmentAvailabilityOut,
+    summary="Quantity available for a period",
+    description="Serviceable quantity minus reservations that overlap the period.",
+    responses=error_responses(404),
+)
+def check_availability(body: EquipmentAvailabilityIn, db: Session = Depends(get_db)):
+    return equipment_service.check_availability(db, body)
+
+
+@router.post(
+    "/reservations",
+    response_model=EquipmentReservationOut,
+    status_code=201,
+    summary="Reserve a quantity for a period",
+    description="Technical support only. Holds quantity so availability and catalogue edits can see it.",
+    responses=error_responses(403, 404, 503),
+)
+def reserve_quantity(
+    body: EquipmentQuantityReserve,
+    authorization: str | None = Depends(forwarded_bearer),
+    db: Session = Depends(get_db),
+):
+    caller = _technical_support(authorization)
+    return equipment_service.reserve_quantity(db, body, caller)
+
+
 @router.get(
     "/{equipment_id}",
     response_model=EquipmentOut,
@@ -43,6 +98,36 @@ def get_equipment(
     db: Session = Depends(get_db),
 ):
     return equipment_service.get_equipment(db, equipment_id)
+
+
+@router.patch(
+    "/{equipment_id}",
+    response_model=EquipmentOut,
+    summary="Edit an equipment type",
+    description="Technical support only. Rejects out-of-service counts above the total. Returns 409 when the save cuts into reserved stock unless acknowledgeReservationImpact is true.",
+    responses=error_responses(403, 404, 409, 422, 503),
+)
+def update_equipment(
+    body: EquipmentUpdate,
+    equipment_id: str = Path(..., description="Equipment id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    db: Session = Depends(get_db),
+):
+    caller = _technical_support(authorization)
+    return equipment_service.update_equipment(db, equipment_id, body, caller)
+
+
+@router.get(
+    "/{equipment_id}/activity-log",
+    response_model=list[EquipmentActivityLogOut],
+    summary="Catalogue activity log",
+    responses=error_responses(404),
+)
+def get_activity_log(
+    equipment_id: str = Path(..., description="Equipment id."),
+    db: Session = Depends(get_db),
+):
+    return equipment_service.get_activity_log(db, equipment_id)
 
 
 @router.post(

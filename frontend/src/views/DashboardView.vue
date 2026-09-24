@@ -32,9 +32,10 @@
       <BrowseEvents v-else-if="activeTab === 'Browse Events'" />
       <CreateEvent v-else-if="activeTab === 'New Request'" />
       <UpcomingEventsCalendar v-else-if="activeTab === 'Upcoming Events'"/>
+      <EquipmentCatalogue v-else-if="activeTab === 'Equipment Catalogue'" />
 
       <div class="not-built" v-else>
-        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }} are functional.
+        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }}{{ hasEquipmentTab ? ', Equipment Catalogue' : '' }} are functional.
       </div>
     </main>
   </div>
@@ -53,6 +54,7 @@ import { roles } from '../config/roles.js'
 import { auth } from '../firebase.js'
 import { session, logoutSession } from '../store/session.js'
 import UpcomingEventsCalendar from '../features/event-calendar/EventCalendar.vue'
+import EquipmentCatalogue from '../features/equipment-catalogue/EquipmentCatalogue.vue'
 
 const router = useRouter()
 // session.role is briefly null during logout (logoutSession() runs before
@@ -65,6 +67,7 @@ const activeTab = ref('Dashboard')
 const hasVenueTab = computed(() => currentData.value.tabs.includes('Venue Catalogue'))
 const hasEventsTab = computed(() => currentData.value.tabs.includes('Browse Events'))
 const hasNewRequestTab = computed(() => currentData.value.tabs.includes('New Request'))
+const hasEquipmentTab = computed(() => currentData.value.tabs.includes('Equipment Catalogue'))
 
 async function logout() {
   await signOut(auth)
