@@ -2,6 +2,11 @@ from fastapi import APIRouter, Depends, Path
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.dao.equipment_activity_log_dao import EquipmentActivityLogDAO
+from app.dao.equipment_dao import EquipmentDAO
+from app.dao.equipment_request_dao import EquipmentRequestDAO
+from app.dao.equipment_reservation_dao import EquipmentReservationDAO
+from app.dao.equipment_unit_dao import EquipmentUnitDAO
 from app.db.session import get_db
 from app.schemas.equipment import (
     EquipmentActivityLogOut,
@@ -16,7 +21,7 @@ from app.schemas.equipment import (
     EquipmentReservationOut,
     EquipmentUpdate,
 )
-from app.services import equipment_service
+from app.services.equipment_service import EquipmentService
 from shared.auth.deps import forwarded_bearer
 from shared.auth.roles import resolve_caller
 from shared.openapi import error_responses
@@ -28,14 +33,25 @@ router = APIRouter(
 )
 
 
+def get_equipment_service(db: Session = Depends(get_db)) -> EquipmentService:
+    return EquipmentService(
+        db,
+        EquipmentDAO(db),
+        EquipmentUnitDAO(db),
+        EquipmentActivityLogDAO(db),
+        EquipmentReservationDAO(db),
+        EquipmentRequestDAO(db),
+    )
+
+
 @router.get(
     "",
     response_model=list[EquipmentOut],
     summary="List equipment",
     description="Catalogue of equipment types. `status` is derived from unit rows.",
 )
-def list_equipment(db: Session = Depends(get_db)):
-    return equipment_service.list_equipment(db)
+def list_equipment(service: EquipmentService = Depends(get_equipment_service)):
+    return service.list_equipment()
 
 
 def _technical_support(authorization: str | None) -> dict:
@@ -53,10 +69,10 @@ def _technical_support(authorization: str | None) -> dict:
 def create_equipment(
     body: EquipmentCreate,
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: EquipmentService = Depends(get_equipment_service),
 ):
     caller = _technical_support(authorization)
-    return equipment_service.create_equipment(db, body, caller)
+    return service.create_equipment(body, caller)
 
 
 @router.post(
@@ -66,8 +82,8 @@ def create_equipment(
     description="Serviceable quantity minus reservations that overlap the period.",
     responses=error_responses(404),
 )
-def check_availability(body: EquipmentAvailabilityIn, db: Session = Depends(get_db)):
-    return equipment_service.check_availability(db, body)
+def check_availability(body: EquipmentAvailabilityIn, service: EquipmentService = Depends(get_equipment_service)):
+    return service.check_availability(body)
 
 
 @router.post(
@@ -81,10 +97,10 @@ def check_availability(body: EquipmentAvailabilityIn, db: Session = Depends(get_
 def reserve_quantity(
     body: EquipmentQuantityReserve,
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: EquipmentService = Depends(get_equipment_service),
 ):
     caller = _technical_support(authorization)
-    return equipment_service.reserve_quantity(db, body, caller)
+    return service.reserve_quantity(body, caller)
 
 
 @router.get(
@@ -95,9 +111,9 @@ def reserve_quantity(
 )
 def get_equipment(
     equipment_id: str = Path(..., description="Equipment id, e.g. `eq1`."),
-    db: Session = Depends(get_db),
+    service: EquipmentService = Depends(get_equipment_service),
 ):
-    return equipment_service.get_equipment(db, equipment_id)
+    return service.get_equipment(equipment_id)
 
 
 @router.patch(
@@ -111,10 +127,10 @@ def update_equipment(
     body: EquipmentUpdate,
     equipment_id: str = Path(..., description="Equipment id."),
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: EquipmentService = Depends(get_equipment_service),
 ):
     caller = _technical_support(authorization)
-    return equipment_service.update_equipment(db, equipment_id, body, caller)
+    return service.update_equipment(equipment_id, body, caller)
 
 
 @router.get(
@@ -125,9 +141,9 @@ def update_equipment(
 )
 def get_activity_log(
     equipment_id: str = Path(..., description="Equipment id."),
-    db: Session = Depends(get_db),
+    service: EquipmentService = Depends(get_equipment_service),
 ):
-    return equipment_service.get_activity_log(db, equipment_id)
+    return service.get_activity_log(equipment_id)
 
 
 @router.post(
@@ -141,10 +157,10 @@ def get_activity_log(
 def create_request(
     body: EquipmentRequestCreate,
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: EquipmentService = Depends(get_equipment_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
-    return equipment_service.create_request(db, body, caller["userId"])
+    return service.create_request(body, caller["userId"])
 
 
 @router.post(
@@ -158,10 +174,10 @@ def review_request(
     body: EquipmentRequestReview,
     request_id: str = Path(..., description="Request id returned by create request."),
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: EquipmentService = Depends(get_equipment_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"techsupport"})
-    return equipment_service.review_request(db, request_id, caller["userId"], body.approve, body.reviewNote)
+    return service.review_request(request_id, caller["userId"], body.approve, body.reviewNote)
 
 
 @router.post(
@@ -175,7 +191,7 @@ def review_request(
 def reserve_request(
     request_id: str = Path(..., description="Request id returned by create request."),
     authorization: str | None = Depends(forwarded_bearer),
-    db: Session = Depends(get_db),
+    service: EquipmentService = Depends(get_equipment_service),
 ):
     resolve_caller(authorization, settings.user_service_url, allowed_roles={"techsupport"})
-    return equipment_service.reserve_request(db, request_id)
+    return service.reserve_request(request_id)
