@@ -4,7 +4,14 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 from app.orchestration.clients import current_organiser, current_technical_support
-from app.schemas.event import EventAssignmentCreate, EventAssignmentOut, EventCreate, EventOut
+from app.schemas.event import (
+    EventAssignmentCreate,
+    EventAssignmentOut,
+    EventCreate,
+    EventDecision,
+    EventDraftUpsert,
+    EventOut,
+)
 from app.services import event_service
 from shared.auth.deps import forwarded_bearer
 from shared.auth.roles import resolve_caller
@@ -45,14 +52,48 @@ def create_event(
         db, body, organiser["userId"], organiser.get("organisationId")
     )
 
+@router.post("/drafts", response_model=EventOut, status_code=201)
+def create_draft(
+    body: EventDraftUpsert,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    organiser = current_organiser(authorization)
+    return event_service.create_draft(db, body, organiser["userId"], organiser.get("organisationId"))
 
-@router.get(
-    "/upcoming/technical",
-    response_model=list[EventOut],
-    summary="Upcoming events (technical support)",
-    description="Technical support only. Events whose `proposedEndAt` is still in the future, excluding `rejected`, `cancelled`, and `completed`.",
-    responses=error_responses(403, 503),
-)
+
+@router.get("/drafts/mine", response_model=list[EventOut])
+def list_my_drafts(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    organiser = current_organiser(authorization)
+    return event_service.list_my_drafts(db, organiser["userId"])
+
+
+@router.put("/{event_id}/draft", response_model=EventOut)
+def update_draft(
+    event_id: str,
+    body: EventDraftUpsert,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    organiser = current_organiser(authorization)
+    return event_service.update_draft(db, event_id, body, organiser["userId"])
+
+
+@router.post("/{event_id}/submit", response_model=EventOut)
+def submit_draft(
+    event_id: str,
+    body: EventCreate,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    organiser = current_organiser(authorization)
+    return event_service.submit_draft(db, event_id, body, organiser["userId"])
+
+
+@router.get("/upcoming/technical", response_model=list[EventOut])
 def list_upcoming_events_for_technical_support(
     authorization: str | None = Depends(forwarded_bearer),
     db: Session = Depends(get_db),
@@ -93,6 +134,28 @@ def get_event(
     db: Session = Depends(get_db),
 ):
     return event_service.get_event(db, event_id)
+
+
+@router.post("/{event_id}/approve", response_model=EventOut)
+def approve_event(
+    event_id: str,
+    body: EventDecision,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return event_service.approve_event(db, event_id, caller["userId"])
+
+
+@router.post("/{event_id}/reject", response_model=EventOut)
+def reject_event(
+    event_id: str,
+    body: EventDecision,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return event_service.reject_event(db, event_id, caller["userId"], body.reason or "")
 
 
 @router.post(
