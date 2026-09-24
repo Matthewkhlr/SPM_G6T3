@@ -775,15 +775,22 @@ def seed_equipment() -> None:
         for equipment_id, name, category, description, location, qty in items:
             conn.execute(
                 text(
-                    "INSERT INTO equipment_info (equipment_id, name, category, description, location, total_quantity) "
-                    "VALUES (:equipment_id, :name, :category, :description, :location, :total_quantity)"
+                    "INSERT INTO equipment_info ("
+                    "equipment_id, code, name, category, description, location, home_location, "
+                    "technical_notes, total_quantity, damaged_count, maintenance_count, retired_count"
+                    ") VALUES ("
+                    ":equipment_id, :code, :name, :category, :description, :location, :home_location, "
+                    ":technical_notes, :total_quantity, 0, 0, 0)"
                 ),
                 {
                     "equipment_id": equipment_id,
+                    "code": equipment_id,
                     "name": name,
                     "category": category,
                     "description": description,
                     "location": location,
+                    "home_location": location,
+                    "technical_notes": "",
                     "total_quantity": qty,
                 },
             )

@@ -245,18 +245,24 @@ These conflict and suitability rules are intended constraints but are not enforc
 
 ## 4. equipment-service (`equipment`)
 
-Quantity-based availability. Units exist so individual items can be marked damaged or in maintenance.
+Quantity-based availability. Catalogue counts live on `equipment_info`. `equipment_units` still stores one row per physical unit. The catalogue create, update, availability, and activity-log endpoints are not implemented yet.
 
 ### equipment_info
 
 | Column | Type | Notes |
 |---|---|---|
 | equipment_id | VARCHAR(64) PK | |
+| code | VARCHAR(64) unique | Catalogue code. Existing rows are backfilled from `equipment_id` |
 | name | VARCHAR(255) | |
 | category | VARCHAR(64) | |
 | description | TEXT | |
-| location | VARCHAR(255) | |
-| total_quantity | INT | |
+| location | VARCHAR(255) | Original store column. Kept so current reads and seed still work |
+| home_location | VARCHAR(255) | SPM-75 home location. Existing rows are backfilled from `location` |
+| technical_notes | TEXT | Optional technical notes |
+| total_quantity | INT | Owned quantity |
+| damaged_count | INT | Out of service, still owned |
+| maintenance_count | INT | Out of service, still owned |
+| retired_count | INT | Out of service, still owned |
 
 ### equipment_units
 
@@ -266,7 +272,22 @@ Quantity-based availability. Units exist so individual items can be marked damag
 | equipment_id | VARCHAR(64) | FK → equipment_info |
 | status | VARCHAR(32) | `available` \| `maintenance` \| `damaged` |
 
-The catalogue API derives one coarse equipment status: `maintenance` if any unit is under maintenance, otherwise `damaged` if any unit is damaged, otherwise `available`. Unit-management endpoints are not implemented.
+The catalogue API derives one coarse equipment status: `maintenance` if any unit is under maintenance, otherwise `damaged` if any unit is damaged, otherwise `available`. Unit-management endpoints are not implemented. Out-of-service counts on `equipment_info` are separate from these unit rows. `retired` is a count, not a unit status.
+
+### equipment_activity_log
+
+One row per catalogue change. Nothing writes this table yet. SPM-75 uses it for quantity and out-of-service edits.
+
+| Column | Type | Notes |
+|---|---|---|
+| log_id | VARCHAR(64) PK | |
+| equipment_id | VARCHAR(64) | FK → equipment_info |
+| action | VARCHAR(32) | |
+| changed_by | VARCHAR(64) | Logical FK → users |
+| changed_by_name | VARCHAR(255) | |
+| changed_by_role | VARCHAR(64) | |
+| changes | JSON | Field diffs, including quantity and out-of-service counts |
+| created_at | DATETIME | |
 
 ### equipment_requests
 
@@ -496,11 +517,28 @@ erDiagram
 
   equipment_info {
     string equipment_id PK
+    string code UK
     string name
     string category
     text description
     string location
+    string home_location
+    text technical_notes
     int total_quantity
+    int damaged_count
+    int maintenance_count
+    int retired_count
+  }
+
+  equipment_activity_log {
+    string log_id PK
+    string equipment_id FK
+    string action
+    string changed_by FK
+    string changed_by_name
+    string changed_by_role
+    json changes
+    datetime created_at
   }
 
   equipment_units {
@@ -591,6 +629,7 @@ erDiagram
   venues ||--o{ venue_unavailability : "blocked by"
 
   equipment_info ||--o{ equipment_units : contains
+  equipment_info ||--o{ equipment_activity_log : logs
   equipment_info ||--o{ equipment_requests : "requested as"
   equipment_info ||--o{ equipment_reservations : "committed from"
   equipment_requests ||--o| equipment_reservations : commits
