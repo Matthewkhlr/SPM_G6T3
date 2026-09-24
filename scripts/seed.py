@@ -759,41 +759,98 @@ def _ensure_equipment_requests(conn, now: datetime, day: timedelta) -> None:
         )
 
 
+# Fifteen catalogue types. eq1–eq3 keep the ids that equipment requests already use.
+# Counts are owned, damaged, under maintenance, and retired.
+_EQUIPMENT_CATALOGUE = [
+    ("eq1", "Projector PX-200", "display", "Includes HDMI + VGA adapters", "Marina Hall store", "Keep a spare lamp in the same store.", 4, 0, 0, 0),
+    ("eq2", "Wireless mic set", "audio", "Handheld pair with a rack receiver", "Riverside store", "Two sets are in the workshop.", 6, 0, 2, 0),
+    ("eq3", "LED wall panel", "display", "One panel is damaged and stays in the catalogue", "Exhibition store", "Do not send the damaged panel out.", 2, 1, 0, 0),
+    ("eq4", "Clicker remote", "display", "Slide advancer with a laser pointer", "Marina Hall store", "", 8, 0, 0, 0),
+    ("eq5", "Lapel microphone", "audio", "Clip-on mic for a speaker who walks the room", "Riverside store", "One capsule is damaged.", 10, 1, 0, 0),
+    ("eq6", "PA speaker pair", "audio", "Powered speakers on stands", "Riverside store", "One pair has been retired.", 6, 0, 0, 1),
+    ("eq7", "Stage monitor", "audio", "Wedge monitor for the stage edge", "Exhibition store", "", 4, 0, 0, 0),
+    ("eq8", "LED par can", "lighting", "Wash light for a small stage", "Lighting store", "One unit is in for a lamp change.", 12, 0, 1, 0),
+    ("eq9", "Follow spot", "lighting", "Operator-aimed spotlight", "Lighting store", "", 2, 0, 0, 0),
+    ("eq10", "DMX controller", "lighting", "Desk for the lighting rig", "Lighting store", "", 3, 0, 0, 0),
+    ("eq11", "Flipchart stand", "staging", "Pad and markers stored with the stand", "Marina Hall store", "", 8, 0, 0, 0),
+    ("eq12", "Lectern", "staging", "Floor lectern with a fixed microphone clip", "Marina Hall store", "", 4, 0, 0, 0),
+    ("eq13", "Confidence monitor", "display", "Floor screen facing the speaker", "Exhibition store", "One screen is being repaired.", 3, 0, 1, 0),
+    ("eq14", "HDMI switcher", "video", "Four-input switcher for laptops", "Tech bench", "", 5, 0, 0, 0),
+    ("eq15", "Capture laptop", "video", "Laptop used to record a session", "Tech bench", "One is damaged and one is retired.", 4, 1, 0, 1),
+]
+
+
+def _insert_equipment(conn, item: tuple) -> None:
+    equipment_id, name, category, description, location, notes, qty, damaged, maintenance, retired = item
+    conn.execute(
+        text(
+            "INSERT INTO equipment_info ("
+            "equipment_id, code, name, category, description, location, home_location, "
+            "technical_notes, total_quantity, damaged_count, maintenance_count, retired_count"
+            ") VALUES ("
+            ":equipment_id, :code, :name, :category, :description, :location, :home_location, "
+            ":technical_notes, :total_quantity, :damaged_count, :maintenance_count, :retired_count)"
+        ),
+        {
+            "equipment_id": equipment_id,
+            "code": equipment_id,
+            "name": name,
+            "category": category,
+            "description": description,
+            "location": location,
+            "home_location": location,
+            "technical_notes": notes,
+            "total_quantity": qty,
+            "damaged_count": damaged,
+            "maintenance_count": maintenance,
+            "retired_count": retired,
+        },
+    )
+
+
+def _ensure_equipment_catalogue(conn) -> None:
+    for item in _EQUIPMENT_CATALOGUE:
+        equipment_id = item[0]
+        exists = conn.execute(
+            text("SELECT equipment_id FROM equipment_info WHERE equipment_id = :id"),
+            {"id": equipment_id},
+        ).first()
+        if not exists:
+            _insert_equipment(conn, item)
+            continue
+        if equipment_id not in {"eq1", "eq2", "eq3"}:
+            continue
+        _, _, _, _, _, notes, qty, damaged, maintenance, retired = item
+        conn.execute(
+            text(
+                "UPDATE equipment_info SET "
+                "technical_notes = :technical_notes, total_quantity = :total_quantity, "
+                "damaged_count = :damaged_count, maintenance_count = :maintenance_count, "
+                "retired_count = :retired_count "
+                "WHERE equipment_id = :equipment_id"
+            ),
+            {
+                "equipment_id": equipment_id,
+                "technical_notes": notes,
+                "total_quantity": qty,
+                "damaged_count": damaged,
+                "maintenance_count": maintenance,
+                "retired_count": retired,
+            },
+        )
+
+
 def seed_equipment() -> None:
     engine = create_engine(URLS["equipment"])
     now = datetime.utcnow()
     day = timedelta(days=1)
     with engine.begin() as conn:
         if not _empty(conn, "equipment_info"):
+            _ensure_equipment_catalogue(conn)
             _ensure_equipment_requests(conn, now, day)
             return
-        items = [
-            ("eq1", "Projector PX-200", "display", "Includes HDMI + VGA adapters", "Marina Hall store", 4),
-            ("eq2", "Wireless mic set", "audio", "Fully booked Thursday in the demo calendar", "Riverside store", 6),
-            ("eq3", "LED wall panel", "display", "One unit flagged unavailable", "Exhibition store", 2),
-        ]
-        for equipment_id, name, category, description, location, qty in items:
-            conn.execute(
-                text(
-                    "INSERT INTO equipment_info ("
-                    "equipment_id, code, name, category, description, location, home_location, "
-                    "technical_notes, total_quantity, damaged_count, maintenance_count, retired_count"
-                    ") VALUES ("
-                    ":equipment_id, :code, :name, :category, :description, :location, :home_location, "
-                    ":technical_notes, :total_quantity, 0, 0, 0)"
-                ),
-                {
-                    "equipment_id": equipment_id,
-                    "code": equipment_id,
-                    "name": name,
-                    "category": category,
-                    "description": description,
-                    "location": location,
-                    "home_location": location,
-                    "technical_notes": "",
-                    "total_quantity": qty,
-                },
-            )
+        for item in _EQUIPMENT_CATALOGUE:
+            _insert_equipment(conn, item)
         units = [
             ("u-eq1", "eq1", "available"),
             ("u-eq2", "eq2", "available"),

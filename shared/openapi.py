@@ -38,6 +38,14 @@ ERROR_RESPONSES = {
         "description": "Conflict with an existing resource or business rule.",
         "content": {"application/json": {"example": {"detail": "Conflict"}}},
     },
+    422: {
+        "description": "The request was understood, but a quantity rule rejected it.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Out-of-service counts cannot add up to more than the total owned"}
+            }
+        },
+    },
     503: {
         "description": "A downstream service is unavailable.",
         "content": {"application/json": {"example": {"detail": "Could not verify identity"}}},

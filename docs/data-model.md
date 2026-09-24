@@ -245,7 +245,7 @@ These conflict and suitability rules are intended constraints but are not enforc
 
 ## 4. equipment-service (`equipment`)
 
-Quantity-based availability. Catalogue counts live on `equipment_info`. `equipment_units` still stores one row per physical unit. The catalogue create, update, availability, and activity-log endpoints are not implemented yet.
+Quantity-based availability. Catalogue counts live on `equipment_info`. `equipment_units` still stores one row per physical unit. Technical support can create and update a catalogue record. Availability for a period is serviceable quantity minus overlapping active reservations. A save that drops serviceable quantity below reserved stock returns 409 until the caller acknowledges it. Quantity and out-of-service edits are written to `equipment_activity_log`.
 
 ### equipment_info
 
