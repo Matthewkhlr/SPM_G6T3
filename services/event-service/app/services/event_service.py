@@ -1,3 +1,5 @@
+import logging
+import time
 from datetime import datetime
 from uuid import uuid4
 
@@ -19,6 +21,8 @@ from app.schemas.event import (
 )
 from shared.exceptions.http import conflict, forbidden, not_found
 
+logger = logging.getLogger("perf.event_service")
+
 # Full intended event lifecycle. The status column is a free VARCHAR(32) with
 # no DB-level enum, so this is documentation for future transitions, not an
 # enforced constraint. Only submitted -> approved/rejected is wired up today.
@@ -34,7 +38,7 @@ EVENT_STATUSES = (
 )
 
 
-def _to_out(row: Event) -> EventOut:
+def _to_out(row: Event, authorization: str | None = None) -> EventOut:
     return EventOut(
         eventId=row.eventId,
         eventName=row.eventName,
@@ -51,8 +55,25 @@ def _to_out(row: Event) -> EventOut:
         registrationOpensAt=row.registrationOpensAt,
         registrationClosesAt=row.registrationClosesAt,
         capacity=row.capacity,
-        registeredCount=registration_count(row.eventId),
+        submittedAt=row.submittedAt,
+        registeredCount=registration_count(row.eventId, authorization),
     )
+
+
+def _to_out_list(
+    rows: list[Event], authorization: str | None, label: str
+) -> list[EventOut]:
+    """_to_out() over a list, with timing so the registration-count fan-out
+    cost is visible separately from the DB query that produced `rows`."""
+    start = time.perf_counter()
+    result = [_to_out(row, authorization) for row in rows]
+    logger.info(
+        "%s _to_out (incl. registration_count) took %.3fs total for %d rows",
+        label,
+        time.perf_counter() - start,
+        len(rows),
+    )
+    return result
 
 
 class EventService:
@@ -81,33 +102,81 @@ class EventService:
             raise not_found("Event not found")
         return row
 
-    def list_events(self) -> list[EventOut]:
+    def list_events(self, authorization: str | None = None) -> list[EventOut]:
         """Every event except drafts — a draft is only visible to its own organiser."""
-        return [_to_out(row) for row in self.event_dao.list_excluding_draft()]
+        query_start = time.perf_counter()
+        rows = self.event_dao.list_excluding_draft()
+        logger.info(
+            "list_events DB query took %.3fs, %d rows",
+            time.perf_counter() - query_start,
+            len(rows),
+        )
+        return _to_out_list(rows, authorization, "list_events")
 
-    def list_all_events(self) -> list[EventOut]:
+    def list_all_events(self, authorization: str | None = None) -> list[EventOut]:
         """Every event except rejected ones and drafts."""
-        return [_to_out(row) for row in self.event_dao.list_excluding_statuses(["rejected", "draft"])]
+        query_start = time.perf_counter()
+        rows = self.event_dao.list_excluding_statuses(["rejected", "draft"])
+        logger.info(
+            "list_all_events DB query took %.3fs, %d rows",
+            time.perf_counter() - query_start,
+            len(rows),
+        )
+        return _to_out_list(rows, authorization, "list_all_events")
 
-    def list_confirmed_events(self) -> list[EventOut]:
+    def list_confirmed_events(self, authorization: str | None = None) -> list[EventOut]:
         """Only events that have been confirmed.
 
         NOTE: no transition in this service currently sets status to
         "confirmed" - create_event() only ever sets "created". This will return
         an empty list until an approval workflow exists that writes that status.
         """
-        return [_to_out(row) for row in self.event_dao.list_by_status("confirmed")]
+        query_start = time.perf_counter()
+        rows = self.event_dao.list_by_status("confirmed")
+        logger.info(
+            "list_confirmed_events DB query took %.3fs, %d rows",
+            time.perf_counter() - query_start,
+            len(rows),
+        )
+        return _to_out_list(rows, authorization, "list_confirmed_events")
 
-    def list_upcoming_events(self) -> list[EventOut]:
+    def list_upcoming_events(self, authorization: str | None = None) -> list[EventOut]:
         now = datetime.utcnow()
         statuses = ["rejected", "cancelled", "completed", "draft"]
-        return [_to_out(row) for row in self.event_dao.list_upcoming_excluding_statuses(now, statuses)]
+        query_start = time.perf_counter()
+        rows = self.event_dao.list_upcoming_excluding_statuses(now, statuses)
+        logger.info(
+            "list_upcoming_events DB query took %.3fs, %d rows",
+            time.perf_counter() - query_start,
+            len(rows),
+        )
+        return _to_out_list(rows, authorization, "list_upcoming_events")
 
-    def get_event(self, event_id: str) -> EventOut:
-        return _to_out(self._require_event(event_id))
+    def get_event(self, event_id: str, authorization: str | None = None) -> EventOut:
+        return _to_out(self._require_event(event_id), authorization)
+
+    def list_submission_queue(self, authorization: str | None = None) -> list[EventOut]:
+        """Coordinator review queue: submitted events, longest-waiting first.
+
+        Role-gating happens in the router (resolve_caller, allowed_roles=
+        {"coordinator"}) before this is called - same pattern as
+        approve_event/reject_event.
+        """
+        query_start = time.perf_counter()
+        rows = self.event_dao.list_by_status_ordered_by_submitted("submitted")
+        logger.info(
+            "list_submission_queue DB query took %.3fs, %d rows",
+            time.perf_counter() - query_start,
+            len(rows),
+        )
+        return _to_out_list(rows, authorization, "list_submission_queue")
 
     def create_event(
-        self, data: EventCreate, organiser_id: str, organisation_id: str | None
+        self,
+        data: EventCreate,
+        organiser_id: str,
+        organisation_id: str | None,
+        authorization: str | None = None,
     ) -> EventOut:
         """Create and immediately submit an event request.
 
@@ -142,10 +211,14 @@ class EventService:
         self.event_dao.add(row)
         self.db.commit()
         self.db.refresh(row)
-        return _to_out(row)
+        return _to_out(row, authorization)
 
     def create_draft(
-        self, data: EventDraftUpsert, organiser_id: str, organisation_id: str | None
+        self,
+        data: EventDraftUpsert,
+        organiser_id: str,
+        organisation_id: str | None,
+        authorization: str | None = None,
     ) -> EventOut:
         now = datetime.utcnow()
         row = Event(
@@ -176,7 +249,7 @@ class EventService:
         self.event_dao.add(row)
         self.db.commit()
         self.db.refresh(row)
-        return _to_out(row)
+        return _to_out(row, authorization)
 
     def _get_own_draft(self, event_id: str, organiser_id: str) -> Event:
         event = self._require_event(event_id)
@@ -186,7 +259,13 @@ class EventService:
             raise conflict(f"Event is already {event.status}")
         return event
 
-    def update_draft(self, event_id: str, data: EventDraftUpsert, organiser_id: str) -> EventOut:
+    def update_draft(
+        self,
+        event_id: str,
+        data: EventDraftUpsert,
+        organiser_id: str,
+        authorization: str | None = None,
+    ) -> EventOut:
         event = self._get_own_draft(event_id, organiser_id)
         event.eventName = data.eventName
         event.purpose = data.purpose
@@ -200,9 +279,15 @@ class EventService:
         event.updatedAt = datetime.utcnow()
         self.db.commit()
         self.db.refresh(event)
-        return _to_out(event)
+        return _to_out(event, authorization)
 
-    def submit_draft(self, event_id: str, data: EventCreate, organiser_id: str) -> EventOut:
+    def submit_draft(
+        self,
+        event_id: str,
+        data: EventCreate,
+        organiser_id: str,
+        authorization: str | None = None,
+    ) -> EventOut:
         event = self._get_own_draft(event_id, organiser_id)
         now = datetime.utcnow()
         event.eventName = data.eventName
@@ -226,10 +311,11 @@ class EventService:
         event.updatedAt = now
         self.db.commit()
         self.db.refresh(event)
-        return _to_out(event)
+        return _to_out(event, authorization)
 
-    def list_my_drafts(self, organiser_id: str) -> list[EventOut]:
-        return [_to_out(row) for row in self.event_dao.list_drafts_by_organiser(organiser_id)]
+    def list_my_drafts(self, organiser_id: str, authorization: str | None = None) -> list[EventOut]:
+        rows = self.event_dao.list_drafts_by_organiser(organiser_id)
+        return _to_out_list(rows, authorization, "list_my_drafts")
 
     def assign_coordinator(
         self, event_id: str, data: EventAssignmentCreate, assigned_by: str
@@ -269,7 +355,14 @@ class EventService:
             )
         )
 
-    def _decide_event(self, event_id: str, coordinator_id: str, new_status: str, reason: str) -> EventOut:
+    def _decide_event(
+        self,
+        event_id: str,
+        coordinator_id: str,
+        new_status: str,
+        reason: str,
+        authorization: str | None = None,
+    ) -> EventOut:
         event = self._require_event(event_id)
         if event.status != "submitted":
             raise conflict(f"Event is already {event.status}")
@@ -278,10 +371,18 @@ class EventService:
         event.updatedAt = datetime.utcnow()
         self.db.commit()
         self.db.refresh(event)
-        return _to_out(event)
+        return _to_out(event, authorization)
 
-    def approve_event(self, event_id: str, coordinator_id: str) -> EventOut:
-        return self._decide_event(event_id, coordinator_id, "approved", "")
+    def approve_event(
+        self, event_id: str, coordinator_id: str, authorization: str | None = None
+    ) -> EventOut:
+        return self._decide_event(event_id, coordinator_id, "approved", "", authorization)
 
-    def reject_event(self, event_id: str, coordinator_id: str, reason: str = "") -> EventOut:
-        return self._decide_event(event_id, coordinator_id, "rejected", reason)
+    def reject_event(
+        self,
+        event_id: str,
+        coordinator_id: str,
+        reason: str = "",
+        authorization: str | None = None,
+    ) -> EventOut:
+        return self._decide_event(event_id, coordinator_id, "rejected", reason, authorization)

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import Depends
 
 from app.core.config import settings
@@ -5,6 +7,8 @@ from app.routers.registration import router as registration_router
 from shared.auth.deps import require_authenticated_user
 from shared.config import parse_origins
 from shared.openapi import create_service_app
+
+logging.basicConfig(level=logging.INFO)
 
 app = create_service_app(
     service_id="registration-service",

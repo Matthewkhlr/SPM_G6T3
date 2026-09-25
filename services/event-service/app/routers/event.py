@@ -37,8 +37,11 @@ def get_event_service(db: Session = Depends(get_db)) -> EventService:
     summary="List events",
     description="Every event, including rejected ones. `registeredCount` is fetched from registration-service.",
 )
-def list_events(service: EventService = Depends(get_event_service)):
-    return service.list_events()
+def list_events(
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    return service.list_events(authorization)
 
 
 @router.post(
@@ -55,7 +58,7 @@ def create_event(
     service: EventService = Depends(get_event_service),
 ):
     organiser = current_organiser(authorization)
-    return service.create_event(body, organiser["userId"], organiser.get("organisationId"))
+    return service.create_event(body, organiser["userId"], organiser.get("organisationId"), authorization)
 
 @router.post("/drafts", response_model=EventOut, status_code=201)
 def create_draft(
@@ -64,7 +67,7 @@ def create_draft(
     service: EventService = Depends(get_event_service),
 ):
     organiser = current_organiser(authorization)
-    return service.create_draft(body, organiser["userId"], organiser.get("organisationId"))
+    return service.create_draft(body, organiser["userId"], organiser.get("organisationId"), authorization)
 
 
 @router.get("/drafts/mine", response_model=list[EventOut])
@@ -73,7 +76,7 @@ def list_my_drafts(
     service: EventService = Depends(get_event_service),
 ):
     organiser = current_organiser(authorization)
-    return service.list_my_drafts(organiser["userId"])
+    return service.list_my_drafts(organiser["userId"], authorization)
 
 
 @router.put("/{event_id}/draft", response_model=EventOut)
@@ -84,7 +87,7 @@ def update_draft(
     service: EventService = Depends(get_event_service),
 ):
     organiser = current_organiser(authorization)
-    return service.update_draft(event_id, body, organiser["userId"])
+    return service.update_draft(event_id, body, organiser["userId"], authorization)
 
 
 @router.post("/{event_id}/submit", response_model=EventOut)
@@ -95,7 +98,7 @@ def submit_draft(
     service: EventService = Depends(get_event_service),
 ):
     organiser = current_organiser(authorization)
-    return service.submit_draft(event_id, body, organiser["userId"])
+    return service.submit_draft(event_id, body, organiser["userId"], authorization)
 
 
 @router.get("/upcoming/technical", response_model=list[EventOut])
@@ -104,7 +107,7 @@ def list_upcoming_events_for_technical_support(
     service: EventService = Depends(get_event_service),
 ):
     _technical_user = current_technical_support(authorization)
-    return service.list_upcoming_events()
+    return service.list_upcoming_events(authorization)
 
 
 @router.get(
@@ -113,8 +116,11 @@ def list_upcoming_events_for_technical_support(
     summary="List events except rejected",
     description="Same as list events, but omits status `rejected`. Ordered by `proposedStartAt`.",
 )
-def list_all_events(service: EventService = Depends(get_event_service)):
-    return service.list_all_events()
+def list_all_events(
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    return service.list_all_events(authorization)
 
 
 @router.get(
@@ -123,8 +129,26 @@ def list_all_events(service: EventService = Depends(get_event_service)):
     summary="List confirmed events",
     description="Only events with status `confirmed`, ordered by `proposedStartAt`.",
 )
-def list_confirmed_events(service: EventService = Depends(get_event_service)):
-    return service.list_confirmed_events()
+def list_confirmed_events(
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    return service.list_confirmed_events(authorization)
+
+
+@router.get(
+    "/queue",
+    response_model=list[EventOut],
+    summary="Coordinator review queue",
+    description="Coordinator only. Submitted events awaiting review, ordered by submission time - longest-waiting first.",
+    responses=error_responses(403, 503),
+)
+def list_submission_queue(
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.list_submission_queue(authorization)
 
 
 @router.get(
@@ -136,9 +160,10 @@ def list_confirmed_events(service: EventService = Depends(get_event_service)):
 )
 def get_event(
     event_id: str = Path(..., description="Event id, e.g. `e1`."),
+    authorization: str | None = Depends(forwarded_bearer),
     service: EventService = Depends(get_event_service),
 ):
-    return service.get_event(event_id)
+    return service.get_event(event_id, authorization)
 
 
 @router.post("/{event_id}/approve", response_model=EventOut)
@@ -149,7 +174,7 @@ def approve_event(
     service: EventService = Depends(get_event_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
-    return service.approve_event(event_id, caller["userId"])
+    return service.approve_event(event_id, caller["userId"], authorization)
 
 
 @router.post("/{event_id}/reject", response_model=EventOut)
@@ -160,7 +185,7 @@ def reject_event(
     service: EventService = Depends(get_event_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
-    return service.reject_event(event_id, caller["userId"], body.reason or "")
+    return service.reject_event(event_id, caller["userId"], body.reason or "", authorization)
 
 
 @router.post(
