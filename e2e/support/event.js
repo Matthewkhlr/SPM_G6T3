@@ -18,11 +18,10 @@ export async function createDraftEvent(accountId = 'EO-01', name) {
 }
 
 export async function createSubmittedEvent(accountId = 'EO-01', name) {
-  const created = await createDraftEvent(accountId, name)
-  const submitted = await eventApi('POST', `/${created.eventId}/submit`, accountId)
-  expect(submitted.status, JSON.stringify(submitted.body)).toBe(200)
-  expect(submitted.body.status).toMatch(/submitted/i)
-  return submitted.body
+  const created = await eventApi('POST', '', accountId, newEventPayload(name))
+  expect(created.status, JSON.stringify(created.body)).toBe(201)
+  expect(created.body.status).toMatch(/submitted/i)
+  return created.body
 }
 
 export async function createNameOnlyDraft(accountId = 'EO-01', name) {

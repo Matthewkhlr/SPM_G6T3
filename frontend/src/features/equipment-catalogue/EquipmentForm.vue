@@ -6,7 +6,13 @@
     <div class="fields">
       <label>Code<input v-model="form.code" required /></label>
       <label>Name<input v-model="form.name" required /></label>
-      <label>Category<input v-model="form.category" required /></label>
+      <label>
+        Category
+        <select v-model="form.category" required>
+          <option value="" disabled>Select a category</option>
+          <option v-for="item in categoryOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+        </select>
+      </label>
       <label>Total owned<input v-model.number="form.totalQuantity" type="number" min="0" required /></label>
       <label class="wide">Description<textarea v-model="form.description" rows="2" /></label>
       <label>Home location<input v-model="form.homeLocation" /></label>
@@ -25,7 +31,7 @@
 </template>
 
 <script setup>
-import { reactive, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 
 const props = defineProps({
   mode: { type: String, required: true },
@@ -34,7 +40,24 @@ const props = defineProps({
 })
 const emit = defineEmits(['save', 'cancel'])
 
+const CATEGORIES = [
+  { value: 'audio', label: 'Audio' },
+  { value: 'display', label: 'Display' },
+  { value: 'lighting', label: 'Lighting' },
+  { value: 'staging', label: 'Staging' },
+  { value: 'video', label: 'Video' },
+]
+
 const form = reactive(blank())
+
+const categoryOptions = computed(() => {
+  const known = new Set(CATEGORIES.map((item) => item.value))
+  const current = String(form.category || '').trim().toLowerCase()
+  if (current && !known.has(current)) {
+    return [...CATEGORIES, { value: current, label: current.charAt(0).toUpperCase() + current.slice(1) }]
+  }
+  return CATEGORIES
+})
 
 function blank() {
   return {
@@ -54,7 +77,7 @@ function blank() {
 function fill(equipment) {
   form.code = equipment?.code || ''
   form.name = equipment?.name || ''
-  form.category = equipment?.category || ''
+  form.category = String(equipment?.category || '').trim().toLowerCase()
   form.description = equipment?.description || ''
   form.homeLocation = equipment?.homeLocation || ''
   form.technicalNotes = equipment?.technicalNotes || ''
@@ -73,7 +96,7 @@ function submit(acknowledge = false) {
   emit('save', {
     code: form.code.trim(),
     name: form.name.trim(),
-    category: form.category.trim(),
+    category: form.category.trim().toLowerCase(),
     description: form.description.trim(),
     homeLocation: form.homeLocation.trim(),
     technicalNotes: form.technicalNotes.trim(),
@@ -100,7 +123,7 @@ h3 { margin: 0; font-size: 19px; font-weight: 500; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
 .wide { grid-column: 1 / -1; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
-input, textarea {
+input, textarea, select {
   background: rgba(255, 255, 255, .04);
   border: 1px solid var(--hairline);
   border-radius: 10px;
@@ -108,6 +131,10 @@ input, textarea {
   font: inherit;
   font-size: 14px;
   padding: 8px 10px;
+}
+select option {
+  color: #1b1230;
+  background: #ffffff;
 }
 .warning {
   margin: 16px 0 0;
