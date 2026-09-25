@@ -1,20 +1,39 @@
+import logging
+import time
+
 import httpx
 
 from app.core.config import settings
 from shared.exceptions.http import forbidden, unauthorized
 
+logger = logging.getLogger("perf.clients")
 
-def registration_count(event_id: str) -> int:
+# Reused across calls so we're not paying a fresh TCP connect/teardown on
+# every registration_count() call.
+_registration_client = httpx.Client(timeout=3.0)
+
+
+def registration_count(event_id: str, authorization: str | None = None) -> int:
+    start = time.perf_counter()
+    headers = {"Authorization": authorization} if authorization else {}
     try:
-        with httpx.Client(timeout=3.0) as client:
-            response = client.get(
-                f"{settings.registration_service_url}/registrations",
-                params={"eventId": event_id},
-            )
-            if response.status_code == 200:
-                return len(response.json())
-    except httpx.HTTPError:
+        response = _registration_client.get(
+            f"{settings.registration_service_url}/registrations",
+            params={"eventId": event_id},
+            headers=headers,
+        )
+        if response.status_code == 200:
+            return len(response.json())
+        logger.info(
+            "registration_count(%s) got status %s", event_id, response.status_code
+        )
+    except httpx.HTTPError as exc:
+        logger.info("registration_count(%s) raised %r", event_id, exc)
         return 0
+    finally:
+        logger.info(
+            "registration_count(%s) took %.3fs", event_id, time.perf_counter() - start
+        )
     return 0
 
 

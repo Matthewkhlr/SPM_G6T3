@@ -11,6 +11,7 @@
           <div class="event-meta">
             {{ formatRange(event.proposedStartAt, event.proposedEndAt) }} ·
             <span class="status-pill">{{ event.status }}</span>
+            <span v-if="event.submittedAt" class="waiting-note">· waiting {{ waitingFor(event.submittedAt) }}</span>
           </div>
         </div>
         <div class="actions">
@@ -52,7 +53,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { getAllEvents, approveEvent, rejectEvent } from '../../api/eventService.js'
+import { getSubmissionQueue, approveEvent, rejectEvent } from '../../api/eventService.js'
 
 const events = ref([])
 const loading = ref(true)
@@ -73,12 +74,24 @@ function formatRange(start, end) {
   return `${startDate.toLocaleString()} – ${endDate.toLocaleString()}`
 }
 
+function waitingFor(submittedAt) {
+  const ms = Date.now() - new Date(submittedAt).getTime()
+  const hours = Math.floor(ms / (1000 * 60 * 60))
+  if (hours < 1) return 'less than an hour'
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  return `${days}d ${hours % 24}h`
+}
+
 async function loadEvents() {
   loading.value = true
   error.value = ''
   try {
-    const { data } = await getAllEvents()
-    events.value = data.filter((event) => event.status === 'submitted')
+    // Server already filters to status "submitted" and orders by
+    // submittedAt ascending (longest-waiting first) - no client-side
+    // filtering/sorting needed here.
+    const { data } = await getSubmissionQueue()
+    events.value = data
   } catch (err) {
     error.value = err.response?.data?.detail || 'Could not load the review queue. Please try again.'
   } finally {
@@ -145,6 +158,7 @@ onMounted(loadEvents)
 .event-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .event-name { font-family: 'Space Grotesk', sans-serif; font-weight: 500; color: var(--text); font-size: 15px; }
 .event-meta { font-size: 12px; margin-top: 4px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.waiting-note { color: var(--muted); }
 
 .actions { display: flex; gap: 10px; flex-shrink: 0; }
 

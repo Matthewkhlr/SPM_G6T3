@@ -31,6 +31,15 @@ class EventDAO:
             .all()
         )
 
+    def list_by_status_ordered_by_submitted(self, status: str) -> list[Event]:
+        """Oldest submittedAt first - i.e. longest-waiting request first."""
+        return (
+            self.db.query(Event)
+            .filter(Event.status == status)
+            .order_by(Event.submittedAt.asc())
+            .all()
+        )
+
     def list_upcoming_excluding_statuses(self, after: datetime, statuses: list[str]) -> list[Event]:
         return (
             self.db.query(Event)

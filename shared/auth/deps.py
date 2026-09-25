@@ -3,12 +3,17 @@
 The browser calls services directly, so every service validates the Firebase
 ID token it receives before serving protected endpoints.
 """
+import logging
+import time
+
 from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from shared.exceptions.http import unauthorized
 
 from .tokens import verify_firebase_token
+
+logger = logging.getLogger("perf.auth")
 
 bearer_scheme = HTTPBearer(
     auto_error=False,
@@ -26,10 +31,13 @@ def require_authenticated_user(
 ) -> dict:
     if credentials is None or not credentials.credentials:
         raise unauthorized()
+    start = time.perf_counter()
     try:
         return verify_firebase_token(credentials.credentials)
     except ValueError:
         raise unauthorized("Invalid or expired token")
+    finally:
+        logger.info("verify_firebase_token took %.3fs", time.perf_counter() - start)
 
 
 def forwarded_bearer(
