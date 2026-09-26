@@ -13,7 +13,7 @@ class EventDAO:
         return self.db.query(Event).filter(Event.eventId == event_id).first()
 
     def list_excluding_draft(self) -> list[Event]:
-        return self.db.query(Event).filter(Event.status != "draft").all()
+        return self.db.query(Event).filter(Event.status.notin_(["draft", "discarded"])).all()
 
     def list_excluding_statuses(self, statuses: list[str]) -> list[Event]:
         return (
@@ -53,6 +53,14 @@ class EventDAO:
         return (
             self.db.query(Event)
             .filter(Event.organiserId == organiser_id, Event.status == "draft")
+            .order_by(Event.updatedAt.desc())
+            .all()
+        )
+
+    def list_by_organiser_excluding_statuses(self, organiser_id: str, statuses: list[str]) -> list[Event]:
+        return (
+            self.db.query(Event)
+            .filter(Event.organiserId == organiser_id, Event.status.notin_(statuses))
             .order_by(Event.updatedAt.desc())
             .all()
         )

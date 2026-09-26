@@ -33,3 +33,11 @@ export const getMyDrafts = () => axiosClient.get("/events/drafts/mine");
 
 // Finalizes an existing draft into a fully-validated submitted request (same event id).
 export const submitDraft = (eventId, event) => axiosClient.post(`/events/${eventId}/submit`, event);
+
+// The signed-in organiser's own events at any stage, except ones they discarded.
+export const getMyEvents = () => axiosClient.get("/events/mine");
+
+// Only allowed while the event is still a draft — the backend enforces this.
+export const discardEvent = (eventId) => axiosClient.delete(`/events/${eventId}`);
+
+export const getActivityLog = (eventId) => axiosClient.get(`/events/${eventId}/activity-log`);

@@ -102,6 +102,16 @@ class EventDecision(BaseModel):
     reason: str | None = None
 
 
+class EventStatusHistoryOut(BaseModel):
+    historyId: str
+    eventId: str
+    fromStatus: str | None = None
+    toStatus: str
+    changedBy: str
+    note: str = ""
+    createdAt: datetime
+
+
 class EventDraftUpsert(BaseModel):
     """Fields an organiser can save at draft stage — only eventName is required.
 

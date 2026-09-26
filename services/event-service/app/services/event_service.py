@@ -18,6 +18,7 @@ from app.schemas.event import (
     EventCreate,
     EventDraftUpsert,
     EventOut,
+    EventStatusHistoryOut,
 )
 from shared.exceptions.http import conflict, forbidden, not_found
 
@@ -28,6 +29,7 @@ logger = logging.getLogger("perf.event_service")
 # enforced constraint. Only submitted -> approved/rejected is wired up today.
 EVENT_STATUSES = (
     "draft",
+    "discarded",
     "submitted",
     "approved",
     "rejected",
@@ -114,9 +116,9 @@ class EventService:
         return _to_out_list(rows, authorization, "list_events")
 
     def list_all_events(self, authorization: str | None = None) -> list[EventOut]:
-        """Every event except rejected ones and drafts."""
+        """Every event except rejected ones, drafts, and discarded drafts."""
         query_start = time.perf_counter()
-        rows = self.event_dao.list_excluding_statuses(["rejected", "draft"])
+        rows = self.event_dao.list_excluding_statuses(["rejected", "draft", "discarded"])
         logger.info(
             "list_all_events DB query took %.3fs, %d rows",
             time.perf_counter() - query_start,
@@ -142,7 +144,7 @@ class EventService:
 
     def list_upcoming_events(self, authorization: str | None = None) -> list[EventOut]:
         now = datetime.utcnow()
-        statuses = ["rejected", "cancelled", "completed", "draft"]
+        statuses = ["rejected", "cancelled", "completed", "draft", "discarded"]
         query_start = time.perf_counter()
         rows = self.event_dao.list_upcoming_excluding_statuses(now, statuses)
         logger.info(
@@ -316,6 +318,50 @@ class EventService:
     def list_my_drafts(self, organiser_id: str, authorization: str | None = None) -> list[EventOut]:
         rows = self.event_dao.list_drafts_by_organiser(organiser_id)
         return _to_out_list(rows, authorization, "list_my_drafts")
+
+    def list_my_events(self, organiser_id: str, authorization: str | None = None) -> list[EventOut]:
+        """Every event the caller organises, at any stage, other than one they discarded."""
+        rows = self.event_dao.list_by_organiser_excluding_statuses(organiser_id, ["discarded"])
+        return _to_out_list(rows, authorization, "list_my_events")
+
+    def discard_draft(
+        self, event_id: str, organiser_id: str, authorization: str | None = None
+    ) -> EventOut:
+        """Discard an event request while it is still a draft.
+
+        Only the owning organiser can discard, and only while the event has
+        never been submitted - once it's in the review pipeline it can only
+        move forward (approved/rejected), not disappear.
+        """
+        event = self._require_event(event_id)
+        if event.organiserId != organiser_id:
+            raise forbidden("You do not have permission to discard this event")
+        if event.status != "draft":
+            raise forbidden(f"Only a draft can be discarded (event is {event.status})")
+        self._record_status_change(event, "discarded", organiser_id)
+        event.status = "discarded"
+        event.updatedAt = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(event)
+        return _to_out(event, authorization)
+
+    def get_activity_log(
+        self, event_id: str, authorization: str | None = None
+    ) -> list[EventStatusHistoryOut]:
+        self._require_event(event_id)
+        rows = self.history_dao.list_by_event(event_id)
+        return [
+            EventStatusHistoryOut(
+                historyId=row.historyId,
+                eventId=row.eventId,
+                fromStatus=row.fromStatus,
+                toStatus=row.toStatus,
+                changedBy=row.changedBy,
+                note=row.note,
+                createdAt=row.createdAt,
+            )
+            for row in rows
+        ]
 
     def assign_coordinator(
         self, event_id: str, data: EventAssignmentCreate, assigned_by: str

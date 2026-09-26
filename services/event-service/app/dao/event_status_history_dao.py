@@ -9,3 +9,11 @@ class EventStatusHistoryDAO:
 
     def add(self, row: EventStatusHistory) -> None:
         self.db.add(row)
+
+    def list_by_event(self, event_id: str) -> list[EventStatusHistory]:
+        return (
+            self.db.query(EventStatusHistory)
+            .filter(EventStatusHistory.eventId == event_id)
+            .order_by(EventStatusHistory.createdAt.asc())
+            .all()
+        )
