@@ -14,6 +14,7 @@ from app.schemas.event import (
     EventDecision,
     EventDraftUpsert,
     EventOut,
+    EventStatusHistoryOut,
 )
 from app.services.event_service import EventService
 from shared.auth.deps import forwarded_bearer
@@ -152,6 +153,21 @@ def list_submission_queue(
 
 
 @router.get(
+    "/mine",
+    response_model=list[EventOut],
+    summary="My events",
+    description="Organiser only. Every event the caller organises, at any stage, except ones they discarded.",
+    responses=error_responses(403),
+)
+def list_my_events(
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    organiser = current_organiser(authorization)
+    return service.list_my_events(organiser["userId"], authorization)
+
+
+@router.get(
     "/{event_id}",
     response_model=EventOut,
     summary="Get event",
@@ -164,6 +180,38 @@ def get_event(
     service: EventService = Depends(get_event_service),
 ):
     return service.get_event(event_id, authorization)
+
+
+@router.delete(
+    "/{event_id}",
+    response_model=EventOut,
+    summary="Discard a draft",
+    description="Organiser only, and only while the event is still a draft. Once submitted, an event "
+    "can no longer be discarded - it moves forward via approve/reject instead.",
+    responses=error_responses(403, 404),
+)
+def discard_event(
+    event_id: str,
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    organiser = current_organiser(authorization)
+    return service.discard_draft(event_id, organiser["userId"], authorization)
+
+
+@router.get(
+    "/{event_id}/activity-log",
+    response_model=list[EventStatusHistoryOut],
+    summary="Event activity log",
+    description="Every recorded status change for this event (who changed it, from what, to what, when).",
+    responses=error_responses(404),
+)
+def get_activity_log(
+    event_id: str,
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    return service.get_activity_log(event_id, authorization)
 
 
 @router.post("/{event_id}/approve", response_model=EventOut)

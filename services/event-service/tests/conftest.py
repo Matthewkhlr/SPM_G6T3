@@ -18,7 +18,9 @@ from app.services.event_service import EventService
 def db_session(monkeypatch):
     # No registration-service running in tests; _to_out() calls registration_count()
     # for every event it returns, so stub it instead of hitting the network.
-    monkeypatch.setattr("app.services.event_service.registration_count", lambda event_id: 0)
+    monkeypatch.setattr(
+        "app.services.event_service.registration_count", lambda event_id, authorization=None: 0
+    )
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)

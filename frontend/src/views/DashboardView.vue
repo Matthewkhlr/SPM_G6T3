@@ -35,17 +35,18 @@
       <EquipmentCatalogue v-else-if="activeTab === 'Equipment Catalogue'" />
       <ReviewQueue v-else-if="activeTab === 'Review Queue'" />
       <DraftsList v-else-if="activeTab === 'Drafts'" @edit-draft="activeTab = 'New Request'" />
+      <MyEvents v-else-if="activeTab === 'My Events'" />
 
       <div class="not-built" v-else>
-        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }}{{ hasEquipmentTab ? ', Equipment Catalogue' : '' }} are functional.
+        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }}{{ hasEquipmentTab ? ', Equipment Catalogue' : '' }}{{ hasMyEventsTab ? ', My Events' : '' }} are functional.
       </div>
     </main>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { signOut } from 'firebase/auth'
 import AppLogo from '../components/shared/AppLogo.vue'
 import DashboardHome from '../features/dashboard/DashboardHome.vue'
@@ -59,9 +60,11 @@ import UpcomingEventsCalendar from '../features/event-calendar/EventCalendar.vue
 import EquipmentCatalogue from '../features/equipment-catalogue/EquipmentCatalogue.vue'
 import ReviewQueue from '../features/review-queue/ReviewQueue.vue'
 import DraftsList from '../features/drafts/DraftsList.vue'
+import MyEvents from '../features/my-events/MyEvents.vue'
 import { draftEditor } from '../store/draftEditor.js'
 
 const router = useRouter()
+const route = useRoute()
 // session.role is briefly null during logout (logoutSession() runs before
 // the router finishes navigating away from this still-mounted view), so
 // this falls back to an empty role rather than crashing on
@@ -73,6 +76,16 @@ const hasVenueTab = computed(() => currentData.value.tabs.includes('Venue Catalo
 const hasEventsTab = computed(() => currentData.value.tabs.includes('Browse Events'))
 const hasNewRequestTab = computed(() => currentData.value.tabs.includes('New Request'))
 const hasEquipmentTab = computed(() => currentData.value.tabs.includes('Equipment Catalogue'))
+const hasMyEventsTab = computed(() => currentData.value.tabs.includes('My Events'))
+
+// Coming back from the event detail page (e.g. after discarding a draft)
+// lands on a specific tab via ?tab= instead of always resetting to Dashboard.
+onMounted(() => {
+  const requestedTab = route.query.tab
+  if (typeof requestedTab === 'string' && currentData.value.tabs.includes(requestedTab)) {
+    activeTab.value = requestedTab
+  }
+})
 
 function selectTab(tab) {
   if (tab === activeTab.value) return
