@@ -50,9 +50,30 @@ def _reject_invalid_counts(total: int, damaged: int, maintenance: int, retired: 
         )
 
 
-def _overlapping_quantity(rows: list[EquipmentReservation], starts_at: datetime, ends_at: datetime) -> int:
+def _overlapping_rows(
+    rows: list[EquipmentReservation], starts_at: datetime, ends_at: datetime
+) -> list[EquipmentReservation]:
     starts_at, ends_at = _naive(starts_at), _naive(ends_at)
-    return sum(row.quantity for row in rows if _naive(row.startsAt) < ends_at and _naive(row.endsAt) > starts_at)
+    return [row for row in rows if _naive(row.startsAt) < ends_at and _naive(row.endsAt) > starts_at]
+
+
+def _overlapping_quantity(rows: list[EquipmentReservation], starts_at: datetime, ends_at: datetime) -> int:
+    return sum(row.quantity for row in _overlapping_rows(rows, starts_at, ends_at))
+
+
+def _availability_report(lines: list[dict]) -> dict:
+    can_meet = True
+    for line in lines:
+        if line["shortfall"] > 0:
+            can_meet = False
+    return {"canMeet": can_meet, "canBeMet": can_meet, "lines": lines}
+
+
+def _conflicting_events(rows: list[EquipmentReservation]) -> list[dict]:
+    totals: dict[str, int] = {}
+    for row in rows:
+        totals[row.eventId] = totals.get(row.eventId, 0) + row.quantity
+    return [{"eventId": event_id, "quantity": totals[event_id]} for event_id in sorted(totals)]
 
 
 def _events_over_serviceable(rows: list[EquipmentReservation], serviceable: int) -> list[str]:
@@ -285,6 +306,46 @@ class EquipmentService:
             availableQuantity=viewed.serviceableQuantity - reserved,
         )
 
+    def check_event_availability(self, lines, starts_at, ends_at, exclude_event_id=None) -> dict:
+        report_lines = []
+        for line in lines:
+            viewed = self._equipment_out(self._require_equipment(line["equipmentId"]))
+            held = []
+            for item in self._active_reservations(viewed.equipmentId):
+                if exclude_event_id is not None and item.eventId == exclude_event_id:
+                    continue
+                held.append(item)
+            overlapping = _overlapping_rows(held, starts_at, ends_at)
+            available = viewed.serviceableQuantity - sum(row.quantity for row in overlapping)
+            shortfall = line["quantity"] - available
+            if shortfall < 0:
+                shortfall = 0
+            report_lines.append(
+                {
+                    "equipmentId": viewed.equipmentId,
+                    "name": viewed.name,
+                    "requestedQuantity": line["quantity"],
+                    "availableQuantity": available,
+                    "shortfall": shortfall,
+                    "conflictingEvents": _conflicting_events(overlapping),
+                }
+            )
+        return _availability_report(report_lines)
+
+    def check_event_request(self, event_id: str) -> dict:
+        report_lines = []
+        for request in self.request_dao.list_for_event(event_id):
+            if request.status in ("rejected", "cancelled"):
+                continue
+            piece = self.check_event_availability(
+                [{"equipmentId": request.equipmentId, "quantity": request.quantity}],
+                request.startsAt,
+                request.endsAt,
+                exclude_event_id=event_id,
+            )
+            report_lines.extend(piece["lines"])
+        return _availability_report(report_lines)
+
     def get_activity_log(self, equipment_id: str) -> list[EquipmentActivityLogOut]:
         self._require_equipment(equipment_id)
         rows = self.log_dao.list_for_equipment(equipment_id)
@@ -303,8 +364,12 @@ class EquipmentService:
         ]
 
     def reserve_quantity(self, data: EquipmentQuantityReserve, caller: dict) -> EquipmentReservationOut:
-        self._require_equipment(data.equipmentId)
+        row = self._require_equipment(data.equipmentId)
         starts_at, ends_at = _naive(data.startsAt), _naive(data.endsAt)
+        viewed = self._equipment_out(row)
+        already_held = _overlapping_quantity(self._active_reservations(row.equipmentId), starts_at, ends_at)
+        if data.quantity > viewed.serviceableQuantity - already_held:
+            raise conflict("Requested quantity is not available for that period")
         request = EquipmentRequest(
             requestId=str(uuid4()),
             eventId=data.eventId,
@@ -334,6 +399,24 @@ class EquipmentService:
         self.db.commit()
         self.db.refresh(reservation)
         return _reservation_to_out(reservation)
+
+    def list_reservations(self, equipment_id: str) -> list[EquipmentReservationOut]:
+        self._require_equipment(equipment_id)
+        return [_reservation_to_out(row) for row in self.reservation_dao.list_for_equipment(equipment_id)]
+
+    def release_reservation(self, reservation_id: str, caller: dict) -> EquipmentReservationOut:
+        row = self.reservation_dao.get_by_id(reservation_id)
+        if row is None:
+            raise not_found("Reservation not found")
+        if row.status not in ("active", "reserved"):
+            raise conflict(f"Reservation is already {row.status}")
+        row.status = "released"
+        self.db.commit()
+        self.db.refresh(row)
+        return _reservation_to_out(row)
+
+    def list_requests(self) -> list[EquipmentRequestOut]:
+        return [_request_to_out(row) for row in self.request_dao.list_all()]
 
     def create_request(self, data: EquipmentRequestCreate, requested_by: str) -> EquipmentRequestOut:
         row = EquipmentRequest(

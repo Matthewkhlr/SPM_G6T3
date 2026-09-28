@@ -32,5 +32,7 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `POST /venues/bookings/{id}/approve` or `/reject` | `venue` |
 | `POST /equipment/requests` | `coordinator` |
 | `POST /equipment/requests/{id}/review` or `/reserve` | `techsupport` |
+| `POST /equipment/availability` with `eventId` | signed-in caller |
+| `POST /equipment/reservations/{id}/release` | `techsupport` |
 
 JSON is camelCase. Tables and conflict rules: [data-model.md](data-model.md). How to run the stack: [architecture.md](architecture.md). Acceptance tests: [testing/README.md](testing/README.md).

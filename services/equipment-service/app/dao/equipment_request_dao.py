@@ -12,3 +12,14 @@ class EquipmentRequestDAO:
 
     def add(self, row: EquipmentRequest) -> None:
         self.db.add(row)
+
+    def list_all(self) -> list[EquipmentRequest]:
+        return self.db.query(EquipmentRequest).order_by(EquipmentRequest.createdAt).all()
+
+    def list_for_event(self, event_id: str) -> list[EquipmentRequest]:
+        return (
+            self.db.query(EquipmentRequest)
+            .filter(EquipmentRequest.eventId == event_id)
+            .order_by(EquipmentRequest.createdAt)
+            .all()
+        )
