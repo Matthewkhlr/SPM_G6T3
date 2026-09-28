@@ -1,5 +1,7 @@
 # Acceptance Testing
 
+Unit tests and the Coverage.py demo are in [unit-tests.md](unit-tests.md).
+
 Playwright covers SPM-43, the current SPM-45 API, the current SPM-46 API,
 the SPM-47 tenant-isolation contract, the role-home contracts for
 SPM-55 through SPM-59, the venue-catalogue contracts for SPM-8, SPM-9,

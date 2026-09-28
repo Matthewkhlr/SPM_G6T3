@@ -9,6 +9,9 @@ __pycache__/
 venv/
 *.db
 .pytest_cache/
+.coverage
+htmlcov/
+~$*
 *firebase-adminsdk*.json
 playwright-report/
 test-results/
