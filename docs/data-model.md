@@ -245,7 +245,7 @@ These conflict and suitability rules are intended constraints but are not enforc
 
 ## 4. equipment-service (`equipment`)
 
-Quantity-based availability. Catalogue counts live on `equipment_info`. `equipment_units` still stores one row per physical unit. Technical support can create and update a catalogue record. Availability for a period is serviceable quantity minus overlapping active reservations. A save that drops serviceable quantity below reserved stock returns 409 until the caller acknowledges it. Quantity and out-of-service edits are written to `equipment_activity_log`.
+Quantity-based availability. Catalogue counts live on `equipment_info`. `equipment_units` still stores one row per physical unit. Technical support can create and update a catalogue record. Availability for a period is serviceable quantity minus overlapping active reservations. A check for an event reports each open request line against that line's period and does not create a reservation. A save that drops serviceable quantity below reserved stock returns 409 until the caller acknowledges it. Quantity and out-of-service edits are written to `equipment_activity_log`.
 
 ### equipment_info
 
@@ -321,7 +321,7 @@ Created only when the explicit reserve endpoint is called for an approved reques
 | ends_at | DATETIME | |
 | status | VARCHAR(32) | `active` \| `released` |
 
-The current reserve operation prevents duplicate reservations for the same request, but does not calculate quantity/time-window availability. Releasing reservations, cancelling requests, and reacting to event cancellation are not implemented.
+The reserve operation refuses a quantity above what is serviceable in that period, and refuses a second reservation for the same request. Releasing a reservation sets its status to `released`, which returns that quantity to later availability checks. Cancelling requests and reacting to event cancellation are not implemented.
 
 ---
 

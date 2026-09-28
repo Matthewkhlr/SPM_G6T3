@@ -12,5 +12,7 @@ export const updateEquipment = (equipmentId, body) => axiosClient.patch(`/equipm
 
 export const checkEquipmentAvailability = (body) => axiosClient.post("/equipment/availability", body);
 
+export const getEquipmentRequests = () => axiosClient.get("/equipment/requests");
+
 export const getEquipmentActivityLog = (equipmentId) =>
   axiosClient.get(`/equipment/${equipmentId}/activity-log`);

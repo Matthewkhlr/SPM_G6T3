@@ -27,7 +27,6 @@ These files live in `services/<service>/tests/upcoming/` and are not part of `np
 |---|---|
 | `event-service/tests/upcoming/test_event_lifecycle.py` | confirm, complete, cancel, change request, reschedule |
 | `venue-service/tests/upcoming/test_venue_conflicts.py` | overlapping approval, unavailability, search, suitability |
-| `equipment-service/tests/upcoming/test_equipment_shortfalls.py` | over-reserve, shortfall, release |
 | `registration-service/tests/upcoming/test_registration_withdrawal.py` | withdraw, summary, attendee list |
 | `notification-service/tests/upcoming/test_notification_records.py` | record a notification |
 
@@ -40,7 +39,7 @@ Run one of them from the service directory with `python -m unittest discover -s 
 | user-service | `test_user_service.py`, `test_user_routes.py` |
 | event-service | `test_event_schema.py`, `test_event_clients.py`, `test_event_service.py`, `test_event_drafts.py`, `test_event_listings.py`, `test_event_discard.py`, `test_event_decisions.py`, `test_event_routes.py` |
 | venue-service | `test_venue_helpers.py`, `test_venue_catalogue.py`, `test_venue_bookings.py`, `test_venue_retirement.py`, `test_venue_routes.py` |
-| equipment-service | `test_equipment_catalogue.py`, `test_equipment_units.py`, `test_equipment_reservations.py`, `test_equipment_requests.py`, `test_equipment_routes.py` |
+| equipment-service | `test_equipment_catalogue.py`, `test_equipment_units.py`, `test_equipment_reservations.py`, `test_equipment_requests.py`, `test_equipment_shortfalls.py`, `test_equipment_routes.py` |
 | registration-service | `test_eligibility.py`, `test_event_lookup.py`, `test_registration_service.py`, `test_registration_routes.py` |
 | notification-service | `test_notification_service.py`, `test_notification_routes.py` |
 
@@ -51,6 +50,6 @@ Run one of them from the service directory with `python -m unittest discover -s 
 | user-service | First login links a Firebase uid by email. A later login resolves that uid. An unknown email or uid is 404. The directory lists every user. `GET /users/me` and `GET /users` return the public profile. |
 | event-service | Create submits an event. Drafts can be saved, renamed, submitted, and discarded by the owning organiser. Another organiser is 403. A non-draft cannot be edited or discarded. Lists hide drafts, discarded events, or rejected events as each endpoint specifies. Approve and reject apply only to a submitted event, and reject stores the reason. Assigning a coordinator writes the assignment. Registration counts and identity lookups handle success, a non-200 response, and an unreachable service. End dates and registration windows must be in order. |
 | venue-service | Capacity is the highest layout. Retired venues stay out of the default list and remain readable by id. Updates log layout, hours, facility, and field changes. An unchanged save does not add an update log. One confirmed upcoming booking blocks retire until `confirm` is true; several bookings are named in the 409. Approve and reject apply only while a booking is pending. |
-| equipment-service | Create logs the opening quantity and rejects negative counts, counts above the total, and a duplicate code. Status follows unit rows: no units or available units are available; maintenance wins over damaged. A quantity cut that breaks a reservation is 409 until it is acknowledged. Availability subtracts only overlapping reservations, including timezone-aware times. Requests can be approved, rejected, and reserved once. A second reserve of the same request is 409. |
+| equipment-service | Create logs the opening quantity and rejects negative counts, counts above the total, and a duplicate code. Status follows unit rows: no units or available units are available; maintenance wins over damaged. A quantity cut that breaks a reservation is 409 until it is acknowledged. Availability subtracts only overlapping reservations, including timezone-aware times. An event check reports each requested line, a shortfall of one, out-of-service stock, and overlapping events. Touching periods do not compete. The check does not reserve, and a reservation above the serviceable quantity is 409. Releasing a reservation returns that quantity. Requests can be approved, rejected, and reserved once. A second reserve of the same request is 409. |
 | registration-service | An attendee can register when the event is confirmed, the window is open, and capacity remains. A missing name, email, or window is 409. A closed, not-yet-open, disabled, unconfirmed, full, or duplicate registration is rejected. The event lookup forwards the bearer token and maps a failed call to 404. |
 | notification-service | `POST /notifications` queues an email and returns channel, recipient, and `queued`. A notification row can be stored for the signed-in user. |

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -11,7 +11,6 @@ from app.db.session import get_db
 from app.schemas.equipment import (
     EquipmentActivityLogOut,
     EquipmentAvailabilityIn,
-    EquipmentAvailabilityOut,
     EquipmentCreate,
     EquipmentOut,
     EquipmentQuantityReserve,
@@ -20,6 +19,7 @@ from app.schemas.equipment import (
     EquipmentRequestReview,
     EquipmentReservationOut,
     EquipmentUpdate,
+    ReservationRelease,
 )
 from app.services.equipment_service import EquipmentService
 from shared.auth.deps import forwarded_bearer
@@ -77,12 +77,15 @@ def create_equipment(
 
 @router.post(
     "/availability",
-    response_model=EquipmentAvailabilityOut,
-    summary="Quantity available for a period",
-    description="Serviceable quantity minus reservations that overlap the period.",
-    responses=error_responses(404),
+    summary="Check equipment availability",
+    description="With equipmentId, startsAt, and endsAt, returns the quantity free in that period. With eventId, reports each requested line, whether the whole request can be met, and which other events hold overlapping stock. The check does not reserve anything.",
+    responses=error_responses(404, 422),
 )
 def check_availability(body: EquipmentAvailabilityIn, service: EquipmentService = Depends(get_equipment_service)):
+    if body.eventId:
+        return service.check_event_request(body.eventId)
+    if body.equipmentId is None or body.startsAt is None or body.endsAt is None:
+        raise HTTPException(status_code=422, detail="equipmentId, startsAt, and endsAt are required")
     return service.check_availability(body)
 
 
@@ -101,6 +104,38 @@ def reserve_quantity(
 ):
     caller = _technical_support(authorization)
     return service.reserve_quantity(body, caller)
+
+
+@router.post(
+    "/reservations/{reservation_id}/release",
+    response_model=EquipmentReservationOut,
+    summary="Release a reservation",
+    description="Technical support only. Returns the held quantity to the period.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def release_reservation(
+    body: ReservationRelease,
+    reservation_id: str = Path(..., description="Reservation id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EquipmentService = Depends(get_equipment_service),
+):
+    caller = _technical_support(authorization)
+    return service.release_reservation(reservation_id, caller)
+
+
+@router.get(
+    "/requests",
+    response_model=list[EquipmentRequestOut],
+    summary="List equipment requests",
+    description="Technical support only.",
+    responses=error_responses(403, 503),
+)
+def list_requests(
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EquipmentService = Depends(get_equipment_service),
+):
+    _technical_support(authorization)
+    return service.list_requests()
 
 
 @router.get(
@@ -144,6 +179,21 @@ def get_activity_log(
     service: EquipmentService = Depends(get_equipment_service),
 ):
     return service.get_activity_log(equipment_id)
+
+
+@router.get(
+    "/{equipment_id}/reservations",
+    response_model=list[EquipmentReservationOut],
+    summary="List reservations for one equipment type",
+    responses=error_responses(404),
+)
+def list_reservations(
+    equipment_id: str = Path(..., description="Equipment id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EquipmentService = Depends(get_equipment_service),
+):
+    _technical_support(authorization)
+    return service.list_reservations(equipment_id)
 
 
 @router.post(

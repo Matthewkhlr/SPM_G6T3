@@ -33,9 +33,10 @@ class EquipmentUpdate(BaseModel):
 
 
 class EquipmentAvailabilityIn(BaseModel):
-    equipmentId: str
-    startsAt: datetime
-    endsAt: datetime
+    equipmentId: str | None = None
+    startsAt: datetime | None = None
+    endsAt: datetime | None = None
+    eventId: str | None = None
 
 
 class EquipmentAvailabilityOut(BaseModel):
@@ -54,6 +55,10 @@ class EquipmentActivityLogOut(BaseModel):
     changedByRole: str
     changes: dict
     createdAt: datetime
+
+
+class ReservationRelease(BaseModel):
+    reason: str = ""
 
 
 class EquipmentQuantityReserve(BaseModel):

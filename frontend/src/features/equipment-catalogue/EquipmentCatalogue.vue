@@ -18,10 +18,14 @@
         </label>
       </div>
       <p class="result-count">Showing {{ filtered.length }} of {{ items.length }}</p>
-      <button v-if="canWrite" type="button" class="btn btn-outline add-btn" @click="startCreate">Add equipment</button>
+      <button v-if="canWrite" type="button" class="btn btn-ghost small" @click="showRequests = !showRequests">
+        {{ showRequests ? 'Back to catalogue' : 'Check requests' }}
+      </button>
+      <button v-if="canWrite && !showRequests" type="button" class="btn btn-outline add-btn" @click="startCreate">Add equipment</button>
     </div>
 
-    <div class="body">
+    <RequestAvailability v-if="showRequests" />
+    <div v-else class="body">
       <div class="item-list">
         <button
           v-for="item in filtered"
@@ -96,6 +100,7 @@ import {
 import { session } from '../../store/session.js'
 import EquipmentForm from './EquipmentForm.vue'
 import EquipmentActivityLog from './EquipmentActivityLog.vue'
+import RequestAvailability from './RequestAvailability.vue'
 
 const items = ref([])
 const selected = ref(null)
@@ -109,6 +114,7 @@ const saveWarning = ref('')
 const windowStart = ref('')
 const windowEnd = ref('')
 const availableForWindow = ref(null)
+const showRequests = ref(false)
 const canWrite = computed(() => session.role === 'techsupport')
 let actionToken = 0
 

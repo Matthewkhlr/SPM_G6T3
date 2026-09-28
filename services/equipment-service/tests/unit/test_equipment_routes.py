@@ -51,20 +51,22 @@ class TestEquipmentRoutes(ServiceTestCase):
             ).status_code,
             200,
         )
-        self.assertEqual(
-            self.client.post(
-                "/equipment/reservations",
-                headers=self.headers,
-                json={
-                    "eventId": "e1",
-                    "equipmentId": equipment_id,
-                    "quantity": 1,
-                    "startsAt": START.isoformat(),
-                    "endsAt": END.isoformat(),
-                },
-            ).status_code,
-            201,
+        reserved = self.client.post(
+            "/equipment/reservations",
+            headers=self.headers,
+            json={
+                "eventId": "e1",
+                "equipmentId": equipment_id,
+                "quantity": 1,
+                "startsAt": START.isoformat(),
+                "endsAt": END.isoformat(),
+            },
         )
+        self.assertEqual(reserved.status_code, 201)
+        self.assertEqual(self.client.post("/equipment/availability", json={}).status_code, 422)
+        listed = self.client.get(f"/equipment/{equipment_id}/reservations", headers=self.headers)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()[0]["status"], "active")
 
         self.caller.stop()
         self.caller = patch("app.routers.equipment.resolve_caller", return_value=COORDINATOR)
@@ -81,6 +83,14 @@ class TestEquipmentRoutes(ServiceTestCase):
             },
         )
         self.assertEqual(request.status_code, 201)
+        requests = self.client.get("/equipment/requests", headers=self.headers)
+        self.assertEqual(requests.status_code, 200)
+        self.assertTrue(any(row["eventId"] == "e2" for row in requests.json()))
+        checked = self.client.post("/equipment/availability", json={"eventId": "e2"})
+        self.assertEqual(checked.status_code, 200)
+        self.assertTrue(checked.json()["canMeet"])
+        self.assertEqual(checked.json()["lines"][0]["requestedQuantity"], 1)
+        self.assertEqual(checked.json()["lines"][0]["availableQuantity"], 3)
 
         self.caller.stop()
         self.caller = patch("app.routers.equipment.resolve_caller", return_value=CALLER)
@@ -98,3 +108,10 @@ class TestEquipmentRoutes(ServiceTestCase):
             headers=self.headers,
         )
         self.assertEqual(held.status_code, 201)
+        released = self.client.post(
+            f"/equipment/reservations/{reserved.json()['reservationId']}/release",
+            headers=self.headers,
+            json={"reason": "done"},
+        )
+        self.assertEqual(released.status_code, 200)
+        self.assertEqual(released.json()["status"], "released")
