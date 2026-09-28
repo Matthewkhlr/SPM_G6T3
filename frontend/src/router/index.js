@@ -3,6 +3,7 @@ import LandingView from '../views/LandingView.vue'
 import LoginView from '../views/LoginView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import EventDetail from '../features/event-detail/EventDetail.vue'
+import EventVenueSelect from '../features/venue-request/EventVenueSelect.vue'
 import { session } from '../store/session.js'
 
 const router = createRouter({
@@ -15,6 +16,12 @@ const router = createRouter({
       path: '/app/events/:id',
       name: 'event-detail',
       component: EventDetail,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/events/:id/venues',
+      name: 'event-venue-select',
+      component: EventVenueSelect,
       meta: { requiresAuth: true }
     }
   ]

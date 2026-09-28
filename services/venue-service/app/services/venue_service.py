@@ -7,9 +7,13 @@ from sqlalchemy.orm import Session
 from app.dao.venue_activity_log_dao import VenueActivityLogDAO
 from app.dao.venue_booking_dao import VenueBookingDAO
 from app.dao.venue_dao import VenueDAO
+from app.dao.venue_unavailability_dao import VenueUnavailabilityDAO
 from app.models.venue_booking import VenueBooking
 from app.models.venue_info import VenueInfo
 from app.schemas.venue import (
+    EventFacts,
+    SuitabilityOut,
+    SuitabilityRequest,
     VenueActivityLogOut,
     VenueBookingCreate,
     VenueBookingOut,
@@ -17,6 +21,7 @@ from app.schemas.venue import (
     VenueOut,
     VenueUpdate,
 )
+from app.services import suitability
 from shared.exceptions.http import conflict, not_found
 
 
@@ -122,11 +127,13 @@ class VenueService:
         venue_dao: VenueDAO,
         log_dao: VenueActivityLogDAO,
         booking_dao: VenueBookingDAO,
+        unavailability_dao: VenueUnavailabilityDAO,
     ):
         self.db = db
         self.venue_dao = venue_dao
         self.log_dao = log_dao
         self.booking_dao = booking_dao
+        self.unavailability_dao = unavailability_dao
 
     def _require_venue(self, venue_id: str) -> VenueInfo:
         row = self.venue_dao.get_by_id(venue_id)
@@ -219,7 +226,7 @@ class VenueService:
             # offers the "Retire anyway" action, so this should describe the
             # situation, not instruct the caller how to resend a request.
             listing = "; ".join(
-                f"event {b.eventId}, starting {b.startsAt.strftime('%d %b %Y, %I:%M %p')}" for b in affected
+                f"event {b.eventId}, starting {b.startsAt.strftime('%d %b %Y, %I:%M %p')} UTC" for b in affected
             )
             plural = "booking" if len(affected) == 1 else "bookings"
             raise conflict(
@@ -249,6 +256,19 @@ class VenueService:
             )
             for row in rows
         ]
+
+    def check_suitability(self, request: SuitabilityRequest, event: EventFacts) -> SuitabilityOut:
+        """SPM-62. The one entry point every caller uses, so search, booking
+        requests and re-verification all get the same verdict (AC9)."""
+        venue = self.get_venue(request.venueId)
+        needs = suitability.needs_for(request, event)
+        bookings, unavailability = [], []
+        window = suitability.occupied_window(needs)
+        if window:
+            bookings = self.booking_dao.find_overlapping(venue.venueId, *window, exclude_event_id=request.eventId)
+            unavailability = self.unavailability_dao.find_overlapping(venue.venueId, *window)
+        verdict, reasons = suitability.assess(venue, needs, bookings, unavailability)
+        return SuitabilityOut(eventId=request.eventId, venueId=venue.venueId, verdict=verdict, reasons=reasons)
 
     def create_booking(self, data: VenueBookingCreate, requested_by: str) -> VenueBookingOut:
         row = VenueBooking(

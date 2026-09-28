@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -182,3 +183,70 @@ class VenueBookingOut(BaseModel):
             }
         }
     )
+
+
+class SuitabilityRequest(BaseModel):
+    """SPM-62. Every field besides the two ids is optional: anything left out
+    is taken from the event record, so a caller only sends what differs."""
+
+    eventId: str
+    venueId: str
+    expectedAttendance: int | None = Field(default=None, ge=0, description="Defaults to the event's expected attendance.")
+    layout: str | None = Field(default=None, description="Required layout. Defaults to the event's layout preference.")
+    requiredFacilities: list[str] = []
+    requiredAccessibility: list[str] = []
+    startsAt: datetime | None = Field(default=None, description="Defaults to the event's proposed start.")
+    endsAt: datetime | None = Field(default=None, description="Defaults to the event's proposed end.")
+    setupStartsAt: datetime | None = Field(default=None, description="Defaults to `startsAt`.")
+    teardownEndsAt: datetime | None = Field(default=None, description="Defaults to `endsAt`.")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "eventId": "e1",
+                "venueId": "v1",
+                "requiredFacilities": ["Stage", "Video-conferencing"],
+                "requiredAccessibility": ["Wheelchair accessible"],
+            }
+        }
+    )
+
+
+class SuitabilityReason(BaseModel):
+    severity: Literal["failure", "warning"]
+    check: str = Field(description="Which rule produced this point, e.g. `capacity` or `clash`.")
+    message: str
+
+
+class SuitabilityOut(BaseModel):
+    eventId: str
+    venueId: str
+    verdict: Literal["suitable", "suitable with warnings", "not suitable"]
+    reasons: list[SuitabilityReason] = Field(description="Failures first, then warnings. Empty when suitable.")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "eventId": "e4",
+                "venueId": "v4",
+                "verdict": "suitable with warnings",
+                "reasons": [
+                    {
+                        "severity": "warning",
+                        "check": "capacity",
+                        "message": "Expected attendance of 19 is above 90% of what this venue can hold "
+                        "in the Boardroom layout (20 people), so it will be a tight fit.",
+                    }
+                ],
+            }
+        }
+    )
+
+
+class EventFacts(BaseModel):
+    """The parts of event-service's event record the suitability rule needs."""
+
+    expectedAttendance: int = 0
+    layoutPreference: str | None = None
+    proposedStartAt: datetime | None = None
+    proposedEndAt: datetime | None = None

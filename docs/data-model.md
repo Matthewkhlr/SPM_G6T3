@@ -182,21 +182,39 @@ Seed data writes initial history records; current API operations do not write st
 
 ### venues
 
-The current API lists and retrieves venues. JSON arrays (`facilities`, `layouts`) are stored in MySQL, but no filtering API currently uses `JSON_CONTAINS`.
+Venue Staff create, edit, and retire venues (SPM-60); coordinators, venue staff, and technical support can read them. Retiring sets `is_active` to false and never deletes the row, so booking history keeps resolving. Overall capacity is not stored: the API returns the highest layout capacity (SPM-60 AC3). No filtering API uses `JSON_CONTAINS` yet.
 
 | Column | Type | Notes |
 |---|---|---|
 | venue_id | VARCHAR(64) PK | |
+| code | VARCHAR(64) | Catalogue code, e.g. `MH-A` |
 | name | VARCHAR(255) | |
-| location | VARCHAR(255) | |
-| capacity | INT | |
+| location | VARCHAR(255) | Building or complex |
+| address | VARCHAR(255) | Full street address |
+| floor | VARCHAR(64) | |
+| description | TEXT | |
 | facilities | JSON | Array of strings |
-| accessibility | TEXT | |
-| layouts | JSON | Array of strings |
-| operating_hours | VARCHAR(255) | |
+| accessibility | JSON | Array of strings |
+| layouts | JSON | Array of `{name, capacity}`; capacity must be at least 1 |
+| operating_hours | JSON | Array of `{day, opens, closes}`: day `Mon` to `Sun`, times `HH:MM` read as UTC |
 | turnaround_minutes | INT | |
-| is_active | BOOLEAN | |
+| is_active | BOOLEAN | False once retired |
 | created_at | DATETIME | |
+
+### venue_activity_log
+
+One row per create, update, or retire (SPM-60 AC9), shown in the catalogue's activity log with times in UTC.
+
+| Column | Type | Notes |
+|---|---|---|
+| log_id | VARCHAR(64) PK | |
+| venue_id | VARCHAR(64) | FK → venues |
+| action | VARCHAR(32) | `created` \| `updated` \| `retired` |
+| changed_by | VARCHAR(64) | Logical FK → users |
+| changed_by_name | VARCHAR(255) | Name at the time of the change |
+| changed_by_role | VARCHAR(64) | Role at the time of the change |
+| changes | JSON | Only what changed, e.g. `{"turnaroundMinutes": {"old": 45, "new": 60}}` |
+| created_at | DATETIME | UTC |
 
 ### venue_unavailability
 
@@ -212,7 +230,7 @@ Stores maintenance and blocked periods.
 | created_by | VARCHAR(64) | Logical FK → users |
 | created_at | DATETIME | |
 
-The table exists in the deployed schema but currently has no router or service workflow.
+The suitability check (SPM-62) reads this table: an overlapping period makes a venue not suitable. There is no router yet for recording a period.
 
 ### venue_bookings
 
@@ -237,9 +255,9 @@ Index: `(venue_id, starts_at, ends_at)`.
 
 **Intended conflict rule:** two rows for the same `venue_id` with status in (`pending`, `approved`) should not overlap on `[setup_starts_at, teardown_ends_at)`.
 
-**Intended suitability rule:** `expected_attendance <= capacity`, required facilities ⊆ venue facilities, requested layout in supported layouts, requested window inside operating hours, no conflict.
+**Suitability rule (SPM-62, `POST /venues/suitability`, `app/services/suitability.py`):** failures are attendance above the capacity of the required layout (or the venue's capacity if no layout is given), an unsupported layout, a missing required facility or accessibility feature, a time outside operating hours (hours are read as UTC), and an approved booking of another event or an unavailability period overlapping `[setup_starts_at, teardown_ends_at)`. Warnings are attendance above 90% of that capacity and an overlapping pending booking of another event. Any failure gives `not suitable`; only warnings give `suitable with warnings`. Values not in the request come from the event record.
 
-These conflict and suitability rules are intended constraints but are not enforced by the current implementation. Booking creation accepts caller-supplied setup and teardown times without deriving turnaround or checking overlap. The implemented review flow only transitions a pending booking to `approved` or `rejected`; cancellation is not implemented.
+The suitability check reports conflicts but does not stop them: the conflict rule is not enforced on booking creation or approval yet. Booking creation accepts caller-supplied setup and teardown times without deriving turnaround or checking overlap. The implemented review flow only transitions a pending booking to `approved` or `rejected`; cancellation is not implemented.
 
 ---
 
@@ -476,15 +494,29 @@ erDiagram
 
   venues {
     string venue_id PK
+    string code
     string name
     string location
-    int capacity
+    string address
+    string floor
+    text description
     json facilities
-    text accessibility
+    json accessibility
     json layouts
-    string operating_hours
+    json operating_hours
     int turnaround_minutes
     boolean is_active
+    datetime created_at
+  }
+
+  venue_activity_log {
+    string log_id PK
+    string venue_id FK
+    string action
+    string changed_by FK
+    string changed_by_name
+    string changed_by_role
+    json changes
     datetime created_at
   }
 
@@ -627,6 +659,7 @@ erDiagram
 
   venues ||--o{ venue_bookings : receives
   venues ||--o{ venue_unavailability : "blocked by"
+  venues ||--o{ venue_activity_log : "logs changes"
 
   equipment_info ||--o{ equipment_units : contains
   equipment_info ||--o{ equipment_activity_log : logs

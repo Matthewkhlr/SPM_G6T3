@@ -72,15 +72,3 @@ class TestVenueConflicts(VenueCase):
         matches = self.service.search_venues(min_capacity=80, facility="PA")
 
         self.assertEqual([row.name for row in matches], ["Marina Hall A"])
-
-    def test_suitability_fails_when_attendance_exceeds_the_layout(self):
-        self.assertTrue(hasattr(self.service, "check_suitability"), "check_suitability is not implemented")
-
-        too_big = self.service.check_suitability(self.venue.venueId, expected_attendance=150, layout="Theatre")
-        fits = self.service.check_suitability(
-            self.venue.venueId, expected_attendance=80, layout="Theatre", facilities=["PA"]
-        )
-
-        self.assertFalse(too_big["suitable"])
-        self.assertIn("150", too_big["reason"])
-        self.assertTrue(fits["suitable"])

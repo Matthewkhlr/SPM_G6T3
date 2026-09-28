@@ -15,3 +15,7 @@ export const retireVenue = (venueId, confirm = false) =>
   axiosClient.post(`/venues/${venueId}/retire${confirm ? "?confirm=true" : ""}`);
 
 export const getVenueActivityLog = (venueId) => axiosClient.get(`/venues/${venueId}/activity-log`);
+
+// SPM-62: anything left out of `body` is taken from the event record.
+export const checkSuitability = (eventId, venueId, body = {}) =>
+  axiosClient.post("/venues/suitability", { eventId, venueId, ...body });

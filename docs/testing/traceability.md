@@ -107,7 +107,7 @@
 | SPM-62 | Tight fit is a warning | TC-SPM62-AC06 | `e2e/spm62.spec.js` | Automated |
 | SPM-62 | Pending overlap is a warning | TC-SPM62-AC07 | `e2e/spm62.spec.js` | Automated |
 | SPM-62 | Failures block submit; warnings do not | TC-SPM62-AC08 | `e2e/spm62.spec.js` | Automated |
-| SPM-62 | Shared suitability rule | TC-SPM62-AC09 | `e2e/spm62.spec.js` | Automated |
+| SPM-62 | Shared suitability rule | TC-SPM62-AC09 | `e2e/spm62.spec.js` | Automated; fails until SPM-61 search exists |
 | SPM-63 | Request venue for planning event | TC-SPM63-AC01 | `e2e/spm63.spec.js` | Automated |
 | SPM-63 | Request carries event facts | TC-SPM63-AC02 | `e2e/spm63.spec.js` | Automated |
 | SPM-63 | Failed suitability blocks submit | TC-SPM63-AC03 | `e2e/spm63.spec.js` | Automated |

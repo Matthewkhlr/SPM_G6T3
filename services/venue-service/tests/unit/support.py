@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from app.dao.venue_activity_log_dao import VenueActivityLogDAO
 from app.dao.venue_booking_dao import VenueBookingDAO
 from app.dao.venue_dao import VenueDAO
+from app.dao.venue_unavailability_dao import VenueUnavailabilityDAO
 from app.schemas.venue import Layout, OperatingHours, VenueBookingCreate, VenueCreate
 from app.services.venue_service import VenueService
 from shared.testing.cases import ServiceTestCase
@@ -49,5 +50,9 @@ class VenueCase(ServiceTestCase):
     def setUp(self):
         super().setUp()
         self.service = VenueService(
-            self.db, VenueDAO(self.db), VenueActivityLogDAO(self.db), VenueBookingDAO(self.db)
+            self.db,
+            VenueDAO(self.db),
+            VenueActivityLogDAO(self.db),
+            VenueBookingDAO(self.db),
+            VenueUnavailabilityDAO(self.db),
         )

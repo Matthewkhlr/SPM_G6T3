@@ -55,13 +55,47 @@ class TestVenueCatalogue(VenueCase):
 
         self.assertEqual(updated.name, "Marina Hall B")
         self.assertEqual(updated.capacity, 80)
-        actions = [row.action for row in self.service.get_activity_log(created.venueId)]
-        self.assertIn("updated", actions)
+        entry = next(row for row in self.service.get_activity_log(created.venueId) if row.action == "updated")
+        self.assertEqual(entry.changedBy, "u-venue")
+        self.assertEqual(
+            entry.changes,
+            {
+                "name": {"old": "Marina Hall A", "new": "Marina Hall B"},
+                "facilities": {"added": ["Stage"]},
+                "accessibility": {"added": ["Lift"], "removed": ["Ramp"]},
+                "layouts": {
+                    "Classroom": {"removed": {"capacity": 40}},
+                    "Theatre": {"capacity": {"old": 100, "new": 80}},
+                },
+                "operatingHours": {
+                    "Mon": {"removed": {"opens": "08:00", "closes": "18:00"}},
+                    "Tue": {"added": {"opens": "09:00", "closes": "17:00"}},
+                },
+                "turnaroundMinutes": {"old": 60, "new": 30},
+            },
+        )
 
     def test_update_with_the_same_values_does_not_add_an_update_log(self):
         created = self.service.create_venue(venue_create(), CALLER)
 
         self.service.update_venue(created.venueId, VenueUpdate(name="Marina Hall A"), CALLER)
+
+        actions = [row.action for row in self.service.get_activity_log(created.venueId)]
+        self.assertEqual(actions, ["created"])
+
+    def test_resaving_unchanged_layouts_hours_and_lists_does_not_add_an_update_log(self):
+        created = self.service.create_venue(venue_create(), CALLER)
+
+        self.service.update_venue(
+            created.venueId,
+            VenueUpdate(
+                facilities=["PA"],
+                accessibility=["Ramp"],
+                layouts=[Layout(name="Theatre", capacity=100), Layout(name="Classroom", capacity=40)],
+                operatingHours=[OperatingHours(day="Mon", opens="08:00", closes="18:00")],
+            ),
+            CALLER,
+        )
 
         actions = [row.action for row in self.service.get_activity_log(created.venueId)]
         self.assertEqual(actions, ["created"])
