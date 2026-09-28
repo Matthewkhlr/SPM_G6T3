@@ -69,6 +69,7 @@ class EventOut(BaseModel):
     proposedStartAt: datetime | None = None
     proposedEndAt: datetime | None = None
     expectedAttendance: int
+    layoutPreference: str | None = None
     venueRequirements: str
     equipmentRequirements: str
     registrationEnabled: bool

@@ -28,6 +28,9 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `POST /events` | `organiser` |
 | `GET /events/upcoming/technical` | `techsupport` |
 | `POST /events/{id}/assign-coordinator` | `coordinator` |
+| `GET /venues`, `GET /venues/{id}`, `GET /venues/{id}/activity-log` | `coordinator`, `venue`, `techsupport` |
+| `POST /venues`, `PATCH /venues/{id}`, `POST /venues/{id}/retire` | `venue` |
+| `POST /venues/suitability` | `coordinator`, `venue` |
 | `POST /venues/bookings` | `coordinator` |
 | `POST /venues/bookings/{id}/approve` or `/reject` | `venue` |
 | `POST /equipment/requests` | `coordinator` |

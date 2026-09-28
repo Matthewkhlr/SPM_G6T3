@@ -51,6 +51,7 @@ def _to_out(row: Event, authorization: str | None = None) -> EventOut:
         proposedStartAt=row.proposedStartAt,
         proposedEndAt=row.proposedEndAt,
         expectedAttendance=row.expectedAttendance,
+        layoutPreference=row.layoutPreference,
         venueRequirements=row.venueRequirements,
         equipmentRequirements=row.equipmentRequirements,
         registrationEnabled=row.registrationEnabled,

@@ -5,8 +5,12 @@ from app.core.config import settings
 from app.dao.venue_activity_log_dao import VenueActivityLogDAO
 from app.dao.venue_booking_dao import VenueBookingDAO
 from app.dao.venue_dao import VenueDAO
+from app.dao.venue_unavailability_dao import VenueUnavailabilityDAO
 from app.db.session import get_db
+from app.orchestration.clients import fetch_event_facts
 from app.schemas.venue import (
+    SuitabilityOut,
+    SuitabilityRequest,
     VenueActivityLogOut,
     VenueBookingCreate,
     VenueBookingDecision,
@@ -30,10 +34,15 @@ router = APIRouter(
 # Organisers and Attendees are excluded, enforced here rather than only by
 # hiding the tab in the frontend.
 CATALOGUE_READER_ROLES = {"coordinator", "venue", "techsupport"}
+# SPM-62: coordinators check before requesting a venue; Venue Staff can run
+# the same check when assessing a request.
+SUITABILITY_ROLES = {"coordinator", "venue"}
 
 
 def get_venue_service(db: Session = Depends(get_db)) -> VenueService:
-    return VenueService(db, VenueDAO(db), VenueActivityLogDAO(db), VenueBookingDAO(db))
+    return VenueService(
+        db, VenueDAO(db), VenueActivityLogDAO(db), VenueBookingDAO(db), VenueUnavailabilityDAO(db)
+    )
 
 
 @router.get(
@@ -141,6 +150,27 @@ def get_venue_activity_log(
 ):
     resolve_caller(authorization, settings.user_service_url, allowed_roles=CATALOGUE_READER_ROLES)
     return service.get_activity_log(venue_id)
+
+
+@router.post(
+    "/suitability",
+    response_model=SuitabilityOut,
+    summary="Check whether a venue suits an event",
+    description=(
+        "Coordinators and venue staff. Returns `suitable`, `suitable with warnings`, or `not suitable`, "
+        "with a reason for every failure or warning. Anything not sent is taken from the event record. "
+        "All times are UTC."
+    ),
+    responses=error_responses(403, 404, 503),
+)
+def check_suitability(
+    body: SuitabilityRequest,
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles=SUITABILITY_ROLES)
+    event = fetch_event_facts(body.eventId, authorization)
+    return service.check_suitability(body, event)
 
 
 @router.post(

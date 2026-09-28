@@ -58,23 +58,19 @@ const entries = ref([])
 const loading = ref(true)
 const error = ref('')
 
-// createdAt comes back as a naive UTC timestamp with no "Z"/offset, and the
-// venue is in Singapore, so the log always renders in Singapore time
-// regardless of the viewer's own device/browser timezone, rather than
-// silently using whatever local timezone happens to be set (which is also
-// what native Date parsing of a bare ISO string like this would otherwise
-// misinterpret as *already local*, not UTC).
+// The team shows every time in UTC until the customer specifies a timezone.
+// createdAt arrives without a "Z", so add it or Date would read it as local time.
 function formatWhen(iso) {
   const withZone = /Z|[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso}Z`
   return new Date(withZone).toLocaleString('en-SG', {
-    timeZone: 'Asia/Singapore',
+    timeZone: 'UTC',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
-  }) + ' SGT'
+  }) + ' UTC'
 }
 
 function describeActor(entry) {

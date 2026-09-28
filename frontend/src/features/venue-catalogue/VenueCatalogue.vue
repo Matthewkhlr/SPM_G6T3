@@ -89,6 +89,7 @@
 
         <VenueActivityLog v-if="showLog" :venue-id="selected.venueId" @close="showLog = false" />
       </div>
+      <div class="venue-detail empty" v-else-if="loadingDetail">Loading venue…</div>
       <div class="venue-detail empty" v-else-if="venues.length">Select a venue to view its details.</div>
       <div class="venue-detail empty" v-else>No venues are currently available.</div>
     </div>
@@ -111,6 +112,7 @@ const showLog = ref(false)
 const showRetired = ref(false)
 const confirmingRetire = ref(false)
 const retireWarning = ref('')
+const loadingDetail = ref(false)
 
 const canWrite = computed(() => session.role === 'venue')
 
@@ -132,6 +134,12 @@ let userHasActed = false
 async function selectVenue(venueId) {
   userHasActed = true
   const token = ++actionToken
+  // Hide the previous venue's Edit/Retire right away, or a click during the
+  // load would act on the venue still shown instead of the one just picked.
+  if (selected.value?.venueId !== venueId) {
+    selected.value = null
+    loadingDetail.value = true
+  }
   try {
     error.value = ''
     const { data } = await getVenue(venueId)
@@ -143,6 +151,8 @@ async function selectVenue(venueId) {
     retireWarning.value = ''
   } catch {
     if (token === actionToken) error.value = 'Unable to load this venue’s details. Please try again.'
+  } finally {
+    if (token === actionToken) loadingDetail.value = false
   }
 }
 
@@ -158,6 +168,7 @@ async function onToggleRetired() {
 function startCreate() {
   userHasActed = true
   actionToken++
+  loadingDetail.value = false
   mode.value = 'create'
   confirmingRetire.value = false
   retireWarning.value = ''

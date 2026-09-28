@@ -26,6 +26,7 @@ flowchart LR
   EventSvc -->|"HTTP"| EquipSvc
   EventSvc -->|"HTTP"| RegSvc
   EventSvc -->|"HTTP"| NotifSvc
+  VenueSvc -->|"HTTP"| EventSvc
 ```
 
 There is **no repo-root `db/` folder**. Database data is stored in one Docker volume. Each service owns its schema through its own Alembic migration tree. `infra/` starts one MySQL instance and creates the six empty schemas.
@@ -287,6 +288,7 @@ frontend/
     ├── features/                one folder per dashboard tab
     │   ├── dashboard/
     │   ├── venue-catalogue/
+    │   ├── venue-request/       choose a venue for an event (SPM-62)
     │   └── browse-events/
     ├── auth/users.data.js       demo credentials (UI)
     ├── store/session.js         client session
@@ -316,7 +318,7 @@ services/<name>/
 └── requirements.txt
 ```
 
-`event-service` also has `app/orchestration/` — HTTP clients to other services (no cross-DB joins).
+`event-service` also has `app/orchestration/` — HTTP clients to other services (no cross-DB joins). `venue-service` has one too: the suitability check (SPM-62) reads the event's attendance, layout, and dates from event-service.
 
 ### `infra/`
 
@@ -393,6 +395,6 @@ Because all schemas share one MySQL process and volume, an instance outage affec
 ## Current gaps (so nobody is surprised)
 
 - Many dashboard tabs are still placeholders.
-- Venue catalogue and browse-events still read hardcoded `.data.js` until wired to `src/api`.
+- Browse-events still reads hardcoded `.data.js` until wired to `src/api`. The venue catalogue reads venue-service (SPM-60).
 - Login UI is still client-side; `user-service` already has `/users/login` for when you wire it.
 - Notifications persist in MySQL; sending is still a stub (print / queued email).

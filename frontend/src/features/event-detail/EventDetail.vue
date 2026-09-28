@@ -11,6 +11,14 @@
         </div>
         <div class="actions">
           <button
+            v-if="session.role === 'coordinator' && event.status !== 'draft'"
+            class="btn btn-outline"
+            data-testid="event-choose-venue"
+            @click="router.push(`/app/events/${event.eventId}/venues`)"
+          >
+            Choose a venue
+          </button>
+          <button
             v-if="event.status === 'draft'"
             class="btn btn-outline"
             data-testid="event-discard"
@@ -67,6 +75,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getEvent, discardEvent } from '../../api/eventService.js'
+import { session } from '../../store/session.js'
 
 const route = useRoute()
 const router = useRouter()

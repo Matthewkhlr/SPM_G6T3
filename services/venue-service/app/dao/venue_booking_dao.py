@@ -21,5 +21,23 @@ class VenueBookingDAO:
             .all()
         )
 
+    def find_overlapping(
+        self, venue_id: str, starts_at: datetime, ends_at: datetime, exclude_event_id: str
+    ) -> list[VenueBooking]:
+        """Pending or approved bookings whose setup-to-teardown window overlaps
+        [starts_at, ends_at). Back-to-back windows only touch, so they do not
+        overlap. The event's own bookings are left out, so re-checking an
+        event never reports it as clashing with itself."""
+        return (
+            self.db.query(VenueBooking)
+            .filter(VenueBooking.venueId == venue_id)
+            .filter(VenueBooking.status.in_(("approved", "pending")))
+            .filter(VenueBooking.eventId != exclude_event_id)
+            .filter(VenueBooking.setupStartsAt < ends_at)
+            .filter(VenueBooking.teardownEndsAt > starts_at)
+            .order_by(VenueBooking.setupStartsAt)
+            .all()
+        )
+
     def add(self, row: VenueBooking) -> None:
         self.db.add(row)
