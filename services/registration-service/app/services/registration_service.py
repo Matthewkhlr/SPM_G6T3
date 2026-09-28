@@ -41,8 +41,6 @@ def eligibility(event: dict, registered_count: int) -> tuple[bool, str | None]:
         return False, f"Registration opens {opens.date()}."
     if now > closes:
         return False, "Registration has closed for this event."
-    if registered_count >= event["capacity"]:
-        return False, "This event has reached capacity."
     return True, None
 
 
