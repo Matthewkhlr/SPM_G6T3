@@ -50,6 +50,25 @@ class TestEventClients(unittest.TestCase):
 
         self.assertEqual(count, 0)
 
+    def test_organisation_names_returns_the_id_to_name_mapping(self):
+        response = Mock(status_code=200)
+        response.json.return_value = [
+            {"organisationId": "org-1", "name": "Apex Partners"},
+            {"organisationId": "org-2", "name": "Beacon Media"},
+        ]
+        with patch.object(clients._user_directory_client, "get", return_value=response) as get:
+            names = clients.organisation_names("Bearer token")
+
+        self.assertEqual(names, {"org-1": "Apex Partners", "org-2": "Beacon Media"})
+        self.assertEqual(get.call_args.kwargs["headers"], {"Authorization": "Bearer token"})
+
+    def test_organisation_names_is_empty_when_the_status_is_not_200(self):
+        response = Mock(status_code=503)
+        with patch.object(clients._user_directory_client, "get", return_value=response):
+            names = clients.organisation_names(None)
+
+        self.assertEqual(names, {})
+
     def test_current_organiser_rejects_a_missing_token(self):
         with self.assertRaises(HTTPException) as ctx:
             clients.current_organiser(None)

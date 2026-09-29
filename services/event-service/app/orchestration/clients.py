@@ -12,6 +12,9 @@ logger = logging.getLogger("perf.clients")
 # every registration_count() call.
 _registration_client = httpx.Client(timeout=3.0)
 
+# Reused for organisation_names() the same way.
+_user_directory_client = httpx.Client(timeout=3.0)
+
 
 def registration_count(event_id: str, authorization: str | None = None) -> int:
     start = time.perf_counter()
@@ -35,6 +38,31 @@ def registration_count(event_id: str, authorization: str | None = None) -> int:
             "registration_count(%s) took %.3fs", event_id, time.perf_counter() - start
         )
     return 0
+
+
+def organisation_names(authorization: str | None = None) -> dict[str, str]:
+    """organisationId -> name, for display (e.g. the coordinator review queue).
+
+    Fetched ONCE per caller (see _to_out_list in event_service.py) rather than
+    once per event, for the same reason registration_count() was moved off a
+    fresh-client-per-call pattern: a per-row network call here would
+    reintroduce the same N-calls-per-list lag that registration_count used to
+    cause. Best-effort - an empty dict just means organisationName comes back
+    null on every row, not a broken response.
+    """
+    headers = {"Authorization": authorization} if authorization else {}
+    try:
+        response = _user_directory_client.get(
+            f"{settings.user_service_url}/organisations",
+            headers=headers,
+        )
+    except httpx.HTTPError as exc:
+        logger.info("organisation_names raised %r", exc)
+        return {}
+    if response.status_code != 200:
+        logger.info("organisation_names got status %s", response.status_code)
+        return {}
+    return {row["organisationId"]: row["name"] for row in response.json()}
 
 
 def current_organiser(authorization: str | None) -> dict:

@@ -54,3 +54,28 @@ class TestEventListings(EventCase):
         mine = {row.eventId for row in self.service.list_my_events("org-1")}
         self.assertIn(submitted.eventId, mine)
         self.assertNotIn(discarded.eventId, mine)
+
+    def test_queue_sort_by_proposed_date_and_assignment_filter(self):
+        insert_event(
+            self.db,
+            eventId="e-near",
+            status="submitted",
+            eventName="Near",
+            proposedStartAt=datetime(2026, 9, 1, 9),
+            submittedAt=datetime.utcnow() - timedelta(hours=1),
+        )
+        insert_event(
+            self.db,
+            eventId="e-far",
+            status="submitted",
+            eventName="Far",
+            coordinatorId="coord-1",
+            proposedStartAt=datetime(2026, 12, 1, 9),
+            submittedAt=datetime.utcnow() - timedelta(hours=2),
+        )
+
+        by_date = self.service.list_submission_queue(sort="proposedStartAt")
+        self.assertEqual([row.eventId for row in by_date], ["e-near", "e-far"])
+
+        mine = self.service.list_submission_queue(assigned_to="coord-1")
+        self.assertEqual([row.eventId for row in mine], ["e-far"])

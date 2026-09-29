@@ -69,15 +69,24 @@ class EventOut(BaseModel):
     proposedStartAt: datetime | None = None
     proposedEndAt: datetime | None = None
     expectedAttendance: int
-    layoutPreference: str | None = None
     venueRequirements: str
+    accessibilityNeeds: str = ""
     equipmentRequirements: str
+    layoutPreference: str | None = None
     registrationEnabled: bool
     registrationOpensAt: datetime | None = None
     registrationClosesAt: datetime | None = None
     capacity: int
     submittedAt: datetime | None = None
+    organisationId: str | None = None
+    organisationName: str | None = Field(
+        default=None, description="Resolved from user-service; null if that service is down."
+    )
     coordinatorId: str | None = None
+    dateNear: bool = Field(
+        default=False,
+        description="True when proposedStartAt is within settings.event_proposed_date_near_days.",
+    )
     registeredCount: int = Field(
         default=0, description="Live count from registration-service; 0 if that service is down."
     )
