@@ -33,12 +33,13 @@
       <CreateEvent v-else-if="activeTab === 'New Request'" />
       <UpcomingEventsCalendar v-else-if="activeTab === 'Upcoming Events'"/>
       <EquipmentCatalogue v-else-if="activeTab === 'Equipment Catalogue'" />
+      <AssignedEvents v-else-if="activeTab === 'Assigned Events'" />
       <ReviewQueue v-else-if="activeTab === 'Review Queue'" />
       <DraftsList v-else-if="activeTab === 'Drafts'" @edit-draft="activeTab = 'New Request'" />
       <MyEvents v-else-if="activeTab === 'My Events'" />
 
       <div class="not-built" v-else>
-        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }}{{ hasEquipmentTab ? ', Equipment Catalogue' : '' }}{{ hasMyEventsTab ? ', My Events' : '' }} are functional.
+        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasAssignedTab ? ', Assigned Events' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }}{{ hasEquipmentTab ? ', Equipment Catalogue' : '' }}{{ hasMyEventsTab ? ', My Events' : '' }} are functional.
       </div>
     </main>
   </div>
@@ -58,6 +59,7 @@ import { auth } from '../firebase.js'
 import { session, logoutSession } from '../store/session.js'
 import UpcomingEventsCalendar from '../features/event-calendar/EventCalendar.vue'
 import EquipmentCatalogue from '../features/equipment-catalogue/EquipmentCatalogue.vue'
+import AssignedEvents from '../features/assigned-events/AssignedEvents.vue'
 import ReviewQueue from '../features/review-queue/ReviewQueue.vue'
 import DraftsList from '../features/drafts/DraftsList.vue'
 import MyEvents from '../features/my-events/MyEvents.vue'
@@ -73,6 +75,7 @@ const currentData = computed(() => roles[session.role] ?? { tabs: [], cards: [],
 const activeTab = ref('Dashboard')
 
 const hasVenueTab = computed(() => currentData.value.tabs.includes('Venue Catalogue'))
+const hasAssignedTab = computed(() => currentData.value.tabs.includes('Assigned Events'))
 const hasEventsTab = computed(() => currentData.value.tabs.includes('Browse Events'))
 const hasNewRequestTab = computed(() => currentData.value.tabs.includes('New Request'))
 const hasEquipmentTab = computed(() => currentData.value.tabs.includes('Equipment Catalogue'))

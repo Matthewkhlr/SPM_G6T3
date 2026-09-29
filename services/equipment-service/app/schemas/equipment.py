@@ -125,6 +125,15 @@ class EquipmentRequestCreate(BaseModel):
     )
 
 
+class EquipmentRequestUnavailable(BaseModel):
+    reason: str = ""
+    note: str = ""
+
+
+class EquipmentRequestStatusPatch(BaseModel):
+    status: str
+
+
 class EquipmentRequestReview(BaseModel):
     approve: bool
     reviewNote: str = ""
@@ -141,10 +150,11 @@ class EquipmentRequestOut(BaseModel):
     quantity: int
     technicalRequirements: str
     requestedBy: str
-    status: str = Field(description="`pending`, `approved`, `rejected`, or `reserved`.")
+    status: str = Field(description="`pending`, `approved`, `rejected`, `unavailable`, or `reserved`.")
     startsAt: datetime
     endsAt: datetime
     reviewedBy: str | None
+    reviewedAt: datetime | None = None
     reviewNote: str
     createdAt: datetime
 
@@ -161,6 +171,7 @@ class EquipmentRequestOut(BaseModel):
                 "startsAt": "2026-10-06T08:00:00",
                 "endsAt": "2026-10-06T18:00:00",
                 "reviewedBy": None,
+                "reviewedAt": None,
                 "reviewNote": "",
                 "createdAt": "2026-09-20T10:00:00",
             }

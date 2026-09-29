@@ -21,6 +21,7 @@ class EquipmentRequest(Base):
     startsAt: Mapped[datetime] = mapped_column("starts_at", DateTime)
     endsAt: Mapped[datetime] = mapped_column("ends_at", DateTime)
     reviewedBy: Mapped[str | None] = mapped_column("reviewed_by", String(64), nullable=True)
+    reviewedAt: Mapped[datetime | None] = mapped_column("reviewed_at", DateTime, nullable=True)
     reviewNote: Mapped[str] = mapped_column("review_note", Text, default="")
     createdAt: Mapped[datetime] = mapped_column("created_at", DateTime, default=datetime.utcnow)
 

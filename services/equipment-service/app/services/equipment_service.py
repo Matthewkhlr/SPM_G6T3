@@ -1,9 +1,12 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import httpx
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
+from app.core.config import settings
 
 from app.dao.equipment_activity_log_dao import EquipmentActivityLogDAO
 from app.dao.equipment_dao import EquipmentDAO
@@ -97,6 +100,46 @@ def _events_over_serviceable(rows: list[EquipmentReservation], serviceable: int)
     return sorted(event_ids)
 
 
+def _user_email(user_id: str, authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    try:
+        with httpx.Client(timeout=5) as client:
+            response = client.get(
+                f"{settings.user_service_url}/users",
+                headers={"Authorization": authorization},
+            )
+    except httpx.HTTPError:
+        return None
+    if response.status_code != 200:
+        return None
+    for user in response.json():
+        if user.get("userId") == user_id and user.get("email"):
+            return user["email"]
+    return None
+
+
+def _notify_coordinator(row: EquipmentRequest, authorization: str | None) -> None:
+    email = _user_email(row.requestedBy, authorization)
+    if not email:
+        return
+    try:
+        with httpx.Client(timeout=5) as client:
+            client.post(
+                f"{settings.notification_service_url}/notifications",
+                headers={"Authorization": authorization},
+                json={
+                    "to": email,
+                    "subject": "An equipment request cannot be fulfilled",
+                    "body": (
+                        f"{row.equipmentId} for event {row.eventId} was marked unavailable. {row.reviewNote}"
+                    ).strip(),
+                },
+            )
+    except httpx.HTTPError:
+        return
+
+
 def _request_to_out(row: EquipmentRequest) -> EquipmentRequestOut:
     return EquipmentRequestOut(
         requestId=row.requestId,
@@ -109,6 +152,7 @@ def _request_to_out(row: EquipmentRequest) -> EquipmentRequestOut:
         startsAt=row.startsAt,
         endsAt=row.endsAt,
         reviewedBy=row.reviewedBy,
+        reviewedAt=row.reviewedAt,
         reviewNote=row.reviewNote,
         createdAt=row.createdAt,
     )
@@ -418,6 +462,30 @@ class EquipmentService:
     def list_requests(self) -> list[EquipmentRequestOut]:
         return [_request_to_out(row) for row in self.request_dao.list_all()]
 
+    def get_request(self, request_id: str) -> EquipmentRequestOut:
+        return _request_to_out(self._require_request(request_id))
+
+    def mark_unavailable(
+        self,
+        request_id: str,
+        caller: dict,
+        reason: str,
+        note: str,
+        authorization: str | None,
+    ) -> EquipmentRequestOut:
+        row = self._require_request(request_id)
+        if row.status != "pending":
+            raise conflict(f"Request is already {row.status}")
+        row.status = "unavailable"
+        row.reviewedBy = caller.get("userId", "")
+        row.reviewedAt = datetime.utcnow()
+        pieces = [piece for piece in (reason.strip(), note.strip()) if piece]
+        row.reviewNote = ". ".join(pieces)
+        self.db.commit()
+        self.db.refresh(row)
+        _notify_coordinator(row, authorization)
+        return _request_to_out(row)
+
     def create_request(self, data: EquipmentRequestCreate, requested_by: str) -> EquipmentRequestOut:
         row = EquipmentRequest(
             requestId=str(uuid4()),
@@ -442,6 +510,7 @@ class EquipmentService:
             raise conflict(f"Request is already {row.status}")
         row.status = "approved" if approve else "rejected"
         row.reviewedBy = reviewer_id
+        row.reviewedAt = datetime.utcnow()
         row.reviewNote = review_note
         self.db.commit()
         self.db.refresh(row)
@@ -465,6 +534,7 @@ class EquipmentService:
             status="active",
         )
         self.reservation_dao.add(row)
+        request_row.status = "reserved"
         self.db.commit()
         self.db.refresh(row)
         return _reservation_to_out(row)

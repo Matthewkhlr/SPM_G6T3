@@ -1,12 +1,17 @@
 <template>
-  <div class="event-detail">
+  <div class="event-page">
+    <button type="button" class="btn btn-ghost back" @click="goBack">
+      ← {{ backTarget.label }}
+    </button>
+
     <p v-if="loading" class="empty-note">Loading event…</p>
     <p v-else-if="error" class="form-error">{{ error }}</p>
 
-    <div v-else class="detail-card">
-      <div class="detail-head">
+    <template v-else>
+      <header class="page-head">
         <div>
-          <div class="event-name">{{ event.eventName }}</div>
+          <p class="eyebrow">Event</p>
+          <h1>{{ event.eventName }}</h1>
           <span class="status-pill">{{ event.status }}</span>
         </div>
         <div class="actions">
@@ -27,30 +32,44 @@
             Discard
           </button>
         </div>
+      </header>
+
+      <div class="layout" :class="{ split: showEquipment }">
+        <section class="panel">
+          <h2>Details</h2>
+          <dl class="facts">
+            <div>
+              <dt>When</dt>
+              <dd>{{ formatRange(event.proposedStartAt, event.proposedEndAt) }}</dd>
+            </div>
+            <div>
+              <dt>Expected attendance</dt>
+              <dd>{{ event.expectedAttendance }}</dd>
+            </div>
+            <div v-if="event.purpose" class="wide">
+              <dt>Purpose</dt>
+              <dd>{{ event.purpose }}</dd>
+            </div>
+            <div v-if="event.description" class="wide">
+              <dt>Description</dt>
+              <dd>{{ event.description }}</dd>
+            </div>
+            <div v-if="event.venueRequirements" class="wide">
+              <dt>Venue requirements</dt>
+              <dd>{{ event.venueRequirements }}</dd>
+            </div>
+            <div v-if="event.equipmentRequirements" class="wide">
+              <dt>Equipment notes</dt>
+              <dd>{{ event.equipmentRequirements }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <EventEquipment v-if="showEquipment" :event="event" />
       </div>
 
-      <dl class="detail-grid">
-        <dt>When</dt>
-        <dd>{{ formatRange(event.proposedStartAt, event.proposedEndAt) }}</dd>
-
-        <dt>Expected attendance</dt>
-        <dd>{{ event.expectedAttendance }}</dd>
-
-        <dt v-if="event.purpose">Purpose</dt>
-        <dd v-if="event.purpose">{{ event.purpose }}</dd>
-
-        <dt v-if="event.description">Description</dt>
-        <dd v-if="event.description">{{ event.description }}</dd>
-
-        <dt v-if="event.venueRequirements">Venue requirements</dt>
-        <dd v-if="event.venueRequirements">{{ event.venueRequirements }}</dd>
-
-        <dt v-if="event.equipmentRequirements">Equipment requirements</dt>
-        <dd v-if="event.equipmentRequirements">{{ event.equipmentRequirements }}</dd>
-      </dl>
-
       <p v-if="discardError" class="form-error">{{ discardError }}</p>
-    </div>
+    </template>
 
     <!-- Discard confirmation -->
     <div v-if="confirming" class="modal-backdrop" @click.self="confirming = false">
@@ -72,10 +91,11 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getEvent, discardEvent } from '../../api/eventService.js'
 import { session } from '../../store/session.js'
+import EventEquipment from './EventEquipment.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -87,6 +107,20 @@ const error = ref('')
 const confirming = ref(false)
 const discarding = ref(false)
 const discardError = ref('')
+
+const showEquipment = computed(
+  () => session.role === 'coordinator' || session.role === 'techsupport',
+)
+const backTarget = computed(() => {
+  if (session.role === 'coordinator') return { label: 'Assigned Events', tab: 'Assigned Events' }
+  if (session.role === 'organiser') return { label: 'My Events', tab: 'My Events' }
+  if (session.role === 'techsupport') return { label: 'Upcoming Events', tab: 'Upcoming Events' }
+  return { label: 'Dashboard', tab: 'Dashboard' }
+})
+
+function goBack() {
+  router.push({ path: '/app', query: { tab: backTarget.value.tab } })
+}
 
 function formatRange(start, end) {
   if (!start && !end) return 'No date set yet'
@@ -131,7 +165,16 @@ onMounted(load)
 </script>
 
 <style scoped>
-.event-detail { max-width: 620px; }
+.event-page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 32px 48px;
+}
+
+.back {
+  margin: 0 0 18px -18px;
+  padding-left: 18px;
+}
 
 .empty-note { font-size: 14px; color: var(--muted); }
 .form-error {
@@ -141,18 +184,23 @@ onMounted(load)
   border: 1px solid rgba(255, 138, 118, .25);
   border-radius: 9px;
   padding: 11px 14px;
+  margin-top: 16px;
 }
 
-.detail-card {
-  background: var(--glass);
-  border: 1px solid var(--hairline);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-radius: 14px;
-  padding: 24px 26px;
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  margin-bottom: 22px;
 }
-.detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
-.event-name { font-family: 'Space Grotesk', sans-serif; font-weight: 500; color: var(--text); font-size: 18px; margin-bottom: 8px; }
+.page-head h1 {
+  margin: 6px 0 10px;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -.02em;
+}
+.actions { display: flex; gap: 10px; flex-shrink: 0; }
 
 .status-pill {
   display: inline-block;
@@ -166,12 +214,29 @@ onMounted(load)
   padding: 3px 10px;
 }
 
-.detail-grid { display: grid; grid-template-columns: 180px 1fr; row-gap: 12px; column-gap: 16px; }
-.detail-grid dt {
-  font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--muted);
+.layout { display: grid; gap: 18px; }
+.layout.split { grid-template-columns: minmax(280px, 0.9fr) minmax(340px, 1.1fr); align-items: start; }
+
+.panel {
+  background: var(--glass);
+  border: 1px solid var(--hairline);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 14px;
+  padding: 22px 24px;
 }
-.detail-grid dd { margin: 0; font-size: 14px; color: var(--body); line-height: 1.6; }
+.panel h2 { margin: 0 0 16px; font-size: 16px; font-weight: 500; }
+
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 20px; margin: 0; }
+.facts .wide { grid-column: 1 / -1; }
+.facts dt {
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.facts dd { margin: 0; font-size: 14px; color: var(--body); line-height: 1.55; }
 
 .modal-backdrop {
   position: fixed; inset: 0;
@@ -194,8 +259,10 @@ onMounted(load)
 
 .btn:disabled { opacity: .55; cursor: progress; }
 
-@media (max-width: 560px) {
-  .detail-head { flex-direction: column; }
-  .detail-grid { grid-template-columns: 1fr; }
+@media (max-width: 860px) {
+  .event-page { padding: 22px 18px 36px; }
+  .page-head, .layout.split { display: flex; flex-direction: column; align-items: stretch; }
+  .facts { grid-template-columns: 1fr; }
+  .back { margin-left: 0; }
 }
 </style>

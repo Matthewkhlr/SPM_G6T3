@@ -59,6 +59,7 @@ def _to_out(row: Event, authorization: str | None = None) -> EventOut:
         registrationClosesAt=row.registrationClosesAt,
         capacity=row.capacity,
         submittedAt=row.submittedAt,
+        coordinatorId=row.coordinatorId,
         registeredCount=registration_count(row.eventId, authorization),
     )
 

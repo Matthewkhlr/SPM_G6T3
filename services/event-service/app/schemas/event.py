@@ -77,6 +77,7 @@ class EventOut(BaseModel):
     registrationClosesAt: datetime | None = None
     capacity: int
     submittedAt: datetime | None = None
+    coordinatorId: str | None = None
     registeredCount: int = Field(
         default=0, description="Live count from registration-service; 0 if that service is down."
     )

@@ -17,6 +17,8 @@ from app.schemas.equipment import (
     EquipmentRequestCreate,
     EquipmentRequestOut,
     EquipmentRequestReview,
+    EquipmentRequestStatusPatch,
+    EquipmentRequestUnavailable,
     EquipmentReservationOut,
     EquipmentUpdate,
     ReservationRelease,
@@ -24,6 +26,7 @@ from app.schemas.equipment import (
 from app.services.equipment_service import EquipmentService
 from shared.auth.deps import forwarded_bearer
 from shared.auth.roles import resolve_caller
+from shared.exceptions.http import forbidden
 from shared.openapi import error_responses
 
 router = APIRouter(
@@ -127,14 +130,18 @@ def release_reservation(
     "/requests",
     response_model=list[EquipmentRequestOut],
     summary="List equipment requests",
-    description="Technical support only.",
+    description="Technical support and coordinators.",
     responses=error_responses(403, 503),
 )
 def list_requests(
     authorization: str | None = Depends(forwarded_bearer),
     service: EquipmentService = Depends(get_equipment_service),
 ):
-    _technical_support(authorization)
+    resolve_caller(
+        authorization,
+        settings.user_service_url,
+        allowed_roles={"techsupport", "coordinator"},
+    )
     return service.list_requests()
 
 
@@ -211,6 +218,54 @@ def create_request(
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
     return service.create_request(body, caller["userId"])
+
+
+@router.get(
+    "/requests/{request_id}",
+    response_model=EquipmentRequestOut,
+    summary="Open one equipment request",
+    description="Technical support and the coordinator can read it. Status stays `pending` until technical support acts.",
+    responses=error_responses(403, 404, 503),
+)
+def get_request(
+    request_id: str = Path(..., description="Request id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EquipmentService = Depends(get_equipment_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"techsupport", "coordinator"})
+    return service.get_request(request_id)
+
+
+@router.post(
+    "/requests/{request_id}/unavailable",
+    response_model=EquipmentRequestOut,
+    summary="Mark a request unavailable",
+    description="Technical support only. Records who acted and when, and queues an email to the coordinator.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def mark_unavailable(
+    body: EquipmentRequestUnavailable,
+    request_id: str = Path(..., description="Request id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EquipmentService = Depends(get_equipment_service),
+):
+    caller = _technical_support(authorization)
+    return service.mark_unavailable(request_id, caller, body.reason, body.note, authorization)
+
+
+@router.patch(
+    "/requests/{request_id}",
+    summary="Direct status edits are refused",
+    description="A coordinator cannot set Reserved or Unavailable on this route. Technical support uses review, reserve, and unavailable.",
+    responses=error_responses(403, 503),
+)
+def patch_request_status(
+    body: EquipmentRequestStatusPatch,
+    request_id: str = Path(..., description="Request id."),
+    authorization: str | None = Depends(forwarded_bearer),
+):
+    _technical_support(authorization)
+    raise forbidden(f"Request {request_id} cannot be set to {body.status} directly")
 
 
 @router.post(

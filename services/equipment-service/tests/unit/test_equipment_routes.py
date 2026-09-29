@@ -115,3 +115,43 @@ class TestEquipmentRoutes(ServiceTestCase):
         )
         self.assertEqual(released.status_code, 200)
         self.assertEqual(released.json()["status"], "released")
+
+        self.caller.stop()
+        self.caller = patch("app.routers.equipment.resolve_caller", return_value=COORDINATOR)
+        self.caller.start()
+        fresh = self.client.post(
+            "/equipment/requests",
+            headers=self.headers,
+            json={
+                "eventId": "e9",
+                "equipmentId": equipment_id,
+                "quantity": 1,
+                "startsAt": START.isoformat(),
+                "endsAt": END.isoformat(),
+            },
+        )
+        self.assertEqual(fresh.status_code, 201)
+        request_id = fresh.json()["requestId"]
+
+        self.caller.stop()
+        self.caller = patch("app.routers.equipment.resolve_caller", return_value=CALLER)
+        self.caller.start()
+        opened = self.client.get(f"/equipment/requests/{request_id}", headers=self.headers)
+        self.assertEqual(opened.status_code, 200)
+        self.assertEqual(opened.json()["status"], "pending")
+        with patch("app.services.equipment_service._notify_coordinator"):
+            marked = self.client.post(
+                f"/equipment/requests/{request_id}/unavailable",
+                headers=self.headers,
+                json={"reason": "insufficient stock", "note": "Only two exist"},
+            )
+        self.assertEqual(marked.status_code, 200)
+        self.assertEqual(marked.json()["status"], "unavailable")
+        self.assertEqual(marked.json()["reviewedBy"], "u-tech")
+        self.assertTrue(marked.json()["reviewedAt"])
+        denied = self.client.patch(
+            f"/equipment/requests/{request_id}",
+            headers=self.headers,
+            json={"status": "reserved"},
+        )
+        self.assertEqual(denied.status_code, 403)
