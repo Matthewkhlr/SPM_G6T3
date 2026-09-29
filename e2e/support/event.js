@@ -11,7 +11,7 @@ export async function eventApi(method, path, accountId, body) {
 }
 
 export async function createDraftEvent(accountId = 'EO-01', name) {
-  const created = await eventApi('POST', '', accountId, newEventPayload(name))
+  const created = await eventApi('POST', '/drafts', accountId, newEventPayload(name))
   expect(created.status, JSON.stringify(created.body)).toBe(201)
   expect(created.body.status).toMatch(/draft|created/i)
   return created.body

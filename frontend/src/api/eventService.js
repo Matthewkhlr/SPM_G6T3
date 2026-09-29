@@ -10,8 +10,11 @@ export const getAllEvents = () => axiosClient.get("/events/all");
 // Only events with status "confirmed".
 export const getConfirmedEvents = () => axiosClient.get("/events/confirmed");
 
-// Coordinator-only: submitted events awaiting review, longest-waiting first.
-export const getSubmissionQueue = () => axiosClient.get("/events/queue");
+// Coordinator-only: submitted / under-review / changes-requested events.
+// sort: "proposedStartAt" to order by event date instead of wait time.
+// assignedTo: a coordinator userId, to see only their own assignments.
+export const getSubmissionQueue = ({ sort, assignedTo } = {}) =>
+  axiosClient.get("/events/queue", { params: { sort, assignedTo } });
 
 export const getEvent = (eventId) => axiosClient.get(`/events/${eventId}`);
 

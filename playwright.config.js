@@ -24,7 +24,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'python3 scripts/dev-backend.py',
+      command: 'python scripts/dev-backend.py',
       url: 'http://127.0.0.1:8001/health',
       timeout: 120_000,
       reuseExistingServer: true,
