@@ -317,10 +317,11 @@ One row per catalogue change. Nothing writes this table yet. SPM-75 uses it for 
 | quantity | INT | |
 | technical_requirements | TEXT | |
 | requested_by | VARCHAR(64) | Logical FK → users |
-| status | VARCHAR(32) | `pending` \| `approved` \| `rejected` \| `cancelled` |
+| status | VARCHAR(32) | `pending` \| `approved` \| `rejected` \| `unavailable` \| `cancelled` |
 | starts_at | DATETIME | Caller-supplied request window |
 | ends_at | DATETIME | |
-| reviewed_by | VARCHAR(64) nullable | |
+| reviewed_by | VARCHAR(64) nullable | Technical support user who last acted |
+| reviewed_at | DATETIME nullable | When that action was recorded |
 | review_note | TEXT | |
 | created_at | DATETIME | |
 

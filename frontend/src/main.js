@@ -16,7 +16,7 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     try {
       const { data: profile } = await getMe()
-      loginSession({ role: profile.role, name: profile.userName })
+      loginSession({ role: profile.role, name: profile.userName, userId: profile.userId })
     } catch {
       logoutSession()
     }

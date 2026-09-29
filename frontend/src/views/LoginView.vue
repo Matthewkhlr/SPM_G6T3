@@ -111,7 +111,7 @@ async function submit() {
     // anything failing here is the API (down, CORS, no matching user row).
     try {
       const { data: profile } = await getMe()
-      loginSession({ role: profile.role, name: profile.userName })
+      loginSession({ role: profile.role, name: profile.userName, userId: profile.userId })
       router.push('/app')
     } catch (err) {
       console.error('[login] /users/me failed:', err.response?.status, err.message, err)
