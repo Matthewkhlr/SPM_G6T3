@@ -11,7 +11,8 @@ from app.dao.event_status_history_dao import EventStatusHistoryDAO
 from app.models.event import Event
 from app.models.event_assignment import EventAssignment
 from app.models.event_status_history import EventStatusHistory
-from app.orchestration.clients import registration_count
+from app.core.config import settings
+from app.orchestration.clients import organisation_names, registration_count
 from app.schemas.event import (
     EventAssignmentCreate,
     EventAssignmentOut,
@@ -31,6 +32,8 @@ EVENT_STATUSES = (
     "draft",
     "discarded",
     "submitted",
+    "under review",
+    "changes requested",
     "approved",
     "rejected",
     "preparing",
@@ -39,8 +42,21 @@ EVENT_STATUSES = (
     "completed",
 )
 
+# Statuses the coordinator review queue (GET /events/queue) includes.
+QUEUE_STATUSES = ("submitted", "under review", "changes requested")
 
-def _to_out(row: Event, authorization: str | None = None) -> EventOut:
+
+def _date_near(proposed_start: datetime | None) -> bool:
+    if proposed_start is None:
+        return False
+    return (proposed_start - datetime.utcnow()).days <= settings.event_proposed_date_near_days
+
+
+def _to_out(
+    row: Event, authorization: str | None = None, org_names: dict[str, str] | None = None
+) -> EventOut:
+    if org_names is None:
+        org_names = organisation_names(authorization)
     return EventOut(
         eventId=row.eventId,
         eventName=row.eventName,
@@ -51,14 +67,19 @@ def _to_out(row: Event, authorization: str | None = None) -> EventOut:
         proposedStartAt=row.proposedStartAt,
         proposedEndAt=row.proposedEndAt,
         expectedAttendance=row.expectedAttendance,
-        layoutPreference=row.layoutPreference,
         venueRequirements=row.venueRequirements,
+        accessibilityNeeds=row.accessibilityNeeds or "",
         equipmentRequirements=row.equipmentRequirements,
+        layoutPreference=row.layoutPreference,
         registrationEnabled=row.registrationEnabled,
         registrationOpensAt=row.registrationOpensAt,
         registrationClosesAt=row.registrationClosesAt,
         capacity=row.capacity,
         submittedAt=row.submittedAt,
+        organisationId=row.organisationId,
+        organisationName=org_names.get(row.organisationId) if row.organisationId else None,
+        coordinatorId=row.coordinatorId,
+        dateNear=_date_near(row.proposedStartAt),
         registeredCount=registration_count(row.eventId, authorization),
     )
 
@@ -67,9 +88,15 @@ def _to_out_list(
     rows: list[Event], authorization: str | None, label: str
 ) -> list[EventOut]:
     """_to_out() over a list, with timing so the registration-count fan-out
-    cost is visible separately from the DB query that produced `rows`."""
+    cost is visible separately from the DB query that produced `rows`.
+
+    organisation_names() is fetched ONCE here and passed to every _to_out()
+    call, rather than letting each one fetch it - same reasoning as the
+    registration_count() fix: one network call per list, not one per row.
+    """
+    org_names = organisation_names(authorization)
     start = time.perf_counter()
-    result = [_to_out(row, authorization) for row in rows]
+    result = [_to_out(row, authorization, org_names) for row in rows]
     logger.info(
         "%s _to_out (incl. registration_count) took %.3fs total for %d rows",
         label,
@@ -158,15 +185,30 @@ class EventService:
     def get_event(self, event_id: str, authorization: str | None = None) -> EventOut:
         return _to_out(self._require_event(event_id), authorization)
 
-    def list_submission_queue(self, authorization: str | None = None) -> list[EventOut]:
-        """Coordinator review queue: submitted events, longest-waiting first.
+    def list_submission_queue(
+        self,
+        authorization: str | None = None,
+        sort: str | None = None,
+        assigned_to: str | None = None,
+    ) -> list[EventOut]:
+        """Coordinator review queue: submitted / under review / changes
+        requested events - excludes drafts and everything else.
 
         Role-gating happens in the router (resolve_caller, allowed_roles=
         {"coordinator"}) before this is called - same pattern as
         approve_event/reject_event.
+
+        sort="proposedStartAt" orders by the proposed event date instead of
+        the default (submittedAt ascending - longest-waiting first).
+        assigned_to filters to one coordinator's own assignments.
         """
         query_start = time.perf_counter()
-        rows = self.event_dao.list_by_status_ordered_by_submitted("submitted")
+        if sort == "proposedStartAt":
+            rows = self.event_dao.list_by_statuses_ordered_by_proposed_start(list(QUEUE_STATUSES))
+        else:
+            rows = self.event_dao.list_by_statuses_ordered_by_submitted(list(QUEUE_STATUSES))
+        if assigned_to is not None:
+            rows = [row for row in rows if row.coordinatorId == assigned_to]
         logger.info(
             "list_submission_queue DB query took %.3fs, %d rows",
             time.perf_counter() - query_start,

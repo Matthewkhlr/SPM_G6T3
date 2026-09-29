@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -141,15 +141,19 @@ def list_confirmed_events(
     "/queue",
     response_model=list[EventOut],
     summary="Coordinator review queue",
-    description="Coordinator only. Submitted events awaiting review, ordered by submission time - longest-waiting first.",
+    description="Coordinator only. Submitted / under-review / changes-requested events, ordered by "
+    "submission time - longest-waiting first, unless `sort=proposedStartAt`. Pass `assignedTo` "
+    "(a coordinator userId) to see only that coordinator's own assignments.",
     responses=error_responses(403, 503),
 )
 def list_submission_queue(
+    sort: str | None = Query(default=None, description="`proposedStartAt` to sort by event date instead of wait time."),
+    assignedTo: str | None = Query(default=None, description="Coordinator userId - only their assigned events."),
     authorization: str | None = Depends(forwarded_bearer),
     service: EventService = Depends(get_event_service),
 ):
     resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
-    return service.list_submission_queue(authorization)
+    return service.list_submission_queue(authorization, sort=sort, assigned_to=assignedTo)
 
 
 @router.get(

@@ -31,12 +31,20 @@ class EventDAO:
             .all()
         )
 
-    def list_by_status_ordered_by_submitted(self, status: str) -> list[Event]:
+    def list_by_statuses_ordered_by_submitted(self, statuses: list[str]) -> list[Event]:
         """Oldest submittedAt first - i.e. longest-waiting request first."""
         return (
             self.db.query(Event)
-            .filter(Event.status == status)
+            .filter(Event.status.in_(statuses))
             .order_by(Event.submittedAt.asc())
+            .all()
+        )
+
+    def list_by_statuses_ordered_by_proposed_start(self, statuses: list[str]) -> list[Event]:
+        return (
+            self.db.query(Event)
+            .filter(Event.status.in_(statuses))
+            .order_by(Event.proposedStartAt.asc())
             .all()
         )
 
