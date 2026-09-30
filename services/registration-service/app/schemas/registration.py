@@ -49,6 +49,8 @@ class RegistrationRosterOut(BaseModel):
     registered: int
     withdrawn: int
     remaining: int
+    remainingPlaces: int
+    placesRemaining: int
     registrationOpensAt: datetime | None = None
     registrationClosesAt: datetime | None = None
     attendees: list[AttendeeOut]
@@ -61,6 +63,8 @@ class RegistrationRosterOut(BaseModel):
                 "registered": 1,
                 "withdrawn": 0,
                 "remaining": 2,
+                "remainingPlaces": 2,
+                "placesRemaining": 2,
                 "registrationOpensAt": "2026-09-17T00:00:00",
                 "registrationClosesAt": "2026-10-03T23:59:59",
                 "attendees": [],

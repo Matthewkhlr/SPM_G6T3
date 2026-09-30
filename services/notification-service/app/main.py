@@ -10,9 +10,9 @@ app = create_service_app(
     service_id="notification-service",
     title="Notification Service",
     description="""
-Queues an email notification.
+Queues an email notification and stores notifications for the signed-in user.
 
-Delivery is currently a stub: the payload is logged and the response status is `queued`. Rows may also exist in the notification schema from seed data.
+Delivery of email is currently a stub: the payload is logged and the response status is `queued`. `GET /notifications` returns only the caller's stored rows.
 """,
     port=8006,
     cors_origins=parse_origins(settings.cors_origin),

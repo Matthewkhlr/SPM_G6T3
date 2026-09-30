@@ -373,11 +373,11 @@ One per event. Current seed data creates these rows; automatic creation when an 
 | user_id | VARCHAR(64) nullable | Logical FK → users |
 | attendee_name | VARCHAR(255) | |
 | attendee_email | VARCHAR(255) | |
-| status | VARCHAR(32) | API writes `registered`; `withdrawn` and `waitlisted` are reserved |
+| status | VARCHAR(32) | API writes `registered`. Withdrawal sets `withdrawn` and keeps the row. `waitlisted` is reserved |
 | created_at | DATETIME | |
-| withdrawn_at | DATETIME nullable | |
+| withdrawn_at | DATETIME nullable | Set when the row is withdrawn |
 
-The current application rejects a duplicate email among rows whose status is `registered`. There is no database unique constraint, withdrawal endpoint, or waitlist workflow.
+The current application rejects a duplicate email among rows whose status is `registered`. There is no database unique constraint or waitlist workflow. `POST /registrations/{id}/withdraw` is limited to the owning attendee, and only while the event has not started and is not completed or cancelled. Registering again creates a new row.
 
 **Current capacity rule:** fetch the event over HTTP, require status `confirmed` and registration enabled, check the event’s open/close timestamps, then require the current count of `registered` rows to be below the event’s capacity. The check and insert are not protected by row locking, so concurrent requests can race.
 
@@ -385,7 +385,7 @@ The current application rejects a duplicate email among rows whose status is `re
 
 ## 6. notification-service (`notification`)
 
-The schema contains persisted notification records, and seed data inserts one example. The current `POST /notifications` endpoint is an email stub accepting `to`, `subject`, and `body`; it prints the message and returns `queued`, but does not read or write this table. Domain-triggered persistence and read/mark-read APIs are not implemented.
+The schema contains persisted notification records, and seed data inserts one example. `POST /notifications` is an email stub accepting `to`, `subject`, and `body`; it prints the message and returns `queued`. `POST /notifications/records` stores a row for the signed-in user, and `GET /notifications` returns only that user's rows. Registration withdrawal writes one of these records. Mark-read is not implemented.
 
 ### notifications
 
