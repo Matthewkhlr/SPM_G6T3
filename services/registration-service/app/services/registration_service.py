@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.dao.attendee_registration_dao import AttendeeRegistrationDAO
 from app.dao.registration_window_dao import RegistrationWindowDAO
 from app.models.attendee_registration import AttendeeRegistration
-from shared.exceptions.http import conflict, not_found
+from shared.exceptions.http import conflict, forbidden, not_found, unauthorized
 
 
 def _event(event_id: str, authorization: str | None) -> dict:
@@ -46,6 +46,25 @@ def eligibility(event: dict, registered_count: int) -> tuple[bool, str | None]:
     return True, None
 
 
+def _registration_access(event_id: str, authorization: str | None) -> dict:
+    """Ask event-service whether this caller may see the registration list."""
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(
+                f"{settings.event_service_url}/events/{event_id}/registration-access",
+                headers={"Authorization": authorization} if authorization else {},
+            )
+    except httpx.HTTPError as exc:
+        raise not_found("Event not found") from exc
+    if response.status_code == 403:
+        raise forbidden("You do not have permission to view these registrations.")
+    if response.status_code == 401:
+        raise unauthorized("Invalid or expired token")
+    if response.status_code != 200:
+        raise not_found("Event not found")
+    return response.json()
+
+
 class RegistrationService:
     def __init__(
         self,
@@ -59,6 +78,34 @@ class RegistrationService:
 
     def list_for_event(self, event_id: str) -> list[AttendeeRegistration]:
         return self.registration_dao.list_for_event(event_id)
+
+    def registered_count(self, event_id: str) -> int:
+        return len(self.list_for_event(event_id))
+
+    def registration_roster(
+        self, event_id: str, authorization: str | None, include_withdrawn: bool = True
+    ) -> dict:
+        access = _registration_access(event_id, authorization)
+        if not access.get("registrationEnabled"):
+            raise not_found("Registration has not been enabled for this event.")
+        rows = self.registration_dao.list_all_for_event(event_id)
+        registered = [row for row in rows if row.status == "registered"]
+        withdrawn = [row for row in rows if row.status == "withdrawn"]
+        capacity = int(access.get("capacity") or 0)
+        remaining = capacity - len(registered)
+        if remaining < 0:
+            remaining = 0
+        visible = rows if include_withdrawn else registered
+        return {
+            "eventId": event_id,
+            "capacity": capacity,
+            "registered": len(registered),
+            "withdrawn": len(withdrawn),
+            "remaining": remaining,
+            "registrationOpensAt": access.get("registrationOpensAt"),
+            "registrationClosesAt": access.get("registrationClosesAt"),
+            "attendees": visible,
+        }
 
     def register(
         self, event_id: str, name: str, email: str, user_id: str | None, authorization: str | None = None

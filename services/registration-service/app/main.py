@@ -17,13 +17,15 @@ app = create_service_app(
 Attendee registration for an event.
 
 Eligibility is checked against event-service (event must be `confirmed`, registration enabled and open, capacity not exceeded). Duplicate emails for the same event are rejected.
+
+The registration list is limited to the event's organiser and its assigned coordinator. It includes a capacity summary and each attendee's supplied details, registration time, and status.
 """,
     port=8005,
     cors_origins=parse_origins(settings.cors_origin),
     tags_metadata=[
         {
             "name": "registrations",
-            "description": "List attendees for an event and register a new attendee.",
+            "description": "Register an attendee, or list who has registered when you organise or coordinate the event.",
         }
     ],
 )

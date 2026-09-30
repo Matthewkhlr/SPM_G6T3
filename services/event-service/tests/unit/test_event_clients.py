@@ -30,11 +30,12 @@ def _user_client(status_code, payload):
 class TestEventClients(unittest.TestCase):
     def test_registration_count_returns_the_list_length(self):
         response = Mock(status_code=200)
-        response.json.return_value = [{"id": "r1"}, {"id": "r2"}]
+        response.json.return_value = {"count": 2}
         with patch.object(clients._registration_client, "get", return_value=response) as get:
             count = clients.registration_count("e1", "Bearer token")
 
         self.assertEqual(count, 2)
+        self.assertIn("/registrations/count", get.call_args.args[0])
         self.assertEqual(get.call_args.kwargs["headers"], {"Authorization": "Bearer token"})
 
     def test_registration_count_is_zero_when_the_status_is_not_200(self):
@@ -66,6 +67,12 @@ class TestEventClients(unittest.TestCase):
         response = Mock(status_code=503)
         with patch.object(clients._user_directory_client, "get", return_value=response):
             names = clients.organisation_names(None)
+
+        self.assertEqual(names, {})
+
+    def test_organisation_names_is_empty_when_the_directory_is_unreachable(self):
+        with patch.object(clients._user_directory_client, "get", side_effect=httpx.ConnectError("down")):
+            names = clients.organisation_names("Bearer token")
 
         self.assertEqual(names, {})
 
