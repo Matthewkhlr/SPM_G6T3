@@ -18,7 +18,9 @@ Attendee registration for an event.
 
 Eligibility is checked against event-service (event must be `confirmed`, registration enabled and open, capacity not exceeded). Duplicate emails for the same event are rejected.
 
-The registration list is limited to the event's organiser and its assigned coordinator. It includes a capacity summary and each attendee's supplied details, registration time, and status.
+The registration list is limited to the event's organiser and its assigned coordinator. It includes a capacity summary and each attendee's supplied details, registration time, and status. An attendee asking for that list receives only how many places remain.
+
+An attendee can withdraw their own registration while the event has not started and has not been completed or cancelled. The row is kept with status `withdrawn`, the place is released, and they can register again while the period is open and a place remains.
 """,
     port=8005,
     cors_origins=parse_origins(settings.cors_origin),
