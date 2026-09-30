@@ -16,6 +16,9 @@ export const getEquipmentRequests = () => axiosClient.get("/equipment/requests")
 
 export const createEquipmentRequest = (body) => axiosClient.post("/equipment/requests", body);
 
+export const refineEquipmentRequest = (requestId, body) =>
+  axiosClient.patch(`/equipment/requests/${requestId}/details`, body);
+
 export const reviewEquipmentRequest = (requestId, body) =>
   axiosClient.post(`/equipment/requests/${requestId}/review`, body);
 

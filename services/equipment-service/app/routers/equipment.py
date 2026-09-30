@@ -16,6 +16,7 @@ from app.schemas.equipment import (
     EquipmentQuantityReserve,
     EquipmentRequestCreate,
     EquipmentRequestOut,
+    EquipmentRequestRefine,
     EquipmentRequestReview,
     EquipmentRequestStatusPatch,
     EquipmentRequestUnavailable,
@@ -251,6 +252,23 @@ def mark_unavailable(
 ):
     caller = _technical_support(authorization)
     return service.mark_unavailable(request_id, caller, body.reason, body.note, authorization)
+
+
+@router.patch(
+    "/requests/{request_id}/details",
+    response_model=EquipmentRequestOut,
+    summary="Refine a pending equipment request",
+    description="Coordinator only. Updates quantity and technical requirements while the request is still `pending`.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def refine_request(
+    body: EquipmentRequestRefine,
+    request_id: str = Path(..., description="Request id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EquipmentService = Depends(get_equipment_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.refine_request(request_id, body.quantity, body.technicalRequirements)
 
 
 @router.patch(

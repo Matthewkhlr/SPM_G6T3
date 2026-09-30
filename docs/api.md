@@ -36,6 +36,7 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `POST /venues/bookings/{id}/withdraw` | `coordinator` who sent the request |
 | `POST /venues/bookings/{id}/approve` or `/reject` | `venue` |
 | `POST /equipment/requests` | `coordinator` |
+| `PATCH /equipment/requests/{id}/details` | `coordinator`, and only while the request is still pending |
 | `POST /equipment/requests/{id}/review`, `/reserve`, or `/unavailable` | `techsupport` |
 | `PATCH /equipment/requests/{id}` | refused |
 | `POST /equipment/availability` with `eventId` | signed-in caller |
