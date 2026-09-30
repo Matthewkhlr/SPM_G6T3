@@ -108,6 +108,33 @@ class TestEquipmentRequests(EquipmentCase):
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertIn("already reserved", ctx.exception.detail)
 
+    def test_coordinator_can_refine_a_pending_request_only(self):
+        created = self.service.create_equipment(equipment_create(code="REFINE"), CALLER)
+        request = self._request(created, "e-refine")
+        refined = self.service.refine_request(request.requestId, 4, "Need a longer HDMI run")
+        self.assertEqual(refined.quantity, 4)
+        self.assertEqual(refined.technicalRequirements, "Need a longer HDMI run")
+        self.assertEqual(refined.status, "pending")
+        self.assertIsNone(refined.reviewedBy)
+
+        approved = self.service.review_request(request.requestId, "u-tech", True, "OK")
+        with self.assertRaises(HTTPException) as ctx:
+            self.service.refine_request(approved.requestId, 1, None)
+        self.assertEqual(ctx.exception.status_code, 409)
+        with self.assertRaises(HTTPException) as missing:
+            self.service.refine_request("missing", 1, "note")
+        self.assertEqual(missing.exception.status_code, 404)
+
+        pending = self._request(created, "e-refine-blank")
+        with self.assertRaises(HTTPException) as blank_reason:
+            self.service.mark_unavailable(pending.requestId, CALLER, "   ", "", None)
+        self.assertEqual(blank_reason.exception.status_code, 422)
+        self.assertEqual(self.service.get_request(pending.requestId).status, "pending")
+        with self.assertRaises(HTTPException) as blank_reject:
+            self.service.review_request(pending.requestId, "u-tech", False, "  ")
+        self.assertEqual(blank_reject.exception.status_code, 422)
+        self.assertEqual(self.service.get_request(pending.requestId).status, "pending")
+
     def _request(self, created, event_id):
         return self.service.create_request(
             EquipmentRequestCreate(eventId=event_id, equipmentId=created.equipmentId, quantity=2, startsAt=START, endsAt=END),

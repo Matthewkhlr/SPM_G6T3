@@ -126,12 +126,17 @@ class EquipmentRequestCreate(BaseModel):
 
 
 class EquipmentRequestUnavailable(BaseModel):
-    reason: str = ""
+    reason: str = Field(min_length=1)
     note: str = ""
 
 
 class EquipmentRequestStatusPatch(BaseModel):
     status: str
+
+
+class EquipmentRequestRefine(BaseModel):
+    quantity: int | None = Field(default=None, ge=1)
+    technicalRequirements: str | None = None
 
 
 class EquipmentRequestReview(BaseModel):

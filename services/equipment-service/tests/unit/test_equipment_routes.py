@@ -132,6 +132,20 @@ class TestEquipmentRoutes(ServiceTestCase):
         )
         self.assertEqual(fresh.status_code, 201)
         request_id = fresh.json()["requestId"]
+        refined = self.client.patch(
+            f"/equipment/requests/{request_id}/details",
+            headers=self.headers,
+            json={"quantity": 3, "technicalRequirements": "Wireless"},
+        )
+        self.assertEqual(refined.status_code, 200)
+        self.assertEqual(refined.json()["quantity"], 3)
+        self.assertEqual(refined.json()["status"], "pending")
+        blank = self.client.post(
+            f"/equipment/requests/{request_id}/unavailable",
+            headers=self.headers,
+            json={"reason": ""},
+        )
+        self.assertEqual(blank.status_code, 422)
 
         self.caller.stop()
         self.caller = patch("app.routers.equipment.resolve_caller", return_value=CALLER)

@@ -45,20 +45,20 @@
           </p>
           <p v-if="request.reviewNote" class="notes">{{ request.reviewNote }}</p>
           <p v-if="actionError[request.requestId]" class="error">{{ actionError[request.requestId] }}</p>
-          <div v-if="request.status === 'pending'" class="actions">
+          <div v-if="request.status === 'pending' && decisionFor !== request.requestId" class="actions">
             <button type="button" class="btn btn-solid small" :disabled="busy === request.requestId" @click="accept(request)">Accept</button>
-            <button type="button" class="btn btn-ghost small" :disabled="busy === request.requestId" @click="reject(request)">Reject</button>
-            <button type="button" class="btn btn-ghost small" :disabled="busy === request.requestId" @click="startUnavailable(request)">Mark unavailable</button>
+            <button type="button" class="btn btn-ghost small" :disabled="busy === request.requestId" @click="startDecision(request, 'reject')">Reject</button>
+            <button type="button" class="btn btn-ghost small" :disabled="busy === request.requestId" @click="startDecision(request, 'unavailable')">Mark unavailable</button>
           </div>
           <div v-else-if="request.status === 'approved'" class="actions">
             <button type="button" class="btn btn-solid small" :disabled="busy === request.requestId" @click="reserve(request)">Reserve</button>
           </div>
-          <form v-if="unavailableFor === request.requestId" class="unavailable-form" @submit.prevent="confirmUnavailable(request)">
-            <label>Reason<input v-model="unavailableReason" required /></label>
-            <label>Note<input v-model="unavailableNote" /></label>
+          <form v-if="decisionFor === request.requestId" class="unavailable-form" @submit.prevent="confirmDecision(request)">
+            <label>Reason<input v-model="decisionReason" required /></label>
+            <label v-if="decisionKind === 'unavailable'">Note<input v-model="decisionNote" /></label>
             <div class="actions">
-              <button type="button" class="btn btn-ghost small" @click="unavailableFor = ''">Cancel</button>
-              <button type="submit" class="btn btn-solid small" :disabled="busy === request.requestId">Save</button>
+              <button type="button" class="btn btn-ghost small" @click="cancelDecision(request)">Cancel</button>
+              <button type="submit" class="btn btn-solid small" :disabled="busy === request.requestId || !decisionReason.trim()">Save</button>
             </div>
           </form>
         </li>
@@ -85,9 +85,10 @@ const loading = ref(true)
 const error = ref('')
 const actionError = ref({})
 const busy = ref('')
-const unavailableFor = ref('')
-const unavailableReason = ref('')
-const unavailableNote = ref('')
+const decisionFor = ref('')
+const decisionKind = ref('')
+const decisionReason = ref('')
+const decisionNote = ref('')
 
 const groups = computed(() => {
   const grouped = new Map()
@@ -151,27 +152,41 @@ function accept(request) {
   return run(request, () => reviewEquipmentRequest(request.requestId, { approve: true, reviewNote: 'Accepted' }))
 }
 
-function reject(request) {
-  return run(request, () => reviewEquipmentRequest(request.requestId, { approve: false, reviewNote: 'Rejected' }))
-}
-
 function reserve(request) {
   return run(request, () => reserveEquipmentRequest(request.requestId))
 }
 
-function startUnavailable(request) {
-  unavailableFor.value = request.requestId
-  unavailableReason.value = ''
-  unavailableNote.value = ''
+function startDecision(request, kind) {
+  decisionFor.value = request.requestId
+  decisionKind.value = kind
+  decisionReason.value = ''
+  decisionNote.value = ''
   actionError.value = { ...actionError.value, [request.requestId]: '' }
 }
 
-function confirmUnavailable(request) {
-  const reason = unavailableReason.value.trim()
-  const note = unavailableNote.value.trim()
+function cancelDecision(request) {
+  decisionFor.value = ''
+  decisionKind.value = ''
+  decisionReason.value = ''
+  decisionNote.value = ''
+  actionError.value = { ...actionError.value, [request.requestId]: '' }
+}
+
+function confirmDecision(request) {
+  const reason = decisionReason.value.trim()
+  if (!reason) {
+    actionError.value = { ...actionError.value, [request.requestId]: 'A reason is required.' }
+    return
+  }
+  const note = decisionNote.value.trim()
+  const kind = decisionKind.value
   return run(request, async () => {
-    await markEquipmentRequestUnavailable(request.requestId, { reason, note })
-    unavailableFor.value = ''
+    if (kind === 'reject') {
+      await reviewEquipmentRequest(request.requestId, { approve: false, reviewNote: reason })
+    } else {
+      await markEquipmentRequestUnavailable(request.requestId, { reason, note })
+    }
+    decisionFor.value = ''
   })
 }
 

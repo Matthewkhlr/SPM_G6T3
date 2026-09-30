@@ -11,7 +11,33 @@
             <span class="name">{{ equipmentName(request.equipmentId) }}</span>
             <span class="status">{{ statusLabel(request.status) }}</span>
           </div>
-          <p v-if="request.technicalRequirements" class="notes">{{ request.technicalRequirements }}</p>
+          <p v-if="request.technicalRequirements && editingId !== request.requestId" class="notes">
+            {{ request.technicalRequirements }}
+          </p>
+          <form
+            v-if="canRecord && request.status === 'pending' && editingId === request.requestId"
+            class="edit-form"
+            @submit.prevent="saveEdit(request)"
+          >
+            <label>
+              Quantity
+              <input v-model.number="editQuantity" type="number" min="1" required />
+            </label>
+            <label>
+              Technical requirements
+              <textarea v-model="editNotes" rows="2" />
+            </label>
+            <p v-if="editError" class="form-error">{{ editError }}</p>
+            <div class="edit-actions">
+              <button type="button" class="btn btn-ghost small" @click="editingId = ''">Cancel</button>
+              <button type="submit" class="btn btn-solid small" :disabled="savingEdit">
+                {{ savingEdit ? 'Saving…' : 'Save' }}
+              </button>
+            </div>
+          </form>
+          <div v-else-if="canRecord && request.status === 'pending'" class="edit-actions">
+            <button type="button" class="btn btn-ghost small" @click="startEdit(request)">Edit</button>
+          </div>
         </li>
       </ul>
       <p v-else class="hint">No equipment has been requested for this event yet.</p>
@@ -53,7 +79,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { createEquipmentRequest, getEquipmentList, getEquipmentRequests } from '../../api/equipmentService.js'
+import { createEquipmentRequest, getEquipmentList, getEquipmentRequests, refineEquipmentRequest } from '../../api/equipmentService.js'
 import { session } from '../../store/session.js'
 
 const props = defineProps({
@@ -69,6 +95,11 @@ const saving = ref(false)
 const equipmentId = ref('')
 const quantity = ref(1)
 const technicalRequirements = ref('')
+const editingId = ref('')
+const editQuantity = ref(1)
+const editNotes = ref('')
+const editError = ref('')
+const savingEdit = ref(false)
 
 const canRecord = computed(() => session.role === 'coordinator' && props.event.status !== 'draft')
 const canUseWindow = computed(() => Boolean(props.event.proposedStartAt && props.event.proposedEndAt))
@@ -100,6 +131,31 @@ async function load() {
     loadError.value = 'Unable to load equipment requests.'
   } finally {
     loading.value = false
+  }
+}
+
+function startEdit(request) {
+  editingId.value = request.requestId
+  editQuantity.value = request.quantity
+  editNotes.value = request.technicalRequirements || ''
+  editError.value = ''
+}
+
+async function saveEdit(request) {
+  editError.value = ''
+  savingEdit.value = true
+  try {
+    await refineEquipmentRequest(request.requestId, {
+      quantity: Number(editQuantity.value) || 1,
+      technicalRequirements: editNotes.value.trim(),
+    })
+    editingId.value = ''
+    await load()
+  } catch (err) {
+    const detail = err.response?.data?.detail
+    editError.value = typeof detail === 'string' ? detail : 'Unable to update this equipment request.'
+  } finally {
+    savingEdit.value = false
   }
 }
 
@@ -169,6 +225,10 @@ h3 { margin: 0 0 14px; font-size: 16px; font-weight: 500; }
 }
 .notes, .hint { color: var(--muted); font-size: 13px; }
 .notes { margin: 8px 0 0; line-height: 1.5; }
+.edit-form { display: grid; gap: 10px; margin-top: 10px; }
+.edit-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.btn.small { padding: 6px 14px; font-size: 12px; }
 .hint { margin: 0 0 14px; }
 .outcome {
   margin: 0 0 14px;

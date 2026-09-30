@@ -465,6 +465,23 @@ class EquipmentService:
     def get_request(self, request_id: str) -> EquipmentRequestOut:
         return _request_to_out(self._require_request(request_id))
 
+    def refine_request(
+        self,
+        request_id: str,
+        quantity: int | None,
+        technical_requirements: str | None,
+    ) -> EquipmentRequestOut:
+        row = self._require_request(request_id)
+        if row.status != "pending":
+            raise conflict(f"Request is already {row.status}")
+        if quantity is not None:
+            row.quantity = quantity
+        if technical_requirements is not None:
+            row.technicalRequirements = technical_requirements
+        self.db.commit()
+        self.db.refresh(row)
+        return _request_to_out(row)
+
     def mark_unavailable(
         self,
         request_id: str,
@@ -476,6 +493,8 @@ class EquipmentService:
         row = self._require_request(request_id)
         if row.status != "pending":
             raise conflict(f"Request is already {row.status}")
+        if not reason.strip():
+            raise HTTPException(status_code=422, detail="A reason is required.")
         row.status = "unavailable"
         row.reviewedBy = caller.get("userId", "")
         row.reviewedAt = datetime.utcnow()
@@ -508,6 +527,8 @@ class EquipmentService:
         row = self._require_request(request_id)
         if row.status != "pending":
             raise conflict(f"Request is already {row.status}")
+        if not approve and not review_note.strip():
+            raise HTTPException(status_code=422, detail="A reason is required.")
         row.status = "approved" if approve else "rejected"
         row.reviewedBy = reviewer_id
         row.reviewedAt = datetime.utcnow()
