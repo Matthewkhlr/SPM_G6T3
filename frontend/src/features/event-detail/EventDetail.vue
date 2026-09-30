@@ -16,6 +16,15 @@
         </div>
         <div class="actions">
           <button
+            v-if="showRegistrations"
+            type="button"
+            class="btn btn-outline"
+            data-testid="event-registrations"
+            @click="router.push(`/app/events/${event.eventId}/registrations`)"
+          >
+            Registrations
+          </button>
+          <button
             v-if="session.role === 'coordinator' && event.status !== 'draft'"
             class="btn btn-outline"
             data-testid="event-choose-venue"
@@ -110,6 +119,11 @@ const discardError = ref('')
 
 const showEquipment = computed(
   () => session.role === 'coordinator' || session.role === 'techsupport',
+)
+const showRegistrations = computed(
+  () =>
+    !!event.value?.registrationEnabled &&
+    (session.role === 'organiser' || session.role === 'coordinator'),
 )
 const backTarget = computed(() => {
   if (session.role === 'coordinator') return { label: 'Assigned Events', tab: 'Assigned Events' }

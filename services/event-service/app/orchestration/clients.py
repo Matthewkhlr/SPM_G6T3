@@ -21,12 +21,12 @@ def registration_count(event_id: str, authorization: str | None = None) -> int:
     headers = {"Authorization": authorization} if authorization else {}
     try:
         response = _registration_client.get(
-            f"{settings.registration_service_url}/registrations",
+            f"{settings.registration_service_url}/registrations/count",
             params={"eventId": event_id},
             headers=headers,
         )
         if response.status_code == 200:
-            return len(response.json())
+            return int(response.json().get("count", 0))
         logger.info(
             "registration_count(%s) got status %s", event_id, response.status_code
         )

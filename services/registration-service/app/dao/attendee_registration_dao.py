@@ -17,5 +17,13 @@ class AttendeeRegistrationDAO:
             .all()
         )
 
+    def list_all_for_event(self, event_id: str) -> list[AttendeeRegistration]:
+        return (
+            self.db.query(AttendeeRegistration)
+            .filter(AttendeeRegistration.eventId == event_id)
+            .order_by(AttendeeRegistration.createdAt.asc())
+            .all()
+        )
+
     def add(self, row: AttendeeRegistration) -> None:
         self.db.add(row)

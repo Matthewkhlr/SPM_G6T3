@@ -153,6 +153,32 @@ class EventAssignmentCreate(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"coordinatorId": "u2"}})
 
 
+class RegistrationAccessOut(BaseModel):
+    """Registration facts for the organiser or assigned coordinator.
+
+    organiserId is not included. Callers who are not that organiser or
+    coordinator are refused before this payload is built.
+    """
+
+    eventId: str
+    registrationEnabled: bool
+    registrationOpensAt: datetime | None = None
+    registrationClosesAt: datetime | None = None
+    capacity: int
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "eventId": "e1",
+                "registrationEnabled": True,
+                "registrationOpensAt": "2026-09-17T00:00:00",
+                "registrationClosesAt": "2026-10-03T23:59:59",
+                "capacity": 3,
+            }
+        }
+    )
+
+
 class EventAssignmentOut(BaseModel):
     assignmentId: str
     eventId: str
