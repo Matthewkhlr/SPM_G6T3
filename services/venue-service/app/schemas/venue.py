@@ -125,6 +125,11 @@ class VenueBookingCreate(BaseModel):
     setupStartsAt: datetime
     teardownEndsAt: datetime
     requirementsSnapshot: str = ""
+    coordinatorNotes: str = Field(default="", description="The coordinator's own notes for Venue Staff.")
+    acknowledgeWarnings: bool = Field(
+        default=False,
+        description="Must be true to send a request for a venue whose suitability check has warnings.",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -152,7 +157,7 @@ class VenueBookingOut(BaseModel):
     venueId: str
     eventId: str
     requestedBy: str
-    status: str = Field(description="`pending`, `approved`, or `rejected`.")
+    status: str = Field(description="`pending`, `approved`, `rejected`, or `withdrawn`.")
     startsAt: datetime
     endsAt: datetime
     setupStartsAt: datetime
@@ -162,6 +167,11 @@ class VenueBookingOut(BaseModel):
     reviewedBy: str | None
     reviewedAt: datetime | None
     createdAt: datetime
+    eventSnapshot: dict | None = Field(
+        default=None, description="The event's facts when the request was sent: name, client, times, needs."
+    )
+    coordinatorNotes: str = ""
+    warnings: list[str] = Field(default=[], description="Suitability warnings the coordinator acknowledged.")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -244,9 +254,17 @@ class SuitabilityOut(BaseModel):
 
 
 class EventFacts(BaseModel):
-    """The parts of event-service's event record the suitability rule needs."""
+    """The parts of event-service's event record that venue-service uses:
+    the suitability rule (SPM-62) and booking requests (SPM-63)."""
 
     expectedAttendance: int = 0
     layoutPreference: str | None = None
     proposedStartAt: datetime | None = None
     proposedEndAt: datetime | None = None
+    eventName: str = ""
+    status: str = ""
+    coordinatorId: str | None = None
+    organisationId: str | None = None
+    organisationName: str | None = None
+    accessibilityNeeds: str = ""
+    venueRequirements: str = ""

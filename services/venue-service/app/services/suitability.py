@@ -177,6 +177,13 @@ def _opening_hours(venue: VenueOut, start: datetime, end: datetime) -> list[Suit
     return reasons
 
 
+def _event_label(booking: VenueBooking) -> str:
+    """Name the other event in plain words. Requests sent since SPM-63 carry the
+    event's name; older bookings only have its id."""
+    name = (booking.eventSnapshot or {}).get("eventName")
+    return f'"{name}"' if name else f"event {booking.eventId}"
+
+
 def _clashes(bookings: list[VenueBooking], unavailability: list[VenueUnavailability]) -> list[SuitabilityReason]:
     reasons = []
     for booking in bookings:
@@ -185,7 +192,7 @@ def _clashes(bookings: list[VenueBooking], unavailability: list[VenueUnavailabil
             reasons.append(
                 _failure(
                     "clash",
-                    f"This venue already has a confirmed booking for event {booking.eventId} at an overlapping "
+                    f"This venue already has a confirmed booking for {_event_label(booking)} at an overlapping "
                     f"time ({when}, including setup and teardown).",
                 )
             )
@@ -193,7 +200,7 @@ def _clashes(bookings: list[VenueBooking], unavailability: list[VenueUnavailabil
             reasons.append(
                 _warning(
                     "pendingRequest",
-                    f"Another booking request for this venue (event {booking.eventId}) is waiting for a decision "
+                    f"Another booking request for this venue ({_event_label(booking)}) is waiting for a decision "
                     f"at an overlapping time ({when}). You can still go ahead, but Venue Staff can approve only "
                     f"one of them.",
                 )

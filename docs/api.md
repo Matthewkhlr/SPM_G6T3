@@ -31,7 +31,9 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `GET /venues`, `GET /venues/{id}`, `GET /venues/{id}/activity-log` | `coordinator`, `venue`, `techsupport` |
 | `POST /venues`, `PATCH /venues/{id}`, `POST /venues/{id}/retire` | `venue` |
 | `POST /venues/suitability` | `coordinator`, `venue` |
-| `POST /venues/bookings` | `coordinator` |
+| `POST /venues/bookings` | `coordinator` assigned to the event (SPM-63) |
+| `GET /venues/bookings`, `GET /venues/bookings/{id}` | `coordinator`, `venue` |
+| `POST /venues/bookings/{id}/withdraw` | `coordinator` who sent the request |
 | `POST /venues/bookings/{id}/approve` or `/reject` | `venue` |
 | `POST /equipment/requests` | `coordinator` |
 | `POST /equipment/requests/{id}/review`, `/reserve`, or `/unavailable` | `techsupport` |

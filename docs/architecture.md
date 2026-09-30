@@ -27,6 +27,7 @@ flowchart LR
   EventSvc -->|"HTTP"| RegSvc
   EventSvc -->|"HTTP"| NotifSvc
   VenueSvc -->|"HTTP"| EventSvc
+  VenueSvc -->|"HTTP"| NotifSvc
 ```
 
 There is **no repo-root `db/` folder**. Database data is stored in one Docker volume. Each service owns its schema through its own Alembic migration tree. `infra/` starts one MySQL instance and creates the six empty schemas.
@@ -318,7 +319,7 @@ services/<name>/
 └── requirements.txt
 ```
 
-`event-service` also has `app/orchestration/` — HTTP clients to other services (no cross-DB joins). `venue-service` has one too: the suitability check (SPM-62) reads the event's attendance, layout, and dates from event-service.
+`event-service` also has `app/orchestration/` — HTTP clients to other services (no cross-DB joins). `venue-service` has one too: the suitability check (SPM-62) reads the event's attendance, layout, and dates from event-service, and venue booking requests (SPM-63) also take the client organisation's name from that event record, read the Venue Staff list from user-service, and notify Venue Staff through notification-service.
 
 ### `infra/`
 

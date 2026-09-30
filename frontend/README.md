@@ -103,8 +103,16 @@ pattern — don't add it to `components/shared/`.
 - `features/venue-request/` opens from "Choose a venue" on an event
   (coordinators only). Picking a venue shows suitable, suitable with warnings,
   or not suitable, with a reason for each point
-- "Request this venue" is disabled on any failure and allowed with warnings.
-  Sending the request itself is SPM-63
+- "Request this venue" is disabled on any failure and allowed with warnings
+
+**Venue booking requests (SPM-63)**
+- On the same page, the assigned coordinator sends the request for an event
+  approved for planning, with optional notes for Venue Staff. With warnings,
+  they must first tick that they have read them
+- While the event has a pending request, the page shows it with a
+  "Withdraw request" button, and no other venue can be requested
+- The Venue Staff queue screen, the venue calendar, and the readiness view are
+  other stories (SPM-8/SPM-57, SPM-108, SPM-5)
 
 **Attendee registration**
 - `features/browse-events/` — 4 hardcoded events specifically chosen to

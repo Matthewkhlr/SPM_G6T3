@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -20,6 +20,12 @@ class VenueBooking(Base):
     setupStartsAt: Mapped[datetime] = mapped_column("setup_starts_at", DateTime)
     teardownEndsAt: Mapped[datetime] = mapped_column("teardown_ends_at", DateTime)
     requirementsSnapshot: Mapped[str] = mapped_column("requirements_snapshot", Text, default="")
+    # SPM-63: the event's facts as they were when the request was sent (AC2),
+    # the coordinator's own notes, and the suitability warnings the coordinator
+    # acknowledged, so Venue Staff see them with the request (AC4).
+    eventSnapshot: Mapped[dict | None] = mapped_column("event_snapshot", JSON, nullable=True)
+    coordinatorNotes: Mapped[str | None] = mapped_column("coordinator_notes", Text, nullable=True, default="")
+    warnings: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
     decisionReason: Mapped[str | None] = mapped_column("decision_reason", Text, nullable=True)
     reviewedBy: Mapped[str | None] = mapped_column("reviewed_by", String(64), nullable=True)
     reviewedAt: Mapped[datetime | None] = mapped_column("reviewed_at", DateTime, nullable=True)

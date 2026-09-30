@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test'
 import { login } from './support/auth.js'
 import { account } from './support/test-data.js'
 import { venuePeriod } from './support/api-data.js'
-import { createPendingBooking, venueRequest } from './support/venue.js'
+import { venueRequest } from './support/venue.js'
+import { THEATRE_EVENT, approvedEvent, freshPeriod, requestVenue } from './support/venue-request.js'
 
 async function suitability(eventId, venueId, extras = {}) {
   return venueRequest('POST', '/venues/suitability', 'EC-01', {
@@ -42,11 +43,16 @@ test.describe('SPM-62 Venue suitability check for an event', () => {
   })
 
   test('TC-SPM62-AC04 an overlapping confirmed booking or unavailability is a named failure', async () => {
-    const created = await createPendingBooking('EC-01', 250, { venueId: 'v4' })
-    await venueRequest('POST', `/venues/bookings/${created.bookingId}/approve`, 'VS-01', {
+    // Since SPM-63, only a suitable venue for an approved event can be booked,
+    // so the confirmed booking comes from a fresh Theatre event at v1.
+    const other = await approvedEvent(THEATRE_EVENT)
+    const period = freshPeriod()
+    const created = await requestVenue(other, 'v1', period)
+    expect(created.status, JSON.stringify(created.body)).toBe(201)
+    await venueRequest('POST', `/venues/bookings/${created.body.bookingId}/approve`, 'VS-01', {
       reason: 'for suitability',
     })
-    const result = await suitability('e4', 'v4', venuePeriod(250, 2))
+    const result = await suitability('e4', 'v1', { ...period, layout: 'Theatre' })
     expect(result.status).toBe(200)
     expect(result.body.verdict).toMatch(/not suitable/i)
     expect(JSON.stringify(result.body)).toMatch(/e1|booking|unavailab/i)
@@ -81,10 +87,13 @@ test.describe('SPM-62 Venue suitability check for an event', () => {
   })
 
   test('TC-SPM62-AC07 an overlapping pending request is a warning', async () => {
-    await createPendingBooking('EC-01', 252, { venueId: 'v3' })
+    // The pending request comes from a fresh approved Theatre event (see AC04).
+    const period = freshPeriod()
+    const created = await requestVenue(await approvedEvent(THEATRE_EVENT), 'v3', period)
+    expect(created.status, JSON.stringify(created.body)).toBe(201)
     // e4 asks for a Boardroom, which v3 does not offer (a real failure), so
     // check it in a layout v3 has, leaving the pending request as the only issue.
-    const result = await suitability('e4', 'v3', { ...venuePeriod(252, 2), layout: 'Theatre' })
+    const result = await suitability('e4', 'v3', { ...period, layout: 'Theatre' })
     expect(result.status).toBe(200)
     expect(result.body.verdict).toMatch(/suitable with warnings/i)
     expect(JSON.stringify(result.body)).toMatch(/pending|contested|warning/i)
@@ -104,12 +113,16 @@ test.describe('SPM-62 Venue suitability check for an event', () => {
   })
 
   test('TC-SPM62-AC08 a venue with only warnings can still be requested', async ({ page }) => {
-    // e4 expects 20 people and asks for a Boardroom; v4's Boardroom holds exactly 20.
+    // 280 people in v1's Theatre (300) is above 90%: a warning only. Since
+    // SPM-63 the coordinator ticks that they read the warnings, then may go ahead.
+    const tight = await approvedEvent({ layoutPreference: 'Theatre', expectedAttendance: 280 })
     await login(page, account('EC-01'))
-    await page.goto('/app/events/e4/venues')
-    await page.getByTestId('venue-select-v4').click()
+    await page.goto(`/app/events/${tight.eventId}/venues`)
+    await page.getByTestId('venue-select-v1').click()
     await expect(page.getByTestId('suitability-verdict')).toHaveText(/suitable with warnings/i)
     await expect(page.getByTestId('suitability-reasons')).toContainText(/Warning.*90%/)
+    await expect(page.getByTestId('venue-request-submit')).toBeDisabled()
+    await page.getByTestId('suitability-acknowledge').check()
     await expect(page.getByTestId('venue-request-submit')).toBeEnabled()
   })
 

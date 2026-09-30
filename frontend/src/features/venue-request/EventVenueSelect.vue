@@ -18,6 +18,25 @@
         </p>
       </div>
 
+      <!-- SPM-63 AC7 and AC8: one pending request per event; the coordinator can withdraw it. -->
+      <div v-if="pendingRequest" class="pending-banner" data-testid="venue-request-pending">
+        <p>
+          A request for <strong>{{ venueNameFor(pendingRequest.venueId) }}</strong> is waiting for Venue Staff
+          (sent {{ formatUtc(pendingRequest.createdAt) }} UTC). Withdraw it before requesting a different venue.
+        </p>
+        <button
+          type="button"
+          class="btn btn-ghost small"
+          data-testid="venue-request-withdraw"
+          :disabled="withdrawing"
+          @click="withdraw"
+        >
+          {{ withdrawing ? 'Withdrawing…' : 'Withdraw request' }}
+        </button>
+      </div>
+      <p v-if="withdrawError" class="form-error">{{ withdrawError }}</p>
+      <p v-if="notice" class="success-note" data-testid="venue-request-result">{{ notice }}</p>
+
       <div class="layout">
         <div class="venue-list">
           <div
@@ -53,27 +72,28 @@
             </ul>
             <p v-else class="hint all-clear">This venue meets every requirement for this event.</p>
 
-            <!-- AC8: warnings may go ahead, failures may not. -->
+            <!-- SPM-62 AC8 and SPM-63 AC3/AC4: failures block; warnings go ahead once acknowledged. -->
+            <label v-if="result.verdict === 'suitable with warnings'" class="acknowledge">
+              <input v-model="acknowledged" type="checkbox" data-testid="suitability-acknowledge" />
+              I have read the warnings above and want to send the request anyway.
+            </label>
+            <label v-if="result.verdict !== 'not suitable'" class="notes">
+              Notes for Venue Staff (optional)
+              <textarea v-model="notes" rows="3" maxlength="1000" data-testid="venue-request-notes" />
+            </label>
             <div class="request-row">
               <button
                 type="button"
                 class="btn btn-solid"
                 data-testid="venue-request-submit"
-                :disabled="result.verdict === 'not suitable'"
+                :disabled="!canSubmit"
                 @click="requestVenue"
               >
-                Request this venue
+                {{ submitting ? 'Sending…' : 'Request this venue' }}
               </button>
-              <p class="hint">
-                <template v-if="result.verdict === 'not suitable'">
-                  This venue cannot be requested until every failure above is resolved.
-                </template>
-                <template v-else-if="result.verdict === 'suitable with warnings'">
-                  You can still request this venue. Please read the warnings above first.
-                </template>
-              </p>
+              <p v-if="submitHint" class="hint">{{ submitHint }}</p>
             </div>
-            <p v-if="requestNote" class="hint note">{{ requestNote }}</p>
+            <p v-if="requestError" class="form-error request-error">{{ requestError }}</p>
           </template>
         </div>
       </div>
@@ -85,7 +105,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getEvent } from '../../api/eventService.js'
-import { checkSuitability, getVenues } from '../../api/venueService.js'
+import {
+  checkSuitability,
+  getVenueBookings,
+  getVenues,
+  requestVenueBooking,
+  withdrawVenueBooking,
+} from '../../api/venueService.js'
 import { session } from '../../store/session.js'
 
 const VERDICT_LABELS = {
@@ -109,7 +135,44 @@ const selectedName = ref('')
 const checking = ref(false)
 const checkError = ref('')
 const result = ref(null)
-const requestNote = ref('')
+
+// SPM-63: the request itself.
+const PLANNING_STATUSES = ['approved', 'planning']
+const bookings = ref([]) // this event's venue requests
+const acknowledged = ref(false)
+const notes = ref('')
+const submitting = ref(false)
+const requestError = ref('')
+const withdrawing = ref(false)
+const withdrawError = ref('')
+const notice = ref('')
+
+const pendingRequest = computed(() => bookings.value.find((b) => b.status === 'pending') || null)
+const hasDates = computed(() => Boolean(event.value?.proposedStartAt && event.value?.proposedEndAt))
+const inPlanning = computed(() => PLANNING_STATUSES.includes(event.value?.status))
+
+const canSubmit = computed(() => Boolean(
+  result.value
+    && result.value.verdict !== 'not suitable'
+    && (result.value.verdict !== 'suitable with warnings' || acknowledged.value)
+    && !pendingRequest.value
+    && hasDates.value
+    && inPlanning.value
+    && !submitting.value,
+))
+
+// Why the button is off, in plain words (the most blocking reason first).
+const submitHint = computed(() => {
+  if (!result.value) return ''
+  if (result.value.verdict === 'not suitable') return 'This venue cannot be requested until every failure above is resolved.'
+  if (!inPlanning.value) return 'A venue can be requested once the event has been approved for planning.'
+  if (!hasDates.value) return "Add the event's date and time before requesting a venue."
+  if (pendingRequest.value) return 'This event already has a pending request. Withdraw it first to request this venue.'
+  if (result.value.verdict === 'suitable with warnings' && !acknowledged.value) {
+    return 'Tick the box above to confirm you have read the warnings.'
+  }
+  return ''
+})
 
 // Only the latest click may show its verdict, so a slow check for an earlier
 // venue can never appear under the venue picked after it.
@@ -140,7 +203,8 @@ async function selectVenue(venue) {
   selectedName.value = venue.name
   result.value = null
   checkError.value = ''
-  requestNote.value = ''
+  requestError.value = ''
+  acknowledged.value = false
   checking.value = true
   try {
     const { data } = await checkSuitability(eventId, venue.venueId)
@@ -154,17 +218,64 @@ async function selectVenue(venue) {
   }
 }
 
-function requestVenue() {
-  // Sending the booking request to Venue Staff is SPM-63.
-  requestNote.value = 'Sending venue booking requests is not available yet. It is coming in the next update.'
+function venueNameFor(venueId) {
+  return venues.value.find((v) => v.venueId === venueId)?.name || 'another venue'
+}
+
+// SPM-63 AC2: the request uses the event's own dates; the server adds the
+// rest of the event's facts and runs the suitability check again.
+async function requestVenue() {
+  submitting.value = true
+  requestError.value = ''
+  notice.value = ''
+  try {
+    const { data } = await requestVenueBooking({
+      eventId,
+      venueId: selectedId.value,
+      startsAt: event.value.proposedStartAt,
+      endsAt: event.value.proposedEndAt,
+      setupStartsAt: event.value.proposedStartAt,
+      teardownEndsAt: event.value.proposedEndAt,
+      coordinatorNotes: notes.value.trim(),
+      acknowledgeWarnings: acknowledged.value,
+    })
+    bookings.value = [...bookings.value, data]
+    notice.value = `Request submitted for ${selectedName.value}. It is now pending with Venue Staff.`
+    notes.value = ''
+    acknowledged.value = false
+  } catch (err) {
+    requestError.value = err.response?.data?.detail || 'Unable to send this request right now. Please try again.'
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function withdraw() {
+  withdrawing.value = true
+  withdrawError.value = ''
+  notice.value = ''
+  try {
+    const { data } = await withdrawVenueBooking(pendingRequest.value.bookingId)
+    bookings.value = bookings.value.map((b) => (b.bookingId === data.bookingId ? data : b))
+    notice.value = 'Request withdrawn. Venue Staff have been told, and you can now request a different venue.'
+  } catch (err) {
+    withdrawError.value = err.response?.data?.detail || 'Unable to withdraw this request right now. Please try again.'
+  } finally {
+    withdrawing.value = false
+  }
 }
 
 onMounted(async () => {
   if (!canCheck.value) return
   try {
-    const [eventResponse, venuesResponse] = await Promise.all([getEvent(eventId), getVenues()])
+    const [eventResponse, venuesResponse, bookingsResponse] = await Promise.all([
+      getEvent(eventId),
+      getVenues(),
+      getVenueBookings({ eventId }),
+    ])
     event.value = eventResponse.data
     venues.value = venuesResponse.data
+    bookings.value = bookingsResponse.data
   } catch (err) {
     error.value = err.response?.status === 404
       ? 'This event could not be found.'
@@ -186,8 +297,30 @@ onMounted(async () => {
   border-radius: 9px; padding: 11px 14px;
 }
 .hint { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.6; }
-.note { margin-top: 12px; }
 .all-clear { margin-bottom: 18px; }
+.request-error { margin-top: 14px; }
+
+.pending-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  margin: 0 0 18px; padding: 14px 16px; border-radius: 12px;
+  background: rgba(255, 198, 109, .08); border: 1px solid rgba(255, 198, 109, .3);
+}
+.pending-banner p { margin: 0; font-size: 13px; color: var(--text); line-height: 1.6; }
+.success-note {
+  margin: 0 0 18px; padding: 11px 14px; border-radius: 9px; font-size: 13px;
+  color: var(--signal); background: rgba(56, 224, 200, .08); border: 1px solid rgba(56, 224, 200, .25);
+}
+
+.acknowledge {
+  display: flex; align-items: flex-start; gap: 8px; margin: 0 0 14px;
+  font-size: 13px; color: var(--text); line-height: 1.5; cursor: pointer;
+}
+.acknowledge input { margin-top: 3px; accent-color: var(--iris); }
+.notes { display: flex; flex-direction: column; gap: 6px; margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+.notes textarea {
+  font: inherit; font-size: 13px; color: var(--text); resize: vertical;
+  background: rgba(255, 255, 255, .03); border: 1px solid var(--hairline); border-radius: 9px; padding: 9px 11px;
+}
 
 .event-summary h2 { margin: 0 0 6px; font-size: 22px; font-weight: 500; }
 .event-summary p { margin: 0 0 22px; font-size: 14px; color: var(--body); }
@@ -213,6 +346,8 @@ onMounted(async () => {
   background: var(--glass); border: 1px solid var(--hairline);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border-radius: 16px; padding: 26px; min-height: 140px;
+  /* Stays in view while a long venue list scrolls, so a click always shows its verdict. */
+  position: sticky; top: 24px;
 }
 .verdict-panel h3 { margin: 0 0 12px; font-size: 19px; font-weight: 500; }
 

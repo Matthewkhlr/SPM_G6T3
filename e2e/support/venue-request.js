@@ -1,0 +1,40 @@
+import { expect } from '@playwright/test'
+import { assignCoordinator, eventApi } from './event.js'
+import { newEventPayload, venuePeriod } from './api-data.js'
+import { venueRequest } from './venue.js'
+
+// A Theatre event that suits Marina Hall A (v1) and Exhibition Hall B (v3),
+// both open every day, so a weekday or weekend date never matters.
+export const THEATRE_EVENT = { layoutPreference: 'Theatre', expectedAttendance: 50, venueRequirements: 'Stage.' }
+
+// SPM-63 AC1: only the assigned coordinator may request a venue, and only for
+// an event approved for planning. Each test makes its own such event, assigned
+// to EC-01 (u2), so the one-pending-request-per-event rule (AC7) never makes
+// tests, or reruns of them, collide on a shared seeded event.
+export async function approvedEvent(overrides = {}) {
+  const created = await eventApi('POST', '', 'EO-01', {
+    ...newEventPayload(`VENUE-REQ-${Date.now()}`),
+    ...overrides,
+  })
+  expect(created.status, JSON.stringify(created.body)).toBe(201)
+  await assignCoordinator(created.body.eventId, 'u2')
+  const approved = await eventApi('POST', `/${created.body.eventId}/approve`, 'EC-01', {})
+  expect(approved.status, JSON.stringify(approved.body)).toBe(200)
+  return approved.body
+}
+
+// A 10:00 to 12:00 UTC slot on a random day years ahead, so a rerun never
+// overlaps a booking an earlier run left behind.
+export function freshPeriod(hours = 2) {
+  return venuePeriod(300 + Math.floor(Math.random() * 3000), hours)
+}
+
+export function requestVenue(event, venueId, period = freshPeriod(), extras = {}) {
+  return venueRequest('POST', '/venues/bookings', 'EC-01', {
+    eventId: event.eventId,
+    venueId,
+    ...period,
+    requirementsSnapshot: `AUTO-${Date.now()}`,
+    ...extras,
+  })
+}

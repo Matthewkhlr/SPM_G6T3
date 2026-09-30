@@ -39,5 +39,24 @@ class VenueBookingDAO:
             .all()
         )
 
+    def find_pending_for_event(self, event_id: str) -> VenueBooking | None:
+        return (
+            self.db.query(VenueBooking)
+            .filter(VenueBooking.eventId == event_id)
+            .filter(VenueBooking.status == "pending")
+            .first()
+        )
+
+    def list(self, status: str | None, event_id: str | None, venue_id: str | None) -> list[VenueBooking]:
+        """Oldest first: the customer handles venue requests first come, first served."""
+        query = self.db.query(VenueBooking)
+        if status:
+            query = query.filter(VenueBooking.status == status)
+        if event_id:
+            query = query.filter(VenueBooking.eventId == event_id)
+        if venue_id:
+            query = query.filter(VenueBooking.venueId == venue_id)
+        return query.order_by(VenueBooking.createdAt, VenueBooking.bookingId).all()
+
     def add(self, row: VenueBooking) -> None:
         self.db.add(row)

@@ -19,3 +19,10 @@ export const getVenueActivityLog = (venueId) => axiosClient.get(`/venues/${venue
 // SPM-62: anything left out of `body` is taken from the event record.
 export const checkSuitability = (eventId, venueId, body = {}) =>
   axiosClient.post("/venues/suitability", { eventId, venueId, ...body });
+
+// SPM-63: venue booking requests.
+export const requestVenueBooking = (body) => axiosClient.post("/venues/bookings", body);
+
+export const getVenueBookings = (params = {}) => axiosClient.get("/venues/bookings", { params });
+
+export const withdrawVenueBooking = (bookingId) => axiosClient.post(`/venues/bookings/${bookingId}/withdraw`);
