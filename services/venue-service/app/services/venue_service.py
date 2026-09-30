@@ -22,7 +22,11 @@ from app.schemas.venue import (
     VenueUpdate,
 )
 from app.services import suitability
-from shared.exceptions.http import conflict, not_found
+from shared.exceptions.http import conflict, forbidden, not_found
+
+# SPM-63 AC1: "Planning" is the stage after approval. Event approval (SPM-69)
+# writes `approved`; seed data also uses `planning`. Both count.
+PLANNING_STATUSES = ("approved", "planning")
 
 
 def _as_list(value) -> list:
@@ -77,7 +81,31 @@ def _booking_to_out(row: VenueBooking) -> VenueBookingOut:
         reviewedBy=row.reviewedBy,
         reviewedAt=row.reviewedAt,
         createdAt=row.createdAt,
+        eventSnapshot=row.eventSnapshot,
+        coordinatorNotes=row.coordinatorNotes or "",
+        warnings=row.warnings or [],
     )
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _event_snapshot(event: EventFacts) -> dict:
+    """SPM-63 AC2: what Venue Staff need to assess the request, copied from the
+    event record so later edits to the event do not rewrite the request.
+    event-service resolves the client organisation's name; if it could not,
+    the organisation's id still says which client the request is for."""
+    return {
+        "eventName": event.eventName,
+        "clientOrganisation": event.organisationName or event.organisationId or "",
+        "startsAt": _iso(event.proposedStartAt),
+        "endsAt": _iso(event.proposedEndAt),
+        "expectedAttendance": event.expectedAttendance,
+        "layout": event.layoutPreference or "",
+        "accessibilityNeeds": event.accessibilityNeeds,
+        "requiredFacilities": event.venueRequirements,
+    }
 
 
 def _diff_keyed_items(old_items: list[dict], new_items: list[dict], key: str, tracked: list[str]) -> dict:
@@ -270,7 +298,13 @@ class VenueService:
         verdict, reasons = suitability.assess(venue, needs, bookings, unavailability)
         return SuitabilityOut(eventId=request.eventId, venueId=venue.venueId, verdict=verdict, reasons=reasons)
 
-    def create_booking(self, data: VenueBookingCreate, requested_by: str) -> VenueBookingOut:
+    def create_booking(
+        self,
+        data: VenueBookingCreate,
+        requested_by: str,
+        event_snapshot: dict | None = None,
+        warnings: list[str] | None = None,
+    ) -> VenueBookingOut:
         row = VenueBooking(
             bookingId=str(uuid4()),
             venueId=data.venueId,
@@ -282,12 +316,100 @@ class VenueService:
             setupStartsAt=data.setupStartsAt,
             teardownEndsAt=data.teardownEndsAt,
             requirementsSnapshot=data.requirementsSnapshot,
+            eventSnapshot=event_snapshot,
+            coordinatorNotes=data.coordinatorNotes,
+            warnings=warnings or [],
             createdAt=datetime.utcnow(),
         )
         self.booking_dao.add(row)
         self.db.commit()
         self.db.refresh(row)
         return _booking_to_out(row)
+
+    def request_booking(self, data: VenueBookingCreate, caller: dict, event: EventFacts) -> VenueBookingOut:
+        """SPM-63: a coordinator's venue booking request. Every rule below is
+        checked before anything is saved, so a refused request leaves no trace."""
+        # AC1: only the event's assigned coordinator, only once it is in planning.
+        if event.coordinatorId != caller["userId"]:
+            raise forbidden("Only the coordinator assigned to this event can request a venue for it.")
+        if event.status not in PLANNING_STATUSES:
+            raise conflict(
+                "A venue can only be requested once the event has been approved for planning. "
+                f"This event is currently {event.status or 'not yet approved'}."
+            )
+
+        # AC7: one pending request per event at a time.
+        pending = self.booking_dao.find_pending_for_event(data.eventId)
+        if pending:
+            raise conflict(
+                f"This event already has a pending venue request for {self._venue_name(pending.venueId)}. "
+                "Withdraw it before requesting a different venue."
+            )
+
+        # AC3 and AC4: the SPM-62 rule decides; failures block, warnings need an acknowledgement.
+        check = self.check_suitability(
+            SuitabilityRequest(
+                eventId=data.eventId,
+                venueId=data.venueId,
+                startsAt=data.startsAt,
+                endsAt=data.endsAt,
+                setupStartsAt=data.setupStartsAt,
+                teardownEndsAt=data.teardownEndsAt,
+            ),
+            event,
+        )
+        failures = [reason.message for reason in check.reasons if reason.severity == "failure"]
+        warnings = [reason.message for reason in check.reasons if reason.severity == "warning"]
+        if failures:
+            raise conflict("This venue is not suitable for this event, so the request cannot be sent. " + " ".join(failures))
+        if warnings and not data.acknowledgeWarnings:
+            raise conflict(
+                "This venue has warnings. Please read them and confirm before sending the request. " + " ".join(warnings)
+            )
+
+        # AC2: the request carries the event's facts as they are now.
+        return self.create_booking(data, caller["userId"], _event_snapshot(event), warnings)
+
+    def list_bookings(
+        self, status: str | None = None, event_id: str | None = None, venue_id: str | None = None
+    ) -> list[VenueBookingOut]:
+        return [_booking_to_out(row) for row in self.booking_dao.list(status, event_id, venue_id)]
+
+    def get_booking(self, booking_id: str) -> VenueBookingOut:
+        return _booking_to_out(self._require_booking(booking_id))
+
+    def withdraw_booking(self, booking_id: str, caller: dict) -> VenueBookingOut:
+        """SPM-63 AC8. A withdrawn request no longer counts anywhere: the
+        suitability rule and conflict checks only look at pending and approved."""
+        row = self._require_booking(booking_id)
+        if row.requestedBy != caller["userId"]:
+            raise forbidden("You can only withdraw venue requests that you sent.")
+        if row.status != "pending":
+            raise conflict(f"Only a pending request can be withdrawn. This request is already {row.status}.")
+        row.status = "withdrawn"
+        self.db.commit()
+        self.db.refresh(row)
+        return _booking_to_out(row)
+
+    def _venue_name(self, venue_id: str) -> str:
+        row = self.venue_dao.get_by_id(venue_id)
+        return row.name if row else venue_id
+
+    def venue_staff_notice(self, booking: VenueBookingOut, action: str) -> tuple[str, str]:
+        """The subject and body sent to Venue Staff when a request is sent (AC5) or withdrawn (AC8)."""
+        facts = booking.eventSnapshot or {}
+        event = facts.get("eventName") or f"event {booking.eventId}"
+        venue = self._venue_name(booking.venueId)
+        when = f"{booking.startsAt:%d %b %Y, %I:%M %p} to {booking.endsAt:%d %b %Y, %I:%M %p} UTC"
+        if action == "requested":
+            return (
+                f"New venue request: {event} at {venue}",
+                f"A coordinator has requested {venue} for {event}, {when}. It is waiting in your pending queue.",
+            )
+        return (
+            f"Venue request withdrawn: {event} at {venue}",
+            f"The coordinator has withdrawn their request for {venue} for {event}, {when}. No action is needed.",
+        )
 
     def approve_booking(self, booking_id: str, reviewer_id: str, reason: str | None) -> VenueBookingOut:
         row = self._require_booking(booking_id)

@@ -4,6 +4,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.schemas.venue import EventFacts
 from shared.auth.deps import require_authenticated_user
 from shared.testing.cases import ServiceTestCase
 from tests.unit.support import CALLER, COORDINATOR, END, START
@@ -15,12 +16,23 @@ class TestVenueRoutes(ServiceTestCase):
         app.dependency_overrides[require_authenticated_user] = lambda: {"uid": "uid-1"}
         self.caller = patch("app.routers.venue.resolve_caller", return_value=CALLER)
         self.caller.start()
+        # Booking requests read the event and notify Venue Staff over HTTP;
+        # stand in for those so this test stays about the routes themselves.
+        event = EventFacts(coordinatorId=COORDINATOR["userId"], status="approved", expectedAttendance=10)
+        self.others = [
+            patch("app.routers.venue.fetch_event_facts", return_value=event),
+            patch("app.routers.venue.notify_venue_staff", return_value=1),
+        ]
+        for other in self.others:
+            other.start()
         self.client = TestClient(app)
         self.client.__enter__()
         self.headers = {"Authorization": "Bearer token"}
 
     def tearDown(self):
         self.client.__exit__(None, None, None)
+        for other in self.others:
+            other.stop()
         self.caller.stop()
         app.dependency_overrides.clear()
         super().tearDown()
@@ -33,7 +45,10 @@ class TestVenueRoutes(ServiceTestCase):
                 "name": "Marina Hall A",
                 "location": "HarbourFront",
                 "layouts": [{"name": "Theatre", "capacity": 100}],
-                "operatingHours": [{"day": "Mon", "opens": "08:00", "closes": "18:00"}],
+                "operatingHours": [
+                    {"day": day, "opens": "00:00", "closes": "24:00"}
+                    for day in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+                ],
                 "facilities": ["PA"],
                 "accessibility": ["Ramp"],
             },
@@ -65,16 +80,6 @@ class TestVenueRoutes(ServiceTestCase):
             },
         )
         self.assertEqual(booking.status_code, 201)
-
-        self.caller.stop()
-        self.caller = patch("app.routers.venue.resolve_caller", return_value=CALLER)
-        self.caller.start()
-        approved = self.client.post(
-            f"/venues/bookings/{booking.json()['bookingId']}/approve",
-            headers=self.headers,
-            json={"reason": "Free"},
-        )
-        self.assertEqual(approved.status_code, 200)
         second = self.client.post(
             "/venues/bookings",
             headers=self.headers,
@@ -88,6 +93,16 @@ class TestVenueRoutes(ServiceTestCase):
             },
         )
         self.assertEqual(second.status_code, 201)
+
+        self.caller.stop()
+        self.caller = patch("app.routers.venue.resolve_caller", return_value=CALLER)
+        self.caller.start()
+        approved = self.client.post(
+            f"/venues/bookings/{booking.json()['bookingId']}/approve",
+            headers=self.headers,
+            json={"reason": "Free"},
+        )
+        self.assertEqual(approved.status_code, 200)
         rejected = self.client.post(
             f"/venues/bookings/{second.json()['bookingId']}/reject",
             headers=self.headers,

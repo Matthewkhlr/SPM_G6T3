@@ -7,7 +7,7 @@ from app.dao.venue_booking_dao import VenueBookingDAO
 from app.dao.venue_dao import VenueDAO
 from app.dao.venue_unavailability_dao import VenueUnavailabilityDAO
 from app.db.session import get_db
-from app.orchestration.clients import fetch_event_facts
+from app.orchestration.clients import fetch_event_facts, notify_venue_staff
 from app.schemas.venue import (
     SuitabilityOut,
     SuitabilityRequest,
@@ -37,6 +37,8 @@ CATALOGUE_READER_ROLES = {"coordinator", "venue", "techsupport"}
 # SPM-62: coordinators check before requesting a venue; Venue Staff can run
 # the same check when assessing a request.
 SUITABILITY_ROLES = {"coordinator", "venue"}
+# SPM-63: coordinators follow their requests; Venue Staff work the pending queue.
+BOOKING_READER_ROLES = {"coordinator", "venue"}
 
 
 def get_venue_service(db: Session = Depends(get_db)) -> VenueService:
@@ -62,6 +64,43 @@ def list_venues(
 ):
     resolve_caller(authorization, settings.user_service_url, allowed_roles=CATALOGUE_READER_ROLES)
     return service.list_venues(include_retired=includeRetired)
+
+
+@router.get(
+    "/bookings",
+    response_model=list[VenueBookingOut],
+    summary="List venue booking requests",
+    description=(
+        "Coordinators and venue staff. Oldest first. `status=pending` is Venue Staff's pending queue; "
+        "`eventId` shows an event's venue arrangement."
+    ),
+    responses=error_responses(403, 503),
+)
+def list_bookings(
+    status: str | None = Query(None, description="`pending`, `approved`, `rejected`, or `withdrawn`."),
+    eventId: str | None = Query(None, description="Only this event's requests."),
+    venueId: str | None = Query(None, description="Only this venue's requests."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles=BOOKING_READER_ROLES)
+    return service.list_bookings(status, eventId, venueId)
+
+
+@router.get(
+    "/bookings/{booking_id}",
+    response_model=VenueBookingOut,
+    summary="Get a venue booking request",
+    description="Coordinators and venue staff. Includes the event facts, notes, and warnings sent with it.",
+    responses=error_responses(403, 404, 503),
+)
+def get_booking(
+    booking_id: str = Path(..., description="Booking id returned by create booking."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles=BOOKING_READER_ROLES)
+    return service.get_booking(booking_id)
 
 
 @router.get(
@@ -178,8 +217,12 @@ def check_suitability(
     response_model=VenueBookingOut,
     status_code=201,
     summary="Request a venue booking",
-    description="Coordinator only. Creates a booking in status `pending`. `requestedBy` is taken from the bearer token.",
-    responses=error_responses(403, 503),
+    description=(
+        "Only the event's assigned coordinator, for an event approved for planning. Refused with 409 when the "
+        "venue fails the suitability check, when warnings are not acknowledged (`acknowledgeWarnings`), or when "
+        "the event already has a pending request. Venue Staff are notified."
+    ),
+    responses=error_responses(403, 404, 409, 503),
 )
 def create_booking(
     body: VenueBookingCreate,
@@ -187,7 +230,28 @@ def create_booking(
     service: VenueService = Depends(get_venue_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
-    return service.create_booking(body, caller["userId"])
+    event = fetch_event_facts(body.eventId, authorization)
+    booking = service.request_booking(body, caller, event)
+    notify_venue_staff(*service.venue_staff_notice(booking, "requested"), authorization)
+    return booking
+
+
+@router.post(
+    "/bookings/{booking_id}/withdraw",
+    response_model=VenueBookingOut,
+    summary="Withdraw a venue booking request",
+    description="The coordinator who sent it, while it is still pending. Venue Staff are notified.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def withdraw_booking(
+    booking_id: str = Path(..., description="Booking id returned by create booking."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    booking = service.withdraw_booking(booking_id, caller)
+    notify_venue_staff(*service.venue_staff_notice(booking, "withdrawn"), authorization)
+    return booking
 
 
 @router.post(

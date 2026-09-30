@@ -240,12 +240,15 @@ The suitability check (SPM-62) reads this table: an overlapping period makes a v
 | venue_id | VARCHAR(64) | FK → venues |
 | event_id | VARCHAR(64) | Logical FK → events |
 | requested_by | VARCHAR(64) | Logical FK → users |
-| status | VARCHAR(32) | `pending` \| `approved` \| `rejected` \| `cancelled` |
+| status | VARCHAR(32) | `pending` \| `approved` \| `rejected` \| `withdrawn` \| `cancelled` |
 | starts_at | DATETIME | Event window start |
 | ends_at | DATETIME | Event window end |
 | setup_starts_at | DATETIME | Caller-supplied setup boundary |
 | teardown_ends_at | DATETIME | Caller-supplied teardown boundary |
 | requirements_snapshot | TEXT | |
+| event_snapshot | JSON nullable | SPM-63: the event's facts when the request was sent (name, client organisation, times, attendance, layout, accessibility needs, required facilities) |
+| coordinator_notes | TEXT nullable | SPM-63: the coordinator's notes for Venue Staff |
+| warnings | JSON nullable | SPM-63: suitability warnings the coordinator acknowledged, shown to Venue Staff |
 | decision_reason | TEXT nullable | |
 | reviewed_by | VARCHAR(64) nullable | |
 | reviewed_at | DATETIME nullable | |
@@ -257,7 +260,9 @@ Index: `(venue_id, starts_at, ends_at)`.
 
 **Suitability rule (SPM-62, `POST /venues/suitability`, `app/services/suitability.py`):** failures are attendance above the capacity of the required layout (or the venue's capacity if no layout is given), an unsupported layout, a missing required facility or accessibility feature, a time outside operating hours (hours are read as UTC), and an approved booking of another event or an unavailability period overlapping `[setup_starts_at, teardown_ends_at)`. Warnings are attendance above 90% of that capacity and an overlapping pending booking of another event. Any failure gives `not suitable`; only warnings give `suitable with warnings`. Values not in the request come from the event record.
 
-The suitability check reports conflicts but does not stop them: the conflict rule is not enforced on booking creation or approval yet. Booking creation accepts caller-supplied setup and teardown times without deriving turnaround or checking overlap. The implemented review flow only transitions a pending booking to `approved` or `rejected`; cancellation is not implemented.
+**Booking request rules (SPM-63, `POST /venues/bookings`):** only the coordinator assigned to the event may request a venue, and only while the event is `approved` or `planning`. The suitability rule runs first: any failure refuses the request (409, with the failures), and warnings refuse it unless `acknowledgeWarnings` is true, in which case they are stored in `warnings`. An event may have only one `pending` request; the coordinator who sent it can withdraw it (`withdrawn`), after which it no longer counts in suitability checks. Venue Staff are notified of each request and withdrawal (best effort through notification-service). Requests are listed oldest first.
+
+Approval does not enforce the conflict rule yet. Booking creation accepts caller-supplied setup and teardown times without deriving turnaround (the customer confirmed turnaround need not be considered). The implemented review flow only transitions a pending booking to `approved` or `rejected`; cancellation is not implemented.
 
 ---
 
@@ -542,6 +547,9 @@ erDiagram
     datetime setup_starts_at
     datetime teardown_ends_at
     text requirements_snapshot
+    json event_snapshot
+    text coordinator_notes
+    json warnings
     text decision_reason
     string reviewed_by FK
     datetime reviewed_at

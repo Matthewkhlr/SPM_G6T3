@@ -111,12 +111,12 @@
 | SPM-63 | Request venue for planning event | TC-SPM63-AC01 | `e2e/spm63.spec.js` | Automated |
 | SPM-63 | Request carries event facts | TC-SPM63-AC02 | `e2e/spm63.spec.js` | Automated |
 | SPM-63 | Failed suitability blocks submit | TC-SPM63-AC03 | `e2e/spm63.spec.js` | Automated |
-| SPM-63 | Warnings acknowledged and carried | TC-SPM63-AC04 | `e2e/spm63.spec.js` | Automated |
-| SPM-63 | Notify staff and pending queue | TC-SPM63-AC05 | `e2e/spm63.spec.js` | Automated |
-| SPM-63 | Pending on calendar, not locking | TC-SPM63-AC06 | `e2e/spm63.spec.js` | Automated |
+| SPM-63 | Warnings acknowledged and carried | TC-SPM63-AC04 | `e2e/spm63.spec.js` | Automated; the Venue Staff queue screen step fails until SPM-8/SPM-57 |
+| SPM-63 | Notify staff and pending queue | TC-SPM63-AC05 | `e2e/spm63.spec.js` | Automated; the notification list step fails until an in-app notification list exists |
+| SPM-63 | Pending on calendar, not locking | TC-SPM63-AC06 | `e2e/spm63.spec.js` | Automated; fails until the SPM-108 calendar and SPM-61 search exist |
 | SPM-63 | One pending request per event | TC-SPM63-AC07 | `e2e/spm63.spec.js` | Automated |
-| SPM-63 | Coordinator can withdraw | TC-SPM63-AC08 | `e2e/spm63.spec.js` | Automated |
-| SPM-63 | Readiness in progress while pending | TC-SPM63-AC09 | `e2e/spm63.spec.js` | Automated |
+| SPM-63 | Coordinator can withdraw | TC-SPM63-AC08 | `e2e/spm63.spec.js` | Automated; the calendar step fails until SPM-108 |
+| SPM-63 | Readiness in progress while pending | TC-SPM63-AC09 | `e2e/spm63.spec.js` | Automated; fails until the SPM-5 readiness view exists |
 | SPM-64 | Shared conflict rule | TC-SPM64-AC01 | `e2e/spm64.spec.js` | Automated |
 | SPM-64 | Confirmed bookings never overlap | TC-SPM64-AC02 | `e2e/spm64.spec.js` | Automated |
 | SPM-64 | Booking conflicts with unavailability | TC-SPM64-AC03 | `e2e/spm64.spec.js` | Automated |
