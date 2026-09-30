@@ -37,9 +37,10 @@
       <ReviewQueue v-else-if="activeTab === 'Review Queue'" />
       <DraftsList v-else-if="activeTab === 'Drafts'" @edit-draft="activeTab = 'New Request'" />
       <MyEvents v-else-if="activeTab === 'My Events'" />
+      <Profile v-else-if="activeTab === 'Profile'" />
 
       <div class="not-built" v-else>
-        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasAssignedTab ? ', Assigned Events' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }}{{ hasEquipmentTab ? ', Equipment Catalogue' : '' }}{{ hasMyEventsTab ? ', My Events' : '' }} are functional.
+        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasAssignedTab ? ', Assigned Events' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }}{{ hasEquipmentTab ? ', Equipment Catalogue' : '' }}{{ hasMyEventsTab ? ', My Events' : '' }}{{ hasProfileTab ? ', Profile' : '' }} are functional.
       </div>
     </main>
   </div>
@@ -63,6 +64,7 @@ import AssignedEvents from '../features/assigned-events/AssignedEvents.vue'
 import ReviewQueue from '../features/review-queue/ReviewQueue.vue'
 import DraftsList from '../features/drafts/DraftsList.vue'
 import MyEvents from '../features/my-events/MyEvents.vue'
+import Profile from '../features/profile/Profile.vue'
 import { draftEditor } from '../store/draftEditor.js'
 
 const router = useRouter()
@@ -80,6 +82,7 @@ const hasEventsTab = computed(() => currentData.value.tabs.includes('Browse Even
 const hasNewRequestTab = computed(() => currentData.value.tabs.includes('New Request'))
 const hasEquipmentTab = computed(() => currentData.value.tabs.includes('Equipment Catalogue'))
 const hasMyEventsTab = computed(() => currentData.value.tabs.includes('My Events'))
+const hasProfileTab = computed(() => currentData.value.tabs.includes('Profile'))
 
 // Coming back from the event detail page (e.g. after discarding a draft)
 // lands on a specific tab via ?tab= instead of always resetting to Dashboard.
