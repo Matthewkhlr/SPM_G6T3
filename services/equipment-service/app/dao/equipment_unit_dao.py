@@ -1,11 +1,7 @@
-from sqlalchemy.orm import Session
-
 from app.models.equipment_unit import EquipmentUnit
+from shared.dao.base import BaseDAO
 
 
-class EquipmentUnitDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
+class EquipmentUnitDAO(BaseDAO):
     def list_for_equipment(self, equipment_id: str) -> list[EquipmentUnit]:
         return self.db.query(EquipmentUnit).filter(EquipmentUnit.equipmentId == equipment_id).all()

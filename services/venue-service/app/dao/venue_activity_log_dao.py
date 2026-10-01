@@ -1,15 +1,11 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy.orm import Session
-
 from app.models.venue_activity_log import VenueActivityLog
+from shared.dao.base import BaseDAO
 
 
-class VenueActivityLogDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
+class VenueActivityLogDAO(BaseDAO):
     def log(self, venue_id: str, action: str, caller: dict, changes: dict) -> None:
         self.db.add(
             VenueActivityLog(

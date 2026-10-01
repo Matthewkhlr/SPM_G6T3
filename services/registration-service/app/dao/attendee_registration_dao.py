@@ -1,13 +1,10 @@
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
 
 from app.models.attendee_registration import AttendeeRegistration
+from shared.dao.base import BaseDAO
 
 
-class AttendeeRegistrationDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
+class AttendeeRegistrationDAO(BaseDAO):
     def get(self, registration_id: str) -> AttendeeRegistration | None:
         return self.db.get(AttendeeRegistration, registration_id)
 
@@ -62,6 +59,3 @@ class AttendeeRegistrationDAO:
             .order_by(AttendeeRegistration.createdAt.asc())
             .all()
         )
-
-    def add(self, row: AttendeeRegistration) -> None:
-        self.db.add(row)

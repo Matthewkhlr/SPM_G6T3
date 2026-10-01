@@ -4,12 +4,10 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.event import Event
+from shared.dao.base import BaseDAO
 
 
-class EventDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
+class EventDAO(BaseDAO):
     def get_by_id(self, event_id: str) -> Event | None:
         return self.db.query(Event).filter(Event.eventId == event_id).first()
 

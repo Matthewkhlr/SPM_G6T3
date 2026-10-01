@@ -66,13 +66,14 @@ def organisation_names(authorization: str | None = None) -> dict[str, str]:
     return {row["organisationId"]: row["name"] for row in response.json()}
 
 
-def current_organiser(authorization: str | None) -> dict:
+def _current_user(authorization: str | None, role: str, forbidden_message: str) -> dict:
     """Resolve the caller's bearer token to their ConnectSphere user record.
 
     A Firebase token only carries uid/email — role and organisation live in
     user-service's database, which this service cannot read directly. So the
     token is forwarded to user-service's /users/me, which re-verifies it and
-    maps it to the local user via firebase_uid.
+    maps it to the local user via firebase_uid. ``role`` is the single role
+    this call accepts; ``forbidden_message`` is the 403 detail when it does not match.
     """
     if not authorization:
         raise unauthorized()
@@ -87,29 +88,14 @@ def current_organiser(authorization: str | None) -> dict:
     if response.status_code != 200:
         raise unauthorized("Could not verify identity")
     user = response.json()
-    if user.get("role") != "organiser":
-        raise forbidden("Only event organisers can create events")
+    if user.get("role") != role:
+        raise forbidden(forbidden_message)
     return user
 
-def current_technical_support(authorization: str | None) -> dict:
-    if not authorization:
-        raise unauthorized()
 
-    try:
-        with httpx.Client(timeout=5.0) as client:
-            response = client.get(
-                f"{settings.user_service_url}/users/me",
-                headers={"Authorization": authorization},
-            )
-    except httpx.HTTPError as exc:
-        raise unauthorized("Could not verify identity") from exc
+def current_organiser(authorization: str | None) -> dict:
+    return _current_user(authorization, "organiser", "Only event organisers can create events")
 
-    if response.status_code != 200:
-        raise unauthorized("Could not verify identity")
-
-    user = response.json()
-    if user.get("role") != "techsupport":
-        raise forbidden("Only technical support staff can view upcoming events")
 
     return user
 

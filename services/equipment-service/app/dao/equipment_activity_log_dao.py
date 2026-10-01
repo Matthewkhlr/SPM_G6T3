@@ -1,15 +1,8 @@
-from sqlalchemy.orm import Session
-
 from app.models.equipment_activity_log import EquipmentActivityLog
+from shared.dao.base import BaseDAO
 
 
-class EquipmentActivityLogDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
-    def add(self, row: EquipmentActivityLog) -> None:
-        self.db.add(row)
-
+class EquipmentActivityLogDAO(BaseDAO):
     def list_for_equipment(self, equipment_id: str) -> list[EquipmentActivityLog]:
         return (
             self.db.query(EquipmentActivityLog)

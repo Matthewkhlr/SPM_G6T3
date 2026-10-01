@@ -1,6 +1,5 @@
-from sqlalchemy.orm import Session
+from shared.dao.base import BaseDAO
 
-from app.models.event_assignment import EventAssignment
 
 
 class EventAssignmentDAO:

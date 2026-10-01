@@ -30,7 +30,8 @@ from app.schemas.equipment import (
     EquipmentUpdate,
     OutOfServiceCounts,
 )
-from shared.exceptions.http import conflict, not_found
+from shared.exceptions.http import conflict
+from shared.services.base import BaseService
 
 
 def _naive(value: datetime) -> datetime:
@@ -174,7 +175,7 @@ def _reservation_to_out(row: EquipmentReservation) -> EquipmentReservationOut:
     )
 
 
-class EquipmentService:
+class EquipmentService(BaseService):
     """Business logic for the equipment catalogue, requests, and reservations.
     _equipment_out() and _status_for() need the unit/reservation DAOs to
     derive status and serviceable quantity, so unlike the pure mapping
@@ -190,7 +191,7 @@ class EquipmentService:
         reservation_dao: EquipmentReservationDAO,
         request_dao: EquipmentRequestDAO,
     ):
-        self.db = db
+        super().__init__(db)
         self.equipment_dao = equipment_dao
         self.unit_dao = unit_dao
         self.log_dao = log_dao
@@ -198,16 +199,10 @@ class EquipmentService:
         self.request_dao = request_dao
 
     def _require_equipment(self, equipment_id: str) -> EquipmentInfo:
-        row = self.equipment_dao.get_by_id(equipment_id)
-        if not row:
-            raise not_found("Equipment not found")
-        return row
+        return self._require(self.equipment_dao.get_by_id(equipment_id), "Equipment not found")
 
     def _require_request(self, request_id: str) -> EquipmentRequest:
-        row = self.request_dao.get_by_id(request_id)
-        if not row:
-            raise not_found("Equipment request not found")
-        return row
+        return self._require(self.request_dao.get_by_id(request_id), "Equipment request not found")
 
     def _status_for(self, equipment_id: str) -> str:
         units = self.unit_dao.list_for_equipment(equipment_id)
@@ -465,9 +460,7 @@ class EquipmentService:
         return [_reservation_to_out(row) for row in rows]
 
     def release_reservation(self, reservation_id: str, caller: dict) -> EquipmentReservationOut:
-        row = self.reservation_dao.get_by_id(reservation_id)
-        if row is None:
-            raise not_found("Reservation not found")
+        row = self._require(self.reservation_dao.get_by_id(reservation_id), "Reservation not found")
         if row.status not in ("active", "reserved"):
             raise conflict(f"Reservation is already {row.status}")
         row.status = "released"

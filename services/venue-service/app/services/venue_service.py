@@ -22,7 +22,8 @@ from app.schemas.venue import (
     VenueUpdate,
 )
 from app.services import suitability
-from shared.exceptions.http import conflict, forbidden, not_found
+from shared.exceptions.http import conflict, forbidden
+from shared.services.base import BaseService
 
 # SPM-63 AC1: "Planning" is the stage after approval. Event approval (SPM-69)
 # writes `approved`; seed data also uses `planning`. Both count.
@@ -145,7 +146,7 @@ def _diff_set(old_items: list[str], new_items: list[str]) -> dict:
     return diff
 
 
-class VenueService:
+class VenueService(BaseService):
     """Business logic for the venue catalogue and its bookings. Reads and
     writes go through the injected DAOs; this class owns the transaction
     boundary (commit/refresh) since a single use case, such as creating a
@@ -160,23 +161,17 @@ class VenueService:
         booking_dao: VenueBookingDAO,
         unavailability_dao: VenueUnavailabilityDAO,
     ):
-        self.db = db
+        super().__init__(db)
         self.venue_dao = venue_dao
         self.log_dao = log_dao
         self.booking_dao = booking_dao
         self.unavailability_dao = unavailability_dao
 
     def _require_venue(self, venue_id: str) -> VenueInfo:
-        row = self.venue_dao.get_by_id(venue_id)
-        if not row:
-            raise not_found("Venue not found")
-        return row
+        return self._require(self.venue_dao.get_by_id(venue_id), "Venue not found")
 
     def _require_booking(self, booking_id: str) -> VenueBooking:
-        row = self.booking_dao.get_by_id(booking_id)
-        if not row:
-            raise not_found("Venue booking not found")
-        return row
+        return self._require(self.booking_dao.get_by_id(booking_id), "Venue booking not found")
 
     def list_venues(self, include_retired: bool = False) -> list[VenueOut]:
         """Retired venues are excluded from search by default (AC4) without
