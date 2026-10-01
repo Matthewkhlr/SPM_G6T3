@@ -10,6 +10,7 @@ from app.dao.attendee_registration_dao import AttendeeRegistrationDAO
 from app.dao.registration_window_dao import RegistrationWindowDAO
 from app.models.attendee_registration import AttendeeRegistration
 from shared.exceptions.http import conflict, forbidden, not_found, unauthorized
+from shared.services.base import BaseService
 
 logger = logging.getLogger(__name__)
 
@@ -134,14 +135,14 @@ def _notify_withdrawal(row: AttendeeRegistration, event: dict, authorization: st
         logger.warning("withdrawal notification failed for %s", row.attendeeRegistrationId)
 
 
-class RegistrationService:
+class RegistrationService(BaseService):
     def __init__(
         self,
         db: Session,
         registration_dao: AttendeeRegistrationDAO,
         window_dao: RegistrationWindowDAO,
     ):
-        self.db = db
+        super().__init__(db)
         self.registration_dao = registration_dao
         self.window_dao = window_dao
 
@@ -239,9 +240,7 @@ class RegistrationService:
         return self._withdraw_row(row, authorization)
 
     def _owned_row(self, registration_id: str, caller: dict) -> AttendeeRegistration:
-        row = self.registration_dao.get(registration_id)
-        if row is None:
-            raise not_found("Registration not found")
+        row = self._require(self.registration_dao.get(registration_id), "Registration not found")
         if not _owns(row, caller):
             raise forbidden("You do not have permission to use this registration.")
         return row

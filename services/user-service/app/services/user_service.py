@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session
 from app.dao.user_dao import UserDAO
 from app.models.user import User
 from shared.exceptions.http import not_found
+from shared.services.base import BaseService
 
 
-class UserService:
+class UserService(BaseService):
     def __init__(self, db: Session, user_dao: UserDAO):
-        self.db = db
+        super().__init__(db)
         self.user_dao = user_dao
 
     def get_by_firebase_claims(self, uid: str, email: str | None) -> User:
@@ -22,9 +23,7 @@ class UserService:
             return user
         if not email:
             raise not_found("User not found")
-        user = self.user_dao.get_by_email(email)
-        if not user:
-            raise not_found("User not found")
+        user = self._require(self.user_dao.get_by_email(email), "User not found")
         user.firebaseUid = uid
         self.db.commit()
         return user

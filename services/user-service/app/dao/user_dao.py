@@ -1,12 +1,8 @@
-from sqlalchemy.orm import Session
-
 from app.models.user import User
+from shared.dao.base import BaseDAO
 
 
-class UserDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
+class UserDAO(BaseDAO):
     def get_by_firebase_uid(self, uid: str) -> User | None:
         return self.db.query(User).filter(User.firebaseUid == uid).first()
 

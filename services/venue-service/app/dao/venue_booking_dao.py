@@ -1,14 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy.orm import Session
-
 from app.models.venue_booking import VenueBooking
+from shared.dao.base import BaseDAO
 
 
-class VenueBookingDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
+class VenueBookingDAO(BaseDAO):
     def get_by_id(self, booking_id: str) -> VenueBooking | None:
         return self.db.query(VenueBooking).filter(VenueBooking.bookingId == booking_id).first()
 
@@ -57,6 +53,3 @@ class VenueBookingDAO:
         if venue_id:
             query = query.filter(VenueBooking.venueId == venue_id)
         return query.order_by(VenueBooking.createdAt, VenueBooking.bookingId).all()
-
-    def add(self, row: VenueBooking) -> None:
-        self.db.add(row)

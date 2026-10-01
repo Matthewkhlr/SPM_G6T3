@@ -1,11 +1,5 @@
-from sqlalchemy.orm import Session
-
-from app.models.event_assignment import EventAssignment
+from shared.dao.base import BaseDAO
 
 
-class EventAssignmentDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
-    def add(self, row: EventAssignment) -> None:
-        self.db.add(row)
+class EventAssignmentDAO(BaseDAO):
+    """Inserts go through BaseDAO.add. This DAO has no queries of its own."""
