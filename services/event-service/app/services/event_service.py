@@ -36,6 +36,7 @@ from app.schemas.event import (
     EventOut,
     EventUpdate,
     EventUpdateOut,
+    RegistrationAccessOut,
     SignificantFieldsOut,
 )
 from shared.exceptions.http import conflict, forbidden, not_found

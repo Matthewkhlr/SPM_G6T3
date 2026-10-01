@@ -21,6 +21,7 @@ from app.schemas.event import (
     EventOut,
     EventUpdate,
     EventUpdateOut,
+    RegistrationAccessOut,
     SignificantFieldsOut,
 )
 from app.services.event_service import EventService
@@ -220,6 +221,25 @@ def get_event(
     service: EventService = Depends(get_event_service),
 ):
     return service.get_event(event_id, authorization)
+
+
+@router.get(
+    "/{event_id}/registration-access",
+    response_model=RegistrationAccessOut,
+    summary="Registration list access",
+    description=(
+        "Organiser of this event, or its assigned coordinator. Returns capacity and the "
+        "registration period. Refused for every other role. Not offered when registration is disabled."
+    ),
+    responses=error_responses(403, 404),
+)
+def registration_access(
+    event_id: str,
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url)
+    return service.registration_access(event_id, caller)
 
 
 @router.patch(
