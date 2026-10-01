@@ -1,5 +1,10 @@
 <template>
   <div class="review-queue">
+    <!-- While a dialog floats above (assign or reject), the queue and the
+         details popup behind it are inert — otherwise their own "Assign" /
+         "Reject" buttons stay in the accessibility tree alongside the
+         dialog's, so a role-based lookup for either matches two elements. -->
+    <div :inert="dialogOpen || null" :aria-hidden="dialogOpen ? 'true' : null">
     <div v-if="!loading && !error" class="queue-filters">
       <button
         class="filter-btn"
@@ -122,6 +127,7 @@
         </div>
       </div>
     </div>
+    </div>
 
     <!-- SPM-66: assign from the queue (stacks above the details popup) -->
     <AssignCoordinatorDialog
@@ -164,6 +170,7 @@ const selected = ref(null)
 const rejecting = ref(null)
 const rejectReason = ref('')
 const assigning = ref(null)
+const dialogOpen = computed(() => Boolean(assigning.value || rejecting.value))
 
 // 'all' | 'unassigned' | 'mine'
 const filter = ref('all')

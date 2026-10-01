@@ -17,6 +17,9 @@ test.describe('SPM-66 Assign a coordinator to a submitted event', () => {
     await page.getByTestId('assign-coordinator').click()
     await page.getByTestId('assign-candidate-u6').click()
     await page.getByRole('button', { name: /assign/i }).click()
+    // The dialog only closes once the assignment POST has resolved - wait for
+    // that instead of racing an API call against the still in-flight request.
+    await expect(page.getByTestId('assign-dialog')).toHaveCount(0)
     const stored = await eventApi('GET', `/${otherEvent.eventId}`, 'EC-01')
     expect(stored.body.coordinatorId || stored.body.coordinator?.userId).toBe('u6')
   })
