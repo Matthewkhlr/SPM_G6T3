@@ -15,7 +15,7 @@ coverage html
 
 `coverage report` must total 100% statement coverage. `coverage html` writes `htmlcov/index.html`.
 
-Statement coverage only shows that a line ran. Boundary cases pin the comparison itself: the open and close instants of a registration window are inclusive, one place below capacity is accepted and the next is refused, a registration window that opens and closes at the same instant is refused, touching equipment reservations do not overlap, and a catalogue cut down to the reserved quantity is allowed. Each assertion states that result directly, so changing `<` to `<=` or `>` to `>=` fails the suite.
+Statement coverage only shows that a line ran. Boundary cases pin the comparison itself: the open and close instants of a registration window are inclusive, one place below capacity is accepted and the next is refused, a registration window that opens and closes at the same instant is refused, withdrawal is open one microsecond before the event starts and refused at the start instant, touching equipment reservations do not overlap, and a catalogue cut down to the reserved quantity is allowed. Each assertion states that result directly, so changing `<` to `<=` or `>` to `>=` fails the suite.
 
 From the repository root, `npm run test:unit` runs that suite for all six services. `.github/workflows/tests.yml` runs the same command on pushes to `dev` and `main`, and on pull requests into either branch. The job id is `test`, which is the status check to require on both branch rules. It only runs tests for functions that exist today.
 
@@ -27,8 +27,6 @@ These files live in `services/<service>/tests/upcoming/` and are not part of `np
 |---|---|
 | `event-service/tests/upcoming/test_event_lifecycle.py` | confirm, complete, cancel, change request, reschedule |
 | `venue-service/tests/upcoming/test_venue_conflicts.py` | overlapping approval, unavailability, search |
-| `registration-service/tests/upcoming/test_registration_withdrawal.py` | withdraw, summary, attendee list |
-| `notification-service/tests/upcoming/test_notification_records.py` | record a notification |
 
 Run one of them from the service directory with `python -m unittest discover -s tests/upcoming -p "test_*.py" -t .`
 

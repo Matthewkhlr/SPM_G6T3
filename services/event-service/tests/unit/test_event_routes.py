@@ -75,6 +75,36 @@ class TestEventRoutes(ServiceTestCase):
             )
         self.assertEqual(assigned.status_code, 201)
 
+    def test_registration_access_route_returns_capacity_for_the_organiser(self):
+        self.caller.stop()
+        self.caller = patch("app.routers.event.resolve_caller", return_value=ORGANISER)
+        self.caller.start()
+        headers = {"Authorization": "Bearer token"}
+        created = self.client.post(
+            "/events",
+            headers=headers,
+            json={
+                "eventName": "Summit",
+                "proposedStartAt": "2026-10-06T09:00:00",
+                "proposedEndAt": "2026-10-06T17:00:00",
+                "expectedAttendance": 10,
+                "registrationEnabled": True,
+                "registrationOpensAt": "2026-09-01T00:00:00",
+                "registrationClosesAt": "2026-10-01T00:00:00",
+                "capacity": 50,
+            },
+        )
+        access = self.client.get(
+            f"/events/{created.json()['eventId']}/registration-access",
+            headers=headers,
+        )
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(access.status_code, 200)
+        self.assertEqual(access.json()["capacity"], 50)
+        self.assertEqual(access.json()["registrationOpensAt"], "2026-09-01T00:00:00")
+        self.assertNotIn("organiserId", access.json())
+
     def test_http_draft_update_submit_and_discard(self):
         headers = {"Authorization": "Bearer token"}
         created = self.client.post("/events/drafts", headers=headers, json={"eventName": "Draft summit"})

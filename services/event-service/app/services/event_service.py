@@ -121,6 +121,17 @@ def _differs(old, new) -> bool:
     return (old if old != "" else None) != (new if new != "" else None)
 
 
+def _is_registration_viewer(event: Event, caller: dict) -> bool:
+    user_id = caller.get("userId")
+    if not user_id:
+        return False
+    if caller.get("role") == "organiser" and user_id == event.organiserId:
+        return True
+    if caller.get("role") == "coordinator" and event.coordinatorId and user_id == event.coordinatorId:
+        return True
+    return False
+
+
 def _date_near(proposed_start: datetime | None) -> bool:
     if proposed_start is None:
         return False
@@ -267,6 +278,25 @@ class EventService:
 
     def get_event(self, event_id: str, authorization: str | None = None) -> EventOut:
         return _to_out(self._require_event(event_id), authorization)
+
+    def registration_access(self, event_id: str, caller: dict) -> RegistrationAccessOut:
+        """Facts the registration list is allowed to show.
+
+        Only the event's organiser and its assigned coordinator may read this.
+        A disabled registration window is refused so no list is offered.
+        """
+        event = self._require_event(event_id)
+        if not _is_registration_viewer(event, caller):
+            raise forbidden("You do not have permission to view these registrations.")
+        if not event.registrationEnabled:
+            raise not_found("Registration has not been enabled for this event.")
+        return RegistrationAccessOut(
+            eventId=event.eventId,
+            registrationEnabled=True,
+            registrationOpensAt=event.registrationOpensAt,
+            registrationClosesAt=event.registrationClosesAt,
+            capacity=event.capacity,
+        )
 
     def list_submission_queue(
         self,

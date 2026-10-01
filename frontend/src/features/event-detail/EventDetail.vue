@@ -220,6 +220,11 @@ const canEdit = computed(
 const showEquipment = computed(
   () => session.role === 'coordinator' || session.role === 'techsupport',
 )
+const showRegistrations = computed(
+  () =>
+    !!event.value?.registrationEnabled &&
+    (session.role === 'organiser' || session.role === 'coordinator'),
+)
 const backTarget = computed(() => {
   if (session.role === 'coordinator') return { label: 'Assigned Events', tab: 'Assigned Events' }
   if (session.role === 'organiser') return { label: 'My Events', tab: 'My Events' }
