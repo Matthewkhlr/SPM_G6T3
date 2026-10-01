@@ -1,14 +1,8 @@
+from app.models.event_assignment import EventAssignment
 from shared.dao.base import BaseDAO
 
 
-
-class EventAssignmentDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
-    def add(self, row: EventAssignment) -> None:
-        self.db.add(row)
-
+class EventAssignmentDAO(BaseDAO):
     def list_by_event(self, event_id: str) -> list[EventAssignment]:
         return (
             self.db.query(EventAssignment)

@@ -97,6 +97,12 @@ def current_organiser(authorization: str | None) -> dict:
     return _current_user(authorization, "organiser", "Only event organisers can create events")
 
 
+def current_technical_support(authorization: str | None) -> dict:
+    return _current_user(
+        authorization, "techsupport", "Only technical support staff can view upcoming events"
+    )
+
+
     return user
 
 # SPM-71: a significant edit must never quietly invalidate an arrangement, so
