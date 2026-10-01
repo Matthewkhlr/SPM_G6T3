@@ -25,6 +25,23 @@ class EquipmentReservationDAO(BaseDAO):
             .all()
         )
 
+    def list_for_event(self, event_id: str) -> list[EquipmentReservation]:
+        return (
+            self.db.query(EquipmentReservation)
+            .filter(EquipmentReservation.eventId == event_id)
+            .order_by(EquipmentReservation.startsAt, EquipmentReservation.reservationId)
+            .all()
+        )
+
+    def list_active_for_event(self, event_id: str) -> list[EquipmentReservation]:
+        return (
+            self.db.query(EquipmentReservation)
+            .filter(EquipmentReservation.eventId == event_id)
+            .filter(EquipmentReservation.status.in_(["active", "reserved"]))
+            .order_by(EquipmentReservation.startsAt, EquipmentReservation.reservationId)
+            .all()
+        )
+
     def get_by_request_id(self, request_id: str) -> EquipmentReservation | None:
         return (
             self.db.query(EquipmentReservation)

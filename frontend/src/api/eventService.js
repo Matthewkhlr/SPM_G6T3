@@ -44,3 +44,28 @@ export const getMyEvents = () => axiosClient.get("/events/mine");
 export const discardEvent = (eventId) => axiosClient.delete(`/events/${eventId}`);
 
 export const getActivityLog = (eventId) => axiosClient.get(`/events/${eventId}/activity-log`);
+
+// SPM-71: the assigned coordinator edits an event. Send only the changed fields.
+// A significant change on an event with confirmed arrangements comes back as a
+// 409 whose detail names them (detail.requiresConfirmation); resend with
+// confirmSignificantChange: true once the coordinator has confirmed.
+export const updateEvent = (eventId, changes, confirmSignificantChange = false) =>
+  axiosClient.patch(`/events/${eventId}`, { ...changes, confirmSignificantChange });
+
+// { fields: [...significant], quietFields: [...] }
+export const getSignificantFields = () => axiosClient.get("/events/significant-fields");
+
+// SPM-66: coordinators who can be assigned, each with { userId, name, email,
+// activeEventCount } — the count is information only, there is no limit.
+export const getCoordinatorCandidates = () => axiosClient.get("/events/coordinators");
+
+// Assigning a submitted request moves it to "under review".
+export const assignCoordinator = (eventId, coordinatorId) =>
+  axiosClient.post(`/events/${eventId}/assign-coordinator`, { coordinatorId });
+
+// { coordinatorId, name, email } — all null until someone is assigned.
+// Organisers (their own organisation's events) and staff only.
+export const getEventCoordinator = (eventId) => axiosClient.get(`/events/${eventId}/coordinator`);
+
+// Coordinator only — internal notes are never on the shared event read.
+export const getInternalNotes = (eventId) => axiosClient.get(`/events/${eventId}/internal-notes`);

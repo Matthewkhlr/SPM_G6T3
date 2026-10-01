@@ -72,11 +72,13 @@ import { session } from '../../store/session.js'
 
 const STATUS_ORDER = [
   'submitted',
+  'under review',
   'approved',
   'rejected',
   'planning',
   'preparing',
   'prepared',
+  'reconsidering',
   'confirmed',
   'cancelled',
   'completed',

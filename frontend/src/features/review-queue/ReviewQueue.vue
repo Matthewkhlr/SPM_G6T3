@@ -1,5 +1,10 @@
 <template>
   <div class="review-queue">
+    <!-- While a dialog floats above (assign or reject), the queue and the
+         details popup behind it are inert — otherwise their own "Assign" /
+         "Reject" buttons stay in the accessibility tree alongside the
+         dialog's, so a role-based lookup for either matches two elements. -->
+    <div :inert="dialogOpen || null" :aria-hidden="dialogOpen ? 'true' : null">
     <div v-if="!loading && !error" class="queue-filters">
       <button
         class="filter-btn"
@@ -105,6 +110,14 @@
         <p v-if="rowErrors[selected.eventId]" class="row-error">{{ rowErrors[selected.eventId] }}</p>
 
         <div class="details-actions">
+          <button
+            class="btn btn-outline"
+            :disabled="isBusy(selected.eventId)"
+            data-testid="queue-assign-coordinator"
+            @click="assigning = selected"
+          >
+            {{ selected.coordinatorId ? 'Change coordinator' : 'Assign coordinator' }}
+          </button>
           <button class="btn btn-outline" :disabled="isBusy(selected.eventId)" @click="openReject(selected)">
             Reject
           </button>
@@ -114,6 +127,15 @@
         </div>
       </div>
     </div>
+    </div>
+
+    <!-- SPM-66: assign from the queue (stacks above the details popup) -->
+    <AssignCoordinatorDialog
+      v-if="assigning"
+      :event="assigning"
+      @close="assigning = null"
+      @assigned="onAssigned"
+    />
 
     <!-- Reject reason modal (stacks above the details popup when opened from it) -->
     <div v-if="rejecting" class="modal-backdrop" @click.self="rejecting = null">
@@ -136,6 +158,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { getSubmissionQueue, approveEvent, rejectEvent } from '../../api/eventService.js'
 import { getMe } from '../../api/userService.js'
+import AssignCoordinatorDialog from '../event-detail/AssignCoordinatorDialog.vue'
 
 const events = ref([])
 const loading = ref(true)
@@ -146,6 +169,8 @@ const rowErrors = reactive({})
 const selected = ref(null)
 const rejecting = ref(null)
 const rejectReason = ref('')
+const assigning = ref(null)
+const dialogOpen = computed(() => Boolean(assigning.value || rejecting.value))
 
 // 'all' | 'unassigned' | 'mine'
 const filter = ref('all')
@@ -299,6 +324,16 @@ async function approve(event) {
     rowErrors[event.eventId] = err.response?.data?.detail || 'Could not approve this event.'
   } finally {
     busyIds.delete(event.eventId)
+  }
+}
+
+// Assigning moves a submitted request to "under review" and sets its
+// coordinator, so reload the queue and keep the open popup in step.
+async function onAssigned(assignment) {
+  assigning.value = null
+  await loadEvents()
+  if (selected.value?.eventId === assignment.eventId) {
+    selected.value = events.value.find((event) => event.eventId === assignment.eventId) || null
   }
 }
 

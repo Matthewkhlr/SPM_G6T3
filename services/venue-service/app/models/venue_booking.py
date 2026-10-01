@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -26,6 +26,12 @@ class VenueBooking(Base):
     eventSnapshot: Mapped[dict | None] = mapped_column("event_snapshot", JSON, nullable=True)
     coordinatorNotes: Mapped[str | None] = mapped_column("coordinator_notes", Text, nullable=True, default="")
     warnings: Mapped[list | None] = mapped_column(JSON, nullable=True, default=list)
+    # SPM-71 AC4: set when a significant event change may invalidate this
+    # booking. The status is left alone so the booking keeps holding the venue.
+    needsReverification: Mapped[bool] = mapped_column(
+        "needs_reverification", Boolean, default=False, server_default=false()
+    )
+    reverificationNote: Mapped[str | None] = mapped_column("reverification_note", Text, nullable=True)
     decisionReason: Mapped[str | None] = mapped_column("decision_reason", Text, nullable=True)
     reviewedBy: Mapped[str | None] = mapped_column("reviewed_by", String(64), nullable=True)
     reviewedAt: Mapped[datetime | None] = mapped_column("reviewed_at", DateTime, nullable=True)

@@ -1,84 +1,156 @@
 <template>
   <div class="event-page">
-    <button type="button" class="btn btn-ghost back" @click="goBack">
-      ← {{ backTarget.label }}
-    </button>
+    <!-- While a dialog is open the page behind it is inert and hidden from
+         assistive tech, so focus and screen readers stay in the dialog. -->
+    <div :inert="dialogOpen || null" :aria-hidden="dialogOpen ? 'true' : null">
+      <button type="button" class="btn btn-ghost back" @click="goBack">
+        ← {{ backTarget.label }}
+      </button>
 
-    <p v-if="loading" class="empty-note">Loading event…</p>
-    <p v-else-if="error" class="form-error">{{ error }}</p>
+      <p v-if="loading" class="empty-note">Loading event…</p>
+      <p v-else-if="error" class="form-error">{{ error }}</p>
 
-    <template v-else>
-      <header class="page-head">
-        <div>
-          <p class="eyebrow">Event</p>
-          <h1>{{ event.eventName }}</h1>
-          <span class="status-pill">{{ event.status }}</span>
+      <template v-else>
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Event</p>
+            <h1>{{ event.eventName }}</h1>
+            <span
+              class="status-pill"
+              :class="{ attention: event.status === 'reconsidering' }"
+              :data-testid="session.role === 'organiser' ? 'organiser-event-status' : 'event-status'"
+            >
+              {{ eventStatusLabel(event.status) }}
+            </span>
+          </div>
+          <div class="actions">
+            <button
+              v-if="canAssign"
+              class="btn btn-outline"
+              data-testid="assign-coordinator"
+              @click="openAssign"
+            >
+              {{ event.coordinatorId ? 'Change coordinator' : 'Assign coordinator' }}
+            </button>
+            <button
+              v-if="canEdit"
+              class="btn btn-outline"
+              data-testid="event-edit"
+              @click="openEdit"
+            >
+              Edit event
+            </button>
+            <button
+              v-if="session.role === 'coordinator' && event.status !== 'draft'"
+              class="btn btn-outline"
+              data-testid="event-choose-venue"
+              @click="router.push(`/app/events/${event.eventId}/venues`)"
+            >
+              Choose a venue
+            </button>
+            <button
+              v-if="event.status === 'draft'"
+              class="btn btn-outline"
+              data-testid="event-discard"
+              @click="openDiscardConfirm"
+            >
+              Discard
+            </button>
+          </div>
+        </header>
+
+        <p v-if="event.status === 'reconsidering'" class="notice attention" data-testid="event-reconsidering">
+          Some planning details changed after this event was confirmed, so its venue and equipment
+          arrangements are being re-checked. It will show as confirmed again once they are re-verified.
+        </p>
+        <p v-if="savedNote" class="notice" data-testid="event-edit-saved">{{ savedNote }}</p>
+
+        <div class="layout" :class="{ split: showEquipment }">
+          <section class="panel">
+            <h2>Details</h2>
+            <dl class="facts">
+              <div>
+                <dt>When</dt>
+                <dd>{{ formatRange(event.proposedStartAt, event.proposedEndAt) }}</dd>
+              </div>
+              <div>
+                <dt>Expected attendance</dt>
+                <dd>{{ event.expectedAttendance }}</dd>
+              </div>
+              <div
+                v-if="coordinator"
+                class="wide"
+                :data-testid="session.role === 'organiser' ? 'organiser-coordinator' : 'event-coordinator'"
+              >
+                <dt>Coordinator</dt>
+                <dd v-if="coordinator.coordinatorId">
+                  {{ coordinator.name || coordinator.coordinatorId }}
+                  <template v-if="coordinator.email">
+                    · <a :href="`mailto:${coordinator.email}`">{{ coordinator.email }}</a>
+                  </template>
+                </dd>
+                <dd v-else class="muted">Not assigned yet</dd>
+              </div>
+              <div v-if="event.layoutPreference">
+                <dt>Layout</dt>
+                <dd>{{ event.layoutPreference }}</dd>
+              </div>
+              <div v-if="event.category">
+                <dt>Category</dt>
+                <dd>{{ event.category }}</dd>
+              </div>
+              <div v-if="event.organiserContact" class="wide">
+                <dt>Organiser contact</dt>
+                <dd>{{ event.organiserContact }}</dd>
+              </div>
+              <div v-if="event.purpose" class="wide">
+                <dt>Purpose</dt>
+                <dd>{{ event.purpose }}</dd>
+              </div>
+              <div v-if="event.description" class="wide">
+                <dt>Description</dt>
+                <dd>{{ event.description }}</dd>
+              </div>
+              <div v-if="event.venueRequirements" class="wide">
+                <dt>Venue requirements</dt>
+                <dd>{{ event.venueRequirements }}</dd>
+              </div>
+              <div v-if="event.accessibilityNeeds" class="wide">
+                <dt>Accessibility needs</dt>
+                <dd>{{ event.accessibilityNeeds }}</dd>
+              </div>
+              <div v-if="event.equipmentRequirements" class="wide">
+                <dt>Equipment notes</dt>
+                <dd>{{ event.equipmentRequirements }}</dd>
+              </div>
+              <div v-if="internalNotes" class="wide">
+                <dt>Internal notes (staff only)</dt>
+                <dd>{{ internalNotes }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <EventEquipment v-if="showEquipment" :event="event" />
         </div>
-        <div class="actions">
-          <button
-            v-if="showRegistrations"
-            type="button"
-            class="btn btn-outline"
-            data-testid="event-registrations"
-            @click="router.push(`/app/events/${event.eventId}/registrations`)"
-          >
-            Registrations
-          </button>
-          <button
-            v-if="session.role === 'coordinator' && event.status !== 'draft'"
-            class="btn btn-outline"
-            data-testid="event-choose-venue"
-            @click="router.push(`/app/events/${event.eventId}/venues`)"
-          >
-            Choose a venue
-          </button>
-          <button
-            v-if="event.status === 'draft'"
-            class="btn btn-outline"
-            data-testid="event-discard"
-            @click="openDiscardConfirm"
-          >
-            Discard
-          </button>
-        </div>
-      </header>
 
-      <div class="layout" :class="{ split: showEquipment }">
-        <section class="panel">
-          <h2>Details</h2>
-          <dl class="facts">
-            <div>
-              <dt>When</dt>
-              <dd>{{ formatRange(event.proposedStartAt, event.proposedEndAt) }}</dd>
-            </div>
-            <div>
-              <dt>Expected attendance</dt>
-              <dd>{{ event.expectedAttendance }}</dd>
-            </div>
-            <div v-if="event.purpose" class="wide">
-              <dt>Purpose</dt>
-              <dd>{{ event.purpose }}</dd>
-            </div>
-            <div v-if="event.description" class="wide">
-              <dt>Description</dt>
-              <dd>{{ event.description }}</dd>
-            </div>
-            <div v-if="event.venueRequirements" class="wide">
-              <dt>Venue requirements</dt>
-              <dd>{{ event.venueRequirements }}</dd>
-            </div>
-            <div v-if="event.equipmentRequirements" class="wide">
-              <dt>Equipment notes</dt>
-              <dd>{{ event.equipmentRequirements }}</dd>
-            </div>
-          </dl>
-        </section>
+        <p v-if="discardError" class="form-error">{{ discardError }}</p>
+      </template>
+    </div>
 
-        <EventEquipment v-if="showEquipment" :event="event" />
-      </div>
+    <AssignCoordinatorDialog
+      v-if="assigning"
+      :event="event"
+      @close="assigning = false"
+      @assigned="onAssigned"
+    />
 
-      <p v-if="discardError" class="form-error">{{ discardError }}</p>
-    </template>
+    <EventEditForm
+      v-if="editing"
+      :event="event"
+      :internal-notes="internalNotes"
+      @close="editing = false"
+      @saved="onSaved"
+    />
 
     <!-- Discard confirmation -->
     <div v-if="confirming" class="modal-backdrop" @click.self="confirming = false">
@@ -102,8 +174,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getEvent, discardEvent } from '../../api/eventService.js'
+import { getEvent, discardEvent, getEventCoordinator, getInternalNotes } from '../../api/eventService.js'
+import { LOCKED_EVENT_STATUSES, eventStatusLabel } from '../../config/eventStatus.js'
 import { session } from '../../store/session.js'
+import AssignCoordinatorDialog from './AssignCoordinatorDialog.vue'
+import EventEditForm from './EventEditForm.vue'
 import EventEquipment from './EventEquipment.vue'
 
 const route = useRoute()
@@ -116,6 +191,31 @@ const error = ref('')
 const confirming = ref(false)
 const discarding = ref(false)
 const discardError = ref('')
+
+const internalNotes = ref('')
+const editing = ref(false)
+const savedNote = ref('')
+
+const coordinator = ref(null)
+const assigning = ref(false)
+const dialogOpen = computed(() => assigning.value || editing.value || confirming.value)
+
+// SPM-66: any coordinator can assign or reassign, but not a finished event or a draft.
+const canAssign = computed(
+  () => session.role === 'coordinator' && !LOCKED_EVENT_STATUSES.includes(event.value?.status),
+)
+// Who may see the coordinator's contact; the server enforces the organisation check.
+const CONTACT_ROLES = ['organiser', 'coordinator', 'venue', 'techsupport']
+
+// SPM-71: only the assigned coordinator edits, and never a finished event.
+// The server enforces both; this only decides whether to offer the button.
+const canEdit = computed(
+  () =>
+    session.role === 'coordinator' &&
+    !!event.value?.coordinatorId &&
+    event.value.coordinatorId === session.userId &&
+    !LOCKED_EVENT_STATUSES.includes(event.value.status),
+)
 
 const showEquipment = computed(
   () => session.role === 'coordinator' || session.role === 'techsupport',
@@ -153,6 +253,62 @@ async function load() {
   } finally {
     loading.value = false
   }
+  if (event.value && session.role === 'coordinator') loadInternalNotes()
+  if (event.value && CONTACT_ROLES.includes(session.role)) loadCoordinator()
+}
+
+// SPM-66 AC5: the organiser's one person to deal with. Best effort, like the notes.
+async function loadCoordinator() {
+  try {
+    const { data } = await getEventCoordinator(event.value.eventId)
+    coordinator.value = data
+  } catch {
+    coordinator.value = null
+  }
+}
+
+function openAssign() {
+  savedNote.value = ''
+  assigning.value = true
+}
+
+async function onAssigned(assignment) {
+  assigning.value = false
+  // Assigning can change the status (Submitted → Under Review), so re-read the event.
+  try {
+    const { data } = await getEvent(assignment.eventId)
+    event.value = data
+  } catch {
+    event.value = { ...event.value, coordinatorId: assignment.coordinatorId }
+  }
+  await loadCoordinator()
+  savedNote.value = `Coordinator assigned: ${coordinator.value?.name || assignment.coordinatorId}.`
+}
+
+// Internal notes are coordinator-only and come from their own endpoint; if they
+// can't be loaded the rest of the page still works.
+async function loadInternalNotes() {
+  try {
+    const { data } = await getInternalNotes(event.value.eventId)
+    internalNotes.value = data.internalNotes
+  } catch {
+    internalNotes.value = ''
+  }
+}
+
+function openEdit() {
+  savedNote.value = ''
+  editing.value = true
+}
+
+function onSaved(updated) {
+  event.value = updated
+  internalNotes.value = updated.internalNotes || ''
+  editing.value = false
+  const flagged = updated.flaggedArrangements || []
+  savedNote.value = flagged.length
+    ? `Changes saved. Marked for re-verification: ${flagged.map((item) => item.summary).join('; ')}.`
+    : 'Changes saved.'
 }
 
 function openDiscardConfirm() {
@@ -227,6 +383,27 @@ onMounted(load)
   border-radius: 999px;
   padding: 3px 10px;
 }
+.status-pill.attention {
+  color: #FFD9A8;
+  background: rgba(255, 170, 80, .14);
+  border-color: rgba(255, 196, 120, .4);
+}
+
+.notice {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--halo);
+  background: rgba(124, 77, 255, .1);
+  border: 1px solid rgba(167, 139, 250, .25);
+  border-radius: 9px;
+  padding: 11px 14px;
+  margin: 0 0 16px;
+}
+.notice.attention {
+  color: #FFD9A8;
+  background: rgba(255, 170, 80, .08);
+  border-color: rgba(255, 196, 120, .3);
+}
 
 .layout { display: grid; gap: 18px; }
 .layout.split { grid-template-columns: minmax(280px, 0.9fr) minmax(340px, 1.1fr); align-items: start; }
@@ -251,6 +428,8 @@ onMounted(load)
   margin-bottom: 4px;
 }
 .facts dd { margin: 0; font-size: 14px; color: var(--body); line-height: 1.55; }
+.facts dd.muted { color: var(--muted); }
+.facts dd a { color: var(--halo); }
 
 .modal-backdrop {
   position: fixed; inset: 0;

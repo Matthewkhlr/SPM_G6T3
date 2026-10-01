@@ -1,5 +1,8 @@
 from datetime import datetime
 
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 from app.models.event import Event
 from shared.dao.base import BaseDAO
 
@@ -68,3 +71,16 @@ class EventDAO(BaseDAO):
             .order_by(Event.updatedAt.desc())
             .all()
         )
+
+    def count_by_coordinator_excluding_statuses(self, statuses: list[str]) -> dict[str, int]:
+        """coordinatorId -> how many of their assigned events are not in `statuses`."""
+        rows = (
+            self.db.query(Event.coordinatorId, func.count(Event.eventId))
+            .filter(Event.coordinatorId.isnot(None), Event.status.notin_(statuses))
+            .group_by(Event.coordinatorId)
+            .all()
+        )
+        return {coordinator_id: count for coordinator_id, count in rows}
+
+    def add(self, row: Event) -> None:
+        self.db.add(row)

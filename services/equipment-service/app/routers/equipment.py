@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -23,6 +23,7 @@ from app.schemas.equipment import (
     EquipmentReservationOut,
     EquipmentUpdate,
     ReservationRelease,
+    ReservationReverificationRequest,
 )
 from app.services.equipment_service import EquipmentService
 from shared.auth.deps import forwarded_bearer
@@ -125,6 +126,40 @@ def release_reservation(
 ):
     caller = _technical_support(authorization)
     return service.release_reservation(reservation_id, caller)
+
+
+@router.get(
+    "/reservations",
+    response_model=list[EquipmentReservationOut],
+    summary="List an event's reservations",
+    description="Technical support and coordinators. Every reservation for the event, at any status.",
+    responses=error_responses(403, 503),
+)
+def list_event_reservations(
+    eventId: str = Query(..., min_length=1, description="Event id, e.g. `e1`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EquipmentService = Depends(get_equipment_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"techsupport", "coordinator"})
+    return service.list_event_reservations(eventId)
+
+
+@router.post(
+    "/reservations/reverification",
+    response_model=list[EquipmentReservationOut],
+    summary="Mark an event's reservations for re-verification",
+    description="Coordinators only (SPM-71 AC4). Called by event-service when a significant event change "
+    "is saved. Each `active` or `reserved` reservation for the event gets `needsReverification` and the "
+    "reason; its status is unchanged, so the stock stays held. Returns the reservations marked.",
+    responses=error_responses(403, 503),
+)
+def flag_reservations_for_reverification(
+    body: ReservationReverificationRequest,
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EquipmentService = Depends(get_equipment_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.flag_for_reverification(body.eventId, body.reason)
 
 
 @router.get(

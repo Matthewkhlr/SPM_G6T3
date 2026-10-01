@@ -14,7 +14,7 @@
       <div class="event-name">{{ event.eventName || 'Untitled event' }}</div>
       <div class="event-meta">
         {{ formatRange(event.proposedStartAt, event.proposedEndAt) }} ·
-        <span class="status-pill">{{ event.status }}</span>
+        <span class="status-pill">{{ eventStatusLabel(event.status) }}</span>
       </div>
     </div>
   </div>
@@ -24,6 +24,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getMyEvents } from '../../api/eventService.js'
+import { eventStatusLabel } from '../../config/eventStatus.js'
 
 const router = useRouter()
 

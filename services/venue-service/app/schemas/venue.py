@@ -152,6 +152,17 @@ class VenueBookingDecision(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"reason": "Hall A is free that day."}})
 
 
+class BookingReverificationRequest(BaseModel):
+    """SPM-71 AC4: event-service asks for an event's confirmed bookings to be re-verified."""
+
+    eventId: str = Field(min_length=1)
+    reason: str = Field(default="", description="What changed on the event.")
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"eventId": "e1", "reason": "Expected attendance: 120 -> 200"}}
+    )
+
+
 class VenueBookingOut(BaseModel):
     bookingId: str
     venueId: str
@@ -172,6 +183,11 @@ class VenueBookingOut(BaseModel):
     )
     coordinatorNotes: str = ""
     warnings: list[str] = Field(default=[], description="Suitability warnings the coordinator acknowledged.")
+    venueName: str | None = None
+    needsReverification: bool = Field(
+        default=False, description="A significant event change may have invalidated this booking (SPM-71)."
+    )
+    reverificationNote: str | None = Field(default=None, description="What changed on the event.")
 
     model_config = ConfigDict(
         json_schema_extra={

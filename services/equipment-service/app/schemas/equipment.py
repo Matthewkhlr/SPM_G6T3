@@ -61,6 +61,13 @@ class ReservationRelease(BaseModel):
     reason: str = ""
 
 
+class ReservationReverificationRequest(BaseModel):
+    """SPM-71 AC4: event-service asks for an event's held reservations to be re-verified."""
+
+    eventId: str = Field(min_length=1)
+    reason: str = Field(default="", description="What changed on the event.")
+
+
 class EquipmentQuantityReserve(BaseModel):
     eventId: str
     equipmentId: str
@@ -193,6 +200,11 @@ class EquipmentReservationOut(BaseModel):
     startsAt: datetime
     endsAt: datetime
     status: str
+    equipmentName: str | None = None
+    needsReverification: bool = Field(
+        default=False, description="A significant event change may have invalidated this reservation (SPM-71)."
+    )
+    reverificationNote: str | None = Field(default=None, description="What changed on the event.")
 
     model_config = ConfigDict(
         json_schema_extra={

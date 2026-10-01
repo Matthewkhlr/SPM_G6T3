@@ -64,11 +64,15 @@ class TestEventRoutes(ServiceTestCase):
         )
         self.assertEqual(rejected.status_code, 200)
 
-        assigned = self.client.post(
-            f"/events/{event_id}/assign-coordinator",
-            headers=headers,
-            json={"coordinatorId": "coord-1"},
-        )
+        directory = [{"userId": "coord-1", "userName": "Ben", "email": "ben@example.com", "role": "coordinator"}]
+        with patch("app.services.event_service.list_users", return_value=directory), patch(
+            "app.services.event_service.send_notification", return_value=True
+        ):
+            assigned = self.client.post(
+                f"/events/{event_id}/assign-coordinator",
+                headers=headers,
+                json={"coordinatorId": "coord-1"},
+            )
         self.assertEqual(assigned.status_code, 201)
 
     def test_registration_access_route_returns_capacity_for_the_organiser(self):

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -21,6 +21,12 @@ class EquipmentReservation(Base):
     startsAt: Mapped[datetime] = mapped_column("starts_at", DateTime)
     endsAt: Mapped[datetime] = mapped_column("ends_at", DateTime)
     status: Mapped[str] = mapped_column(String(32), default="active")
+    # SPM-71 AC4: set when a significant event change may invalidate this
+    # reservation. The status is left alone so the stock stays held.
+    needsReverification: Mapped[bool] = mapped_column(
+        "needs_reverification", Boolean, default=False, server_default=false()
+    )
+    reverificationNote: Mapped[str | None] = mapped_column("reverification_note", Text, nullable=True)
 
     request: Mapped["EquipmentRequest"] = relationship("EquipmentRequest", back_populates="reservations")
     equipment: Mapped["EquipmentInfo"] = relationship("EquipmentInfo", back_populates="reservations")
