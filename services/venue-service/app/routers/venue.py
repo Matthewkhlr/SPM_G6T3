@@ -9,6 +9,7 @@ from app.dao.venue_unavailability_dao import VenueUnavailabilityDAO
 from app.db.session import get_db
 from app.orchestration.clients import fetch_event_facts, notify_venue_staff
 from app.schemas.venue import (
+    BookingReverificationRequest,
     SuitabilityOut,
     SuitabilityRequest,
     VenueActivityLogOut,
@@ -234,6 +235,24 @@ def create_booking(
     booking = service.request_booking(body, caller, event)
     notify_venue_staff(*service.venue_staff_notice(booking, "requested"), authorization)
     return booking
+
+
+@router.post(
+    "/bookings/reverification",
+    response_model=list[VenueBookingOut],
+    summary="Mark an event's confirmed bookings for re-verification",
+    description="Coordinators only (SPM-71 AC4). Called by event-service when a significant event change "
+    "is saved. Each `approved` booking for the event gets `needsReverification` and the reason; its "
+    "status is unchanged, so the venue stays held. Returns the bookings marked.",
+    responses=error_responses(403, 503),
+)
+def flag_bookings_for_reverification(
+    body: BookingReverificationRequest,
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.flag_for_reverification(body.eventId, body.reason)
 
 
 @router.post(

@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from fastapi import HTTPException
 
 from app.schemas.event import EventAssignmentCreate
@@ -13,14 +15,18 @@ class TestEventDecisions(EventCase):
 
     def test_assign_coordinator_stores_the_assignment(self):
         created = self.service.create_event(event_create(), "org-1", "o1")
+        directory = [{"userId": "coord-1", "userName": "Ben", "email": "ben@example.com", "role": "coordinator"}]
 
-        assignment = self.service.assign_coordinator(
-            created.eventId, EventAssignmentCreate(coordinatorId="coord-1"), "coord-1"
-        )
+        with patch("app.services.event_service.list_users", return_value=directory), patch(
+            "app.services.event_service.send_notification", return_value=True
+        ):
+            assignment = self.service.assign_coordinator(
+                created.eventId, EventAssignmentCreate(coordinatorId="coord-1"), "coord-1"
+            )
 
         self.assertEqual(assignment.coordinatorId, "coord-1")
         self.assertEqual(assignment.assignedBy, "coord-1")
-        self.assertEqual(self.service.get_event(created.eventId).status, "submitted")
+        self.assertEqual(self.service.get_event(created.eventId).status, "under review")
 
     def test_assign_coordinator_is_404_when_the_event_is_missing(self):
         with self.assertRaises(HTTPException) as ctx:

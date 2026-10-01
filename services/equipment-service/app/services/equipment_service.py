@@ -168,6 +168,9 @@ def _reservation_to_out(row: EquipmentReservation) -> EquipmentReservationOut:
         startsAt=row.startsAt,
         endsAt=row.endsAt,
         status=row.status,
+        equipmentName=row.equipment.name if row.equipment else None,
+        needsReverification=bool(row.needsReverification),
+        reverificationNote=row.reverificationNote,
     )
 
 
@@ -447,6 +450,19 @@ class EquipmentService:
     def list_reservations(self, equipment_id: str) -> list[EquipmentReservationOut]:
         self._require_equipment(equipment_id)
         return [_reservation_to_out(row) for row in self.reservation_dao.list_for_equipment(equipment_id)]
+
+    def list_event_reservations(self, event_id: str) -> list[EquipmentReservationOut]:
+        return [_reservation_to_out(row) for row in self.reservation_dao.list_for_event(event_id)]
+
+    def flag_for_reverification(self, event_id: str, reason: str) -> list[EquipmentReservationOut]:
+        """SPM-71 AC4: mark the event's reservations that still hold stock as
+        needing re-verification. Their status is unchanged, so the stock stays held."""
+        rows = self.reservation_dao.list_active_for_event(event_id)
+        for row in rows:
+            row.needsReverification = True
+            row.reverificationNote = reason
+        self.db.commit()
+        return [_reservation_to_out(row) for row in rows]
 
     def release_reservation(self, reservation_id: str, caller: dict) -> EquipmentReservationOut:
         row = self.reservation_dao.get_by_id(reservation_id)

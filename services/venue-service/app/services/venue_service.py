@@ -84,6 +84,9 @@ def _booking_to_out(row: VenueBooking) -> VenueBookingOut:
         eventSnapshot=row.eventSnapshot,
         coordinatorNotes=row.coordinatorNotes or "",
         warnings=row.warnings or [],
+        venueName=row.venue.name if row.venue else None,
+        needsReverification=bool(row.needsReverification),
+        reverificationNote=row.reverificationNote,
     )
 
 
@@ -377,6 +380,16 @@ class VenueService:
 
     def get_booking(self, booking_id: str) -> VenueBookingOut:
         return _booking_to_out(self._require_booking(booking_id))
+
+    def flag_for_reverification(self, event_id: str, reason: str) -> list[VenueBookingOut]:
+        """SPM-71 AC4: mark the event's confirmed bookings as needing
+        re-verification. They stay approved, so the venue stays held."""
+        rows = self.booking_dao.list("approved", event_id, None)
+        for row in rows:
+            row.needsReverification = True
+            row.reverificationNote = reason
+        self.db.commit()
+        return [_booking_to_out(row) for row in rows]
 
     def withdraw_booking(self, booking_id: str, caller: dict) -> VenueBookingOut:
         """SPM-63 AC8. A withdrawn request no longer counts anywhere: the

@@ -24,6 +24,9 @@ class Event(Base):
     accessibilityNeeds: Mapped[str] = mapped_column("accessibility_needs", Text, default="")
     equipmentRequirements: Mapped[str] = mapped_column("equipment_requirements", Text, default="")
     layoutPreference: Mapped[str | None] = mapped_column("layout_preference", String(64), nullable=True)
+    # SPM-71 AC1: staff-only notes, and how to reach the organiser for this event.
+    internalNotes: Mapped[str | None] = mapped_column("internal_notes", Text, nullable=True)
+    organiserContact: Mapped[str | None] = mapped_column("organiser_contact", String(255), nullable=True)
     registrationEnabled: Mapped[bool] = mapped_column("registration_enabled", Boolean, default=False)
     registrationOpensAt: Mapped[datetime | None] = mapped_column(
         "registration_opens_at", DateTime, nullable=True
@@ -43,3 +46,4 @@ class Event(Base):
     assignments: Mapped[list["EventAssignment"]] = relationship("EventAssignment", back_populates="event")
     changeRequests: Mapped[list["EventChangeRequest"]] = relationship("EventChangeRequest", back_populates="event")
     statusHistory: Mapped[list["EventStatusHistory"]] = relationship("EventStatusHistory", back_populates="event")
+    fieldChanges: Mapped[list["EventFieldChange"]] = relationship("EventFieldChange", back_populates="event")

@@ -104,7 +104,9 @@ Lifecycle state is stored in `status`, not a separate table.
 | venue_requirements | TEXT | |
 | accessibility_needs | TEXT | |
 | equipment_requirements | TEXT | |
-| layout_preference | VARCHAR(64) nullable | |
+| layout_preference | VARCHAR(64) nullable | The event's required layout |
+| internal_notes | TEXT nullable | SPM-71: staff only; never on the shared event read |
+| organiser_contact | VARCHAR(255) nullable | SPM-71 |
 | registration_enabled | BOOLEAN | |
 | registration_opens_at | DATETIME nullable | |
 | registration_closes_at | DATETIME nullable | |
@@ -117,6 +119,8 @@ Lifecycle state is stored in `status`, not a separate table.
 **Event status:** the create API currently writes `created`; seed data also uses `planning` and `confirmed`. Other lifecycle values are not validated or transitioned by the current service.
 
 New API-created events have `submitted_at = NULL`. Event editing, submission, and status-history writes are not currently implemented.
+
+**Coordinator edits (SPM-71, `PATCH /events/{id}`):** only the assigned coordinator (`coordinator_id`) may edit, and not while the event is `completed`, `cancelled`, `rejected`, `draft`, or `discarded`. `name`, `description`, `purpose`, `category`, `internal_notes`, and `organiser_contact` save quietly. `proposed_start_at`, `proposed_end_at`, `expected_attendance`, `layout_preference`, `accessibility_needs`, and `equipment_requirements` are significant. A significant change on an event with an `approved` venue booking or an `active`/`reserved` equipment reservation, or on a `confirmed` event, is refused until the coordinator confirms it. Once confirmed, those bookings and reservations get `needs_reverification`, and a `confirmed` event moves to `reconsidering` (written to `event_status_history`). Each changed field is written to `event_field_changes`.
 
 ### event_reviews
 
@@ -142,6 +146,8 @@ Coordinator assign / reassign history.
 | coordinator_id | VARCHAR(64) | Logical FK → users |
 | assigned_by | VARCHAR(64) | Logical FK → users |
 | assigned_at | DATETIME | |
+
+**Assignment rules (SPM-66, `POST /events/{id}/assign-coordinator`):** any Event Coordinator may assign or reassign an event to an Event Coordinator (the assignee's role is checked against user-service). No workload limit applies. Events that are `completed`, `cancelled`, `rejected`, `draft`, or `discarded` cannot be assigned. Each assignment adds a row here and sets `events.coordinator_id`. A `submitted` event moves to `under review` (written to `event_status_history`). These rows appear in the activity log as `assignment` entries, whose previous coordinator comes from the row before.
 
 ### event_change_requests
 
@@ -175,6 +181,20 @@ The table exists in the deployed schema but currently has no router or service w
 | created_at | DATETIME | |
 
 Seed data writes initial history records; current API operations do not write status history.
+
+### event_field_changes
+
+SPM-71: one row per field a coordinator edits. `GET /events/{id}/activity-log` merges these (`kind: edit`) with `event_status_history` (`kind: status`), oldest first.
+
+| Column | Type | Notes |
+|---|---|---|
+| change_id | VARCHAR(64) PK | |
+| event_id | VARCHAR(64) | FK → events |
+| field | VARCHAR(64) | API field name, e.g. `expectedAttendance` |
+| old_value | TEXT nullable | Previous value as text; datetimes in ISO 8601 |
+| new_value | TEXT nullable | New value as text |
+| changed_by | VARCHAR(64) | Logical FK → users |
+| created_at | DATETIME | |
 
 ---
 
@@ -249,6 +269,8 @@ The suitability check (SPM-62) reads this table: an overlapping period makes a v
 | event_snapshot | JSON nullable | SPM-63: the event's facts when the request was sent (name, client organisation, times, attendance, layout, accessibility needs, required facilities) |
 | coordinator_notes | TEXT nullable | SPM-63: the coordinator's notes for Venue Staff |
 | warnings | JSON nullable | SPM-63: suitability warnings the coordinator acknowledged, shown to Venue Staff |
+| needs_reverification | BOOLEAN | SPM-71: default false. Set on `approved` bookings when a significant event change is saved; the status stays `approved`, so the venue stays held |
+| reverification_note | TEXT nullable | SPM-71: what changed on the event |
 | decision_reason | TEXT nullable | |
 | reviewed_by | VARCHAR(64) nullable | |
 | reviewed_at | DATETIME nullable | |
@@ -344,6 +366,8 @@ Created only when the explicit reserve endpoint is called for an approved reques
 | starts_at | DATETIME | |
 | ends_at | DATETIME | |
 | status | VARCHAR(32) | `active` \| `released` |
+| needs_reverification | BOOLEAN | SPM-71: default false. Set on `active`/`reserved` reservations when a significant event change is saved; the status is unchanged, so the stock stays held |
+| reverification_note | TEXT nullable | SPM-71: what changed on the event |
 
 The reserve operation refuses a quantity above what is serviceable in that period, and refuses a second reservation for the same request. Releasing a reservation sets its status to `released`, which returns that quantity to later availability checks. Cancelling requests and reacting to event cancellation are not implemented.
 
@@ -446,6 +470,8 @@ erDiagram
     text accessibility_needs
     text equipment_requirements
     string layout_preference
+    text internal_notes
+    string organiser_contact
     boolean registration_enabled
     datetime registration_opens_at
     datetime registration_closes_at
@@ -495,6 +521,16 @@ erDiagram
     string to_status
     string changed_by FK
     text note
+    datetime created_at
+  }
+
+  event_field_changes {
+    string change_id PK
+    string event_id FK
+    string field
+    text old_value
+    text new_value
+    string changed_by FK
     datetime created_at
   }
 
@@ -550,6 +586,8 @@ erDiagram
     json event_snapshot
     text coordinator_notes
     json warnings
+    boolean needs_reverification
+    text reverification_note
     text decision_reason
     string reviewed_by FK
     datetime reviewed_at
@@ -612,6 +650,8 @@ erDiagram
     datetime starts_at
     datetime ends_at
     string status
+    boolean needs_reverification
+    text reverification_note
   }
 
   registration_windows {
@@ -660,6 +700,7 @@ erDiagram
   events ||--o{ event_assignments : has
   events ||--o{ event_change_requests : has
   events ||--o{ event_status_history : has
+  events ||--o{ event_field_changes : has
   events ||--o{ venue_bookings : books
   events ||--o{ equipment_requests : needs
   events ||--o| registration_windows : opens
