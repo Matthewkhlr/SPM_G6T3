@@ -1,14 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy.orm import Session
-
 from app.models.event import Event
+from shared.dao.base import BaseDAO
 
 
-class EventDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
+class EventDAO(BaseDAO):
     def get_by_id(self, event_id: str) -> Event | None:
         return self.db.query(Event).filter(Event.eventId == event_id).first()
 
@@ -72,6 +68,3 @@ class EventDAO:
             .order_by(Event.updatedAt.desc())
             .all()
         )
-
-    def add(self, row: Event) -> None:
-        self.db.add(row)

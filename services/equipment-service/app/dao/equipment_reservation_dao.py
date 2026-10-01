@@ -1,12 +1,8 @@
-from sqlalchemy.orm import Session
-
 from app.models.equipment_reservation import EquipmentReservation
+from shared.dao.base import BaseDAO
 
 
-class EquipmentReservationDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
+class EquipmentReservationDAO(BaseDAO):
     def list_active_for_equipment(self, equipment_id: str) -> list[EquipmentReservation]:
         return (
             self.db.query(EquipmentReservation)
@@ -35,6 +31,3 @@ class EquipmentReservationDAO:
             .filter(EquipmentReservation.requestId == request_id)
             .first()
         )
-
-    def add(self, row: EquipmentReservation) -> None:
-        self.db.add(row)

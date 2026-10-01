@@ -23,6 +23,7 @@ from app.schemas.event import (
     RegistrationAccessOut,
 )
 from shared.exceptions.http import conflict, forbidden, not_found
+from shared.services.base import BaseService
 
 logger = logging.getLogger("perf.event_service")
 
@@ -118,7 +119,7 @@ def _to_out_list(
     return result
 
 
-class EventService:
+class EventService(BaseService):
     """Business logic for event requests: drafts, submission, coordinator
     decisions, and coordinator assignment. Reads and writes go through the
     injected DAOs; this class owns the transaction boundary (commit/refresh)
@@ -133,16 +134,13 @@ class EventService:
         assignment_dao: EventAssignmentDAO,
         history_dao: EventStatusHistoryDAO,
     ):
-        self.db = db
+        super().__init__(db)
         self.event_dao = event_dao
         self.assignment_dao = assignment_dao
         self.history_dao = history_dao
 
     def _require_event(self, event_id: str) -> Event:
-        row = self.event_dao.get_by_id(event_id)
-        if not row:
-            raise not_found("Event not found")
-        return row
+        return self._require(self.event_dao.get_by_id(event_id), "Event not found")
 
     def list_events(self, authorization: str | None = None) -> list[EventOut]:
         """Every event except drafts — a draft is only visible to its own organiser."""

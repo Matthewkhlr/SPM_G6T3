@@ -1,11 +1,7 @@
-from sqlalchemy.orm import Session
-
 from app.models.organisation import Organisation
+from shared.dao.base import BaseDAO
 
 
-class OrganisationDAO:
-    def __init__(self, db: Session):
-        self.db = db
-
+class OrganisationDAO(BaseDAO):
     def list_all(self) -> list[Organisation]:
         return self.db.query(Organisation).all()

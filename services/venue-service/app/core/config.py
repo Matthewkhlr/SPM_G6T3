@@ -1,11 +1,8 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from shared.config.settings import ServiceSettings
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+class Settings(ServiceSettings):
     database_url: str = "mysql+pymysql://connectsphere:connectsphere@127.0.0.1:3307/venue"
-    # Comma-separated; browsers treat localhost and 127.0.0.1 as distinct origins.
-    cors_origin: str = "http://localhost:5173,http://127.0.0.1:5173"
     user_service_url: str = "http://127.0.0.1:8001"
     event_service_url: str = "http://127.0.0.1:8002"
     notification_service_url: str = "http://127.0.0.1:8006"
