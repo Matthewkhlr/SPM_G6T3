@@ -35,14 +35,15 @@ class TestEventDecisions(EventCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
 
-    def test_approve_event_moves_a_submitted_event_to_approved(self):
-        created = self.service.create_event(event_create(), "org-1", "o1")
+    def test_approve_event_moves_an_assigned_request_under_review_to_planning(self):
+        insert_event(self.db, eventId="e-review", status="under review", coordinatorId="coord-1")
 
-        approved = self.service.approve_event(created.eventId, "coord-1")
+        with patch("app.services.event_service.list_users", return_value=[]):
+            approved = self.service.approve_event("e-review", "coord-1")
 
-        self.assertEqual(approved.status, "approved")
+        self.assertEqual(approved.status, "planning")
 
-    def test_approve_event_conflicts_when_it_is_not_submitted(self):
+    def test_approve_event_conflicts_when_it_is_a_draft(self):
         created = self.service.create_draft(draft_payload(), "org-1", "o1")
 
         with self.assertRaises(HTTPException) as ctx:
@@ -60,6 +61,15 @@ class TestEventDecisions(EventCase):
         self.assertEqual(rejected.status, "rejected")
         self.assertEqual(log[0].note, "Dates clash")
         self.assertEqual(log[0].changedBy, "coord-1")
+
+    def test_reject_event_conflicts_when_it_is_a_draft(self):
+        created = self.service.create_draft(draft_payload(), "org-1", "o1")
+
+        with self.assertRaises(HTTPException) as ctx:
+            self.service.reject_event(created.eventId, "coord-1", "Dates clash")
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(self.service.get_event(created.eventId).status, "draft")
 
     def test_complete_event_moves_a_confirmed_past_event_to_completed(self):
         event = insert_event(

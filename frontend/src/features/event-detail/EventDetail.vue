@@ -25,6 +25,14 @@
           </div>
           <div class="actions">
             <button
+              v-if="canApprove"
+              class="btn btn-solid"
+              data-testid="event-approve"
+              @click="openApprove"
+            >
+              Approve request
+            </button>
+            <button
               v-if="canAssign"
               class="btn btn-outline"
               data-testid="assign-coordinator"
@@ -39,6 +47,14 @@
               @click="openEdit"
             >
               Edit event
+            </button>
+            <button
+              v-if="canSetUpRegistration"
+              class="btn btn-outline"
+              data-testid="event-registration-settings-link"
+              @click="router.push(`/app/events/${event.eventId}/registration-settings`)"
+            >
+              Registration settings
             </button>
             <button
               v-if="session.role === 'coordinator' && event.status !== 'draft'"
@@ -63,6 +79,22 @@
           Some planning details changed after this event was confirmed, so its venue and equipment
           arrangements are being re-checked. It will show as confirmed again once they are re-verified.
         </p>
+        <!-- SPM-69 AC3: the organiser sees the outcome and any note on their event. -->
+        <div
+          v-if="decision?.decision === 'approved'"
+          class="notice"
+          :data-testid="session.role === 'organiser' ? 'organiser-decision' : 'event-decision'"
+        >
+          <p>
+            <strong>Approved</strong><template v-if="decidedByName"> by {{ decidedByName }}</template>
+            on {{ formatUtc(decision.decidedAt) }}. ConnectSphere has taken this event on and planning has started.
+          </p>
+          <p v-if="decision.decisionNote">
+            {{ session.role === 'organiser' ? 'Note from your coordinator' : 'Note to the organiser' }}:
+            {{ decision.decisionNote }}
+          </p>
+          <p v-if="event.status === 'planning'">Venue and equipment are still being arranged.</p>
+        </div>
         <p v-if="savedNote" class="notice" data-testid="event-edit-saved">{{ savedNote }}</p>
 
         <div class="layout" :class="{ split: showEquipment }">
@@ -90,6 +122,17 @@
                   </template>
                 </dd>
                 <dd v-else class="muted">Not assigned yet</dd>
+              </div>
+              <!-- SPM-90 AC6: the organiser sees the registration settings for their event. -->
+              <div
+                class="wide"
+                :data-testid="session.role === 'organiser' ? 'organiser-registration-settings' : 'event-registration-settings'"
+              >
+                <dt>Registration</dt>
+                <dd v-if="event.registrationEnabled">
+                  Needed · capacity {{ event.capacity }} · {{ registrationPeriod }}
+                </dd>
+                <dd v-else class="muted">Not needed</dd>
               </div>
               <div v-if="event.layoutPreference">
                 <dt>Layout</dt>
@@ -133,6 +176,18 @@
           <EventEquipment v-if="showEquipment" :event="event" />
         </div>
 
+        <EventChangeRequests
+          v-if="CONTACT_ROLES.includes(session.role)"
+          :event="event"
+          @changed="reloadEvent"
+        />
+
+        <EventClarifications
+          v-if="CONTACT_ROLES.includes(session.role)"
+          :event="event"
+          @changed="reloadEvent"
+        />
+
         <p v-if="discardError" class="form-error">{{ discardError }}</p>
       </template>
     </div>
@@ -142,6 +197,13 @@
       :event="event"
       @close="assigning = false"
       @assigned="onAssigned"
+    />
+
+    <ApproveEventDialog
+      v-if="approving"
+      :event="event"
+      @close="approving = false"
+      @approved="onApproved"
     />
 
     <EventEditForm
@@ -174,10 +236,25 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getEvent, discardEvent, getEventCoordinator, getInternalNotes } from '../../api/eventService.js'
-import { LOCKED_EVENT_STATUSES, eventStatusLabel } from '../../config/eventStatus.js'
+import {
+  getEvent,
+  discardEvent,
+  getEventCoordinator,
+  getEventDecision,
+  getInternalNotes,
+} from '../../api/eventService.js'
+import {
+  IN_REVIEW_EVENT_STATUSES,
+  LOCKED_EVENT_STATUSES,
+  REGISTRATION_SETUP_STATUSES,
+  eventStatusLabel,
+} from '../../config/eventStatus.js'
 import { session } from '../../store/session.js'
+import { formatUtc } from '../../utils/datetime.js'
+import ApproveEventDialog from './ApproveEventDialog.vue'
 import AssignCoordinatorDialog from './AssignCoordinatorDialog.vue'
+import EventChangeRequests from './EventChangeRequests.vue'
+import EventClarifications from './EventClarifications.vue'
 import EventEditForm from './EventEditForm.vue'
 import EventEquipment from './EventEquipment.vue'
 
@@ -198,7 +275,40 @@ const savedNote = ref('')
 
 const coordinator = ref(null)
 const assigning = ref(false)
-const dialogOpen = computed(() => assigning.value || editing.value || confirming.value)
+const decision = ref(null)
+const approving = ref(false)
+const dialogOpen = computed(
+  () => assigning.value || approving.value || editing.value || confirming.value,
+)
+
+// SPM-69 AC1/AC5: only the assigned coordinator, and only once the request is
+// under review — so never while it is unassigned. The server enforces the same.
+const canApprove = computed(
+  () =>
+    session.role === 'coordinator' &&
+    !!event.value?.coordinatorId &&
+    event.value.coordinatorId === session.userId &&
+    IN_REVIEW_EVENT_STATUSES.includes(event.value.status),
+)
+// SPM-90 AC1: the assigned coordinator, from planning until confirmed.
+const canSetUpRegistration = computed(
+  () =>
+    session.role === 'coordinator' &&
+    !!event.value?.coordinatorId &&
+    event.value.coordinatorId === session.userId &&
+    REGISTRATION_SETUP_STATUSES.includes(event.value.status),
+)
+const registrationPeriod = computed(() => {
+  const { registrationOpensAt: opens, registrationClosesAt: closes } = event.value || {}
+  if (!opens && !closes) return 'period not set yet'
+  const when = (value) => (value ? new Date(value).toLocaleString() : 'not set')
+  return `opens ${when(opens)}, closes ${when(closes)}`
+})
+const decidedByName = computed(() =>
+  coordinator.value?.coordinatorId && coordinator.value.coordinatorId === decision.value?.decidedBy
+    ? coordinator.value.name
+    : '',
+)
 
 // SPM-66: any coordinator can assign or reassign, but not a finished event or a draft.
 const canAssign = computed(
@@ -254,7 +364,48 @@ async function load() {
     loading.value = false
   }
   if (event.value && session.role === 'coordinator') loadInternalNotes()
-  if (event.value && CONTACT_ROLES.includes(session.role)) loadCoordinator()
+  if (event.value && CONTACT_ROLES.includes(session.role)) {
+    loadCoordinator()
+    loadDecision()
+  }
+}
+
+// SPM-68: raising or resolving a clarification can change the status (and with
+// it whether Approve warns), so re-read the event. Best effort.
+async function reloadEvent() {
+  try {
+    const { data } = await getEvent(event.value.eventId)
+    event.value = data
+  } catch {
+    // The page keeps showing what it had; the next load corrects it.
+  }
+}
+
+// SPM-69 AC3: kept off the shared event read, so it is loaded like the coordinator. Best effort.
+async function loadDecision() {
+  try {
+    const { data } = await getEventDecision(event.value.eventId)
+    decision.value = data
+  } catch {
+    decision.value = null
+  }
+}
+
+function openApprove() {
+  savedNote.value = ''
+  approving.value = true
+}
+
+function onApproved(approved) {
+  approving.value = false
+  event.value = approved
+  decision.value = {
+    decision: approved.decision,
+    decisionNote: approved.decisionNote,
+    decidedBy: approved.decidedBy,
+    decidedAt: approved.decidedAt,
+  }
+  savedNote.value = 'Request approved. The organiser has been notified.'
 }
 
 // SPM-66 AC5: the organiser's one person to deal with. Best effort, like the notes.
@@ -399,6 +550,8 @@ onMounted(load)
   padding: 11px 14px;
   margin: 0 0 16px;
 }
+div.notice p { margin: 0; }
+div.notice p + p { margin-top: 6px; }
 .notice.attention {
   color: #FFD9A8;
   background: rgba(255, 170, 80, .08);

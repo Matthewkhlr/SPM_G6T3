@@ -3,25 +3,40 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.dao.event_assignment_dao import EventAssignmentDAO
+from app.dao.event_change_request_dao import EventChangeRequestDAO
 from app.dao.event_dao import EventDAO
 from app.dao.event_field_change_dao import EventFieldChangeDAO
+from app.dao.event_review_dao import EventReviewDAO
 from app.dao.event_status_history_dao import EventStatusHistoryDAO
 from app.db.session import get_db
 from app.orchestration.clients import current_organiser, current_technical_support
 from app.schemas.event import (
+    ChangeableFieldsOut,
+    ChangeRequestAccept,
+    ChangeRequestCreate,
+    ChangeRequestDecline,
+    ChangeRequestOut,
+    ClarificationCreate,
+    ClarificationOut,
+    ClarificationReplyCreate,
     CoordinatorCandidateOut,
     EventActivityOut,
+    EventApproval,
+    EventApprovalOut,
     EventAssignmentCreate,
     EventAssignmentOut,
     EventCoordinatorOut,
     EventCreate,
     EventDecision,
+    EventDecisionOut,
     EventDraftUpsert,
     EventInternalNotesOut,
     EventOut,
     EventUpdate,
     EventUpdateOut,
     RegistrationAccessOut,
+    RegistrationSettingsOut,
+    RegistrationSettingsUpdate,
     SignificantFieldsOut,
 )
 from app.services.event_service import EventService
@@ -38,7 +53,13 @@ router = APIRouter(
 
 def get_event_service(db: Session = Depends(get_db)) -> EventService:
     return EventService(
-        db, EventDAO(db), EventAssignmentDAO(db), EventStatusHistoryDAO(db), EventFieldChangeDAO(db)
+        db,
+        EventDAO(db),
+        EventAssignmentDAO(db),
+        EventStatusHistoryDAO(db),
+        EventFieldChangeDAO(db),
+        EventReviewDAO(db),
+        EventChangeRequestDAO(db),
     )
 
 
@@ -193,6 +214,16 @@ def get_significant_fields():
 
 
 @router.get(
+    "/changeable-fields",
+    response_model=ChangeableFieldsOut,
+    summary="Fields an organiser can ask to change",
+    description="SPM-106 AC3. The fields a change request may propose new values for.",
+)
+def get_changeable_fields():
+    return EventService.changeable_fields()
+
+
+@router.get(
     "/coordinators",
     response_model=list[CoordinatorCandidateOut],
     summary="Coordinators who can be assigned",
@@ -265,6 +296,30 @@ def update_event(
     return service.update_event(event_id, body, caller["userId"], authorization)
 
 
+@router.patch(
+    "/{event_id}/registration-settings",
+    response_model=RegistrationSettingsOut,
+    summary="Set registration needed, period, and capacity",
+    description="Assigned coordinator only (SPM-90), from `planning` until `confirmed`. Send only the fields "
+    "that change. Registration must close after it opens and no later than the event starts (422). A capacity "
+    "below the number already registered is 409 naming that number. A capacity above what a confirmed venue "
+    "booking holds in the event's layout, or turning registration off while people are registered, is 409 "
+    "with `requiresConfirmation` and `warnings` until `confirmOverVenueCapacity` / `confirmRegistrationOff` "
+    "is true. Each changed field goes to the activity log; the organiser is notified, and attendees too when "
+    "registration is turned off. 503 when registrations or the venue booking cannot be checked; nothing is "
+    "saved then.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def update_registration_settings(
+    body: RegistrationSettingsUpdate,
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.update_registration_settings(event_id, body, caller["userId"], authorization)
+
+
 @router.get(
     "/{event_id}/coordinator",
     response_model=EventCoordinatorOut,
@@ -280,6 +335,198 @@ def get_event_coordinator(
 ):
     caller = resolve_caller(authorization, settings.user_service_url)
     return service.get_event_coordinator(event_id, caller, authorization)
+
+
+@router.get(
+    "/{event_id}/decision",
+    response_model=EventDecisionOut,
+    summary="Approval decision",
+    description="SPM-69 AC3. The latest decision on the request, with its note, who made it, and when; "
+    "all null until one is made. Organisers see it for their own organisation's events, staff for any "
+    "event; attendees get 403.",
+    responses=error_responses(403, 404, 503),
+)
+def get_event_decision(
+    event_id: str = Path(..., description="Event id, e.g. `e1`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url)
+    return service.get_event_decision(event_id, caller)
+
+
+@router.get(
+    "/{event_id}/clarifications",
+    response_model=list[ClarificationOut],
+    summary="Clarification threads",
+    description="SPM-68. Every clarification on the event, oldest first, each with its thread: the question, "
+    "then every reply, with author, role, and time. Organisers see them for their own organisation's events, "
+    "staff for any event, at any stage; attendees get 403.",
+    responses=error_responses(403, 404),
+)
+def list_clarifications(
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url)
+    return service.list_clarifications(event_id, caller, authorization)
+
+
+@router.post(
+    "/{event_id}/clarifications",
+    response_model=ClarificationOut,
+    status_code=201,
+    summary="Raise a clarification",
+    description="Assigned coordinator only (SPM-68). States what is unclear and optionally the request field it "
+    "concerns. Opens a clarification, moves the request to `changes requested`, and emails the organiser (best "
+    "effort). Several can be open at once. 409 for a draft, an event with no coordinator, or one past review; "
+    "403 for any other coordinator.",
+    responses=error_responses(403, 404, 409),
+)
+def raise_clarification(
+    body: ClarificationCreate,
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.raise_clarification(event_id, body, caller["userId"], authorization)
+
+
+@router.post(
+    "/{event_id}/clarifications/{clarification_id}/reply",
+    response_model=ClarificationOut,
+    status_code=201,
+    summary="Reply to a clarification",
+    description="The event's organiser (or a colleague in their organisation) or its assigned coordinator "
+    "(SPM-68 AC3). Returns the whole thread. The other side is emailed (best effort). 409 once the "
+    "clarification is resolved.",
+    responses=error_responses(403, 404, 409),
+)
+def reply_to_clarification(
+    body: ClarificationReplyCreate,
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    clarification_id: str = Path(..., description="Clarification id, e.g. `rv-clarify-e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"organiser", "coordinator"})
+    return service.reply_to_clarification(event_id, clarification_id, body, caller, authorization)
+
+
+@router.post(
+    "/{event_id}/clarifications/{clarification_id}/resolve",
+    response_model=ClarificationOut,
+    summary="Resolve a clarification",
+    description="Assigned coordinator only (SPM-68 AC5). Once no clarification is open, a `changes requested` "
+    "request returns to `under review`. 409 if it is already resolved.",
+    responses=error_responses(403, 404, 409),
+)
+def resolve_clarification(
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    clarification_id: str = Path(..., description="Clarification id, e.g. `rv-clarify-e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.resolve_clarification(event_id, clarification_id, caller["userId"], authorization)
+
+
+@router.get(
+    "/{event_id}/change-requests",
+    response_model=list[ChangeRequestOut],
+    summary="Change requests",
+    description="SPM-106. Every change request on the event, newest first, with current and proposed values. "
+    "Organisers see them for their own organisation's events, staff for any event; attendees get 403.",
+    responses=error_responses(403, 404),
+)
+def list_change_requests(
+    event_id: str = Path(..., description="Event id, e.g. `e1`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url)
+    return service.list_change_requests(event_id, caller)
+
+
+@router.post(
+    "/{event_id}/change-requests",
+    response_model=ChangeRequestOut,
+    status_code=201,
+    summary="Request a change",
+    description="The event's organiser or a colleague in their organisation (SPM-106). States each field to "
+    "change (see `/events/changeable-fields`) with its proposed value, and a reason (422 without one). "
+    "Allowed while the event is under review, approved, in planning, or confirmed; 409 for a draft, a "
+    "submitted request, a finished event, or when a request is already pending. The event is not changed; "
+    "the assigned coordinator is emailed (best effort).",
+    responses=error_responses(403, 404, 409),
+)
+def raise_change_request(
+    body: ChangeRequestCreate,
+    event_id: str = Path(..., description="Event id, e.g. `e1`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"organiser"})
+    return service.raise_change_request(event_id, body, caller, authorization)
+
+
+@router.post(
+    "/{event_id}/change-requests/{change_request_id}/withdraw",
+    response_model=ChangeRequestOut,
+    summary="Withdraw a change request",
+    description="The organiser who raised it, while it is pending (SPM-106 AC6). The coordinator is emailed.",
+    responses=error_responses(403, 404, 409),
+)
+def withdraw_change_request(
+    event_id: str = Path(..., description="Event id, e.g. `e1`."),
+    change_request_id: str = Path(..., description="Change request id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"organiser"})
+    return service.withdraw_change_request(event_id, change_request_id, caller, authorization)
+
+
+@router.post(
+    "/{event_id}/change-requests/{change_request_id}/accept",
+    response_model=ChangeRequestOut,
+    summary="Accept a change request",
+    description="Assigned coordinator only (SPM-106 AC7). Applies the proposed values with the same rules as "
+    "`PATCH /events/{id}`: a significant change on an event with confirmed arrangements, or on a confirmed "
+    "event, is 409 naming what is affected until `confirmSignificantChange` is true. The organiser is "
+    "notified with the optional reason.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def accept_change_request(
+    body: ChangeRequestAccept,
+    event_id: str = Path(..., description="Event id, e.g. `e1`."),
+    change_request_id: str = Path(..., description="Change request id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.accept_change_request(event_id, change_request_id, body, caller["userId"], authorization)
+
+
+@router.post(
+    "/{event_id}/change-requests/{change_request_id}/decline",
+    response_model=ChangeRequestOut,
+    summary="Decline a change request",
+    description="Assigned coordinator only (SPM-106 AC7). A reason is required; the organiser is notified "
+    "with it. The event is unchanged.",
+    responses=error_responses(403, 404, 409),
+)
+def decline_change_request(
+    body: ChangeRequestDecline,
+    event_id: str = Path(..., description="Event id, e.g. `e1`."),
+    change_request_id: str = Path(..., description="Change request id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.decline_change_request(event_id, change_request_id, body, caller["userId"], authorization)
 
 
 @router.get(
@@ -331,15 +578,28 @@ def get_activity_log(
     return service.get_activity_log(event_id, authorization)
 
 
-@router.post("/{event_id}/approve", response_model=EventOut)
+@router.post(
+    "/{event_id}/approve",
+    response_model=EventApprovalOut,
+    summary="Approve a request",
+    description="Assigned coordinator only (SPM-69). Moves an `under review` request to `planning` and "
+    "records the decision, the decider, the time, and the optional `note`, which the organiser sees "
+    "(`GET /events/{id}/decision`). The organiser is emailed (best effort). A `changes requested` request "
+    "still has open clarifications, so it returns 409 with `requiresConfirmation` until "
+    "`confirmOpenClarifications` is true. Approval does not book a venue or reserve equipment. 409 when no "
+    "coordinator is assigned or the request is not under review; 403 for any other coordinator.",
+    responses=error_responses(403, 404, 409),
+)
 def approve_event(
-    event_id: str,
-    body: EventDecision,
+    body: EventApproval,
+    event_id: str = Path(..., description="Event id, e.g. `e1`."),
     authorization: str | None = Depends(forwarded_bearer),
     service: EventService = Depends(get_event_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
-    return service.approve_event(event_id, caller["userId"], authorization)
+    return service.approve_event(
+        event_id, caller["userId"], body.note, body.confirmOpenClarifications, authorization
+    )
 
 
 @router.post("/{event_id}/reject", response_model=EventOut)

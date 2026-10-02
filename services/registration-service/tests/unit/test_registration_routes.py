@@ -101,6 +101,7 @@ class TestRegistrationRoutes(ServiceTestCase):
         self.assertEqual(stored.userId, "u-org")
         self.assertEqual(body["attendees"][0]["attendeeName"], "Amy Wong")
         self.assertEqual(body["attendees"][0]["attendeeEmail"], "amy@example.com")
+        self.assertEqual(body["attendees"][0]["userId"], "u-org")
         self.assertEqual(counted.status_code, 200)
         self.assertEqual(counted.json(), {"count": 1})
         self.assertNotIn("amy@example.com", counted.text)

@@ -116,7 +116,9 @@ Lifecycle state is stored in `status`, not a separate table.
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
 
-**Event status:** the create API currently writes `created`; seed data also uses `planning` and `confirmed`. Other lifecycle values are not validated or transitioned by the current service.
+**Event status:** the create API currently writes `created`; seed data also uses `planning` and `confirmed`. Other lifecycle values are not validated or transitioned by the current service. Approving a request (SPM-69) moves it from `under review` or `changes requested` to `planning`, written to `event_status_history`. Raising a clarification (SPM-68) moves `under review` to `changes requested`, and resolving the last open one moves it back.
+
+**Registration settings (SPM-90, `PATCH /events/{id}/registration-settings`):** the assigned coordinator sets `registration_enabled`, `registration_opens_at`, `registration_closes_at`, and `capacity` while the event is `approved`, `planning`, `preparing`, `prepared`, `confirmed`, or `reconsidering`. The close must be after the open and no later than `proposed_start_at`. `capacity` cannot go below the attendees currently registered in registration-service. If it exceeds what a venue booking with status `approved` holds in the event's `layout_preference`, the coordinator must confirm the change; the venue's largest layout applies when there is no layout match. The coordinator must also confirm turning registration off while attendees are registered. Existing registrations are left as they are, and the attendees are notified. Each changed setting is written to `event_field_changes`.
 
 New API-created events have `submitted_at = NULL`. Event editing, submission, and status-history writes are not currently implemented.
 
@@ -130,10 +132,31 @@ New API-created events have `submitted_at = NULL`. Event editing, submission, an
 | event_id | VARCHAR(64) | FK → events |
 | reviewer_id | VARCHAR(64) | Logical FK → users |
 | action | VARCHAR(32) | `request_clarification` \| `approve` \| `reject` |
-| comment | TEXT | |
+| comment | TEXT | The clarification's question, or the decision note |
+| created_at | DATETIME | |
+| field | VARCHAR(64) nullable | SPM-68: the event request field a clarification concerns |
+| status | VARCHAR(16) nullable | SPM-68: `open` \| `resolved` on clarifications; null on decisions |
+| resolved_by | VARCHAR(64) nullable | SPM-68: logical FK → users |
+| resolved_at | DATETIME nullable | SPM-68 |
+
+**Approval (SPM-69, `POST /events/{id}/approve`):** each approval adds an `approve` row: `reviewer_id` is the deciding coordinator, `comment` is their optional note to the organiser, and `created_at` is when they decided. The latest `approve` or `reject` row is what `GET /events/{id}/decision` returns. The `event_status_history` row for the approval does not carry the note. Rejection does not write rows here yet.
+
+**Clarifications (SPM-68, `POST /events/{id}/clarifications`):** each clarification is a `request_clarification` row raised by the assigned coordinator (`reviewer_id`), with its question in `comment`, an optional `field`, and `status` `open` until that coordinator resolves it (`resolved_by`, `resolved_at`). Raising one moves a request that is `under review` to `changes requested`. Once no row for the event is `open`, a `changes requested` event returns to `under review`. Both moves are written to `event_status_history`, but the question itself is not. Drafts cannot take one. Migration `0004` marked every clarification that existed before it as `open`.
+
+### event_clarification_replies
+
+SPM-68 AC3: the replies in a clarification thread.
+
+| Column | Type | Notes |
+|---|---|---|
+| reply_id | VARCHAR(64) PK | |
+| review_id | VARCHAR(64) | FK → event_reviews (a `request_clarification` row) |
+| author_id | VARCHAR(64) | Logical FK → users |
+| author_role | VARCHAR(32) | `organiser` \| `coordinator`: the role they replied as |
+| message | TEXT | |
 | created_at | DATETIME | |
 
-The table exists in the deployed schema but currently has no router or service workflow.
+The organiser who filed the event, a colleague in their organisation, or the assigned coordinator can reply while the clarification is open.
 
 ### event_assignments
 
@@ -156,17 +179,19 @@ Coordinator assign / reassign history.
 | change_request_id | VARCHAR(64) PK | |
 | event_id | VARCHAR(64) | FK → events |
 | requested_by | VARCHAR(64) | Logical FK → users |
-| status | VARCHAR(32) | `pending` \| `approved` \| `rejected` \| `applied` |
-| summary | TEXT | |
-| proposed_changes | JSON nullable | Field diffs |
-| affects_venue | BOOLEAN | |
-| affects_equipment | BOOLEAN | |
-| affects_registration | BOOLEAN | |
-| reviewed_by | VARCHAR(64) nullable | |
-| reviewed_at | DATETIME nullable | |
+| status | VARCHAR(32) | `pending` \| `withdrawn` \| `accepted` \| `declined`; seed rows also use `applied` |
+| summary | TEXT | The organiser's reason for the change |
+| proposed_changes | JSON nullable | Field → proposed value (datetimes as ISO strings, naive UTC) |
+| current_values | JSON nullable | SPM-106: field → value when the request was raised |
+| affects_venue | BOOLEAN | Start, end, attendance, layout, or accessibility changes |
+| affects_equipment | BOOLEAN | Start, end, or equipment requirements change |
+| affects_registration | BOOLEAN | Start, end, or attendance changes |
+| reviewed_by | VARCHAR(64) nullable | Who closed it: the deciding coordinator, or the organiser who withdrew |
+| reviewed_at | DATETIME nullable | When it was closed |
+| decision_reason | TEXT nullable | SPM-106: the coordinator's reason, shown to the organiser |
 | created_at | DATETIME | |
 
-The table exists in the deployed schema but currently has no router or service workflow.
+**Change requests (SPM-106, `POST /events/{id}/change-requests`):** the organiser who filed the event, or a colleague in their organisation, can request a change while the event is `under review`, `changes requested`, `approved`, `planning`, `preparing`, `prepared`, `confirmed`, or `reconsidering`. Drafts are edited directly, a `submitted` request has no coordinator yet, and finished events take none. Changeable fields are the name, description, purpose, category, start and end, expected attendance, layout, accessibility needs, and equipment requirements. Only fields whose proposed value differs are stored, and a reason is required. An event can have only one `pending` request. The event is untouched while one is pending. Only the organiser who raised a request can withdraw it. The assigned coordinator accepts or declines it; declining needs a reason. Accepting applies the proposed values with the SPM-71 edit rules, which write `event_field_changes`, flag arrangements, and move a confirmed event to `reconsidering`. The `0005` migration added `current_values` and `decision_reason`.
 
 ### event_status_history
 
@@ -409,7 +434,7 @@ The current application rejects a duplicate email among rows whose status is `re
 
 ## 6. notification-service (`notification`)
 
-The schema contains persisted notification records, and seed data inserts one example. `POST /notifications` is an email stub accepting `to`, `subject`, and `body`; it prints the message and returns `queued`. `POST /notifications/records` stores a row for the signed-in user, and `GET /notifications` returns only that user's rows. Registration withdrawal writes one of these records. Mark-read is not implemented.
+The schema contains persisted notification records, and seed data inserts one example. `POST /notifications` is an email stub accepting `to`, `subject`, and `body`; it prints the message and returns `queued`. `POST /notifications/records` stores a row for the signed-in user, or for `userId` when the caller is staff (coordinator, venue, techsupport); anyone else naming another user gets 403. `GET /notifications` returns only the caller's rows. Registration withdrawal writes one of these records, and so does a change to an event's registration settings (SPM-90): the organiser gets `event.registration_settings`, and registered attendees get `registration.closed` when registration is turned off. Mark-read is not implemented.
 
 ### notifications
 

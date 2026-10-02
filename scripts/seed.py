@@ -374,9 +374,10 @@ def seed_event() -> None:
         if not conn.execute(text("SELECT review_id FROM event_reviews WHERE review_id = 'rv-clarify-e3'")).first():
             conn.execute(
                 text(
-                    "INSERT INTO event_reviews (review_id, event_id, reviewer_id, action, comment, created_at) "
+                    "INSERT INTO event_reviews "
+                    "(review_id, event_id, reviewer_id, action, comment, field, status, created_at) "
                     "VALUES ('rv-clarify-e3', 'e3', 'u2', 'request_clarification', "
-                    "'Please confirm expected attendance.', :created_at)"
+                    "'Please confirm expected attendance.', 'expectedAttendance', 'open', :created_at)"
                 ),
                 {"created_at": now - 1 * day},
             )

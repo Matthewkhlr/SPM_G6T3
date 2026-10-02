@@ -31,6 +31,7 @@ def _to_attendee(row) -> AttendeeOut:
     return AttendeeOut(
         attendeeRegistrationId=row.attendeeRegistrationId,
         eventId=row.eventId,
+        userId=row.userId,
         attendeeName=row.attendeeName,
         attendeeEmail=row.attendeeEmail,
         status=row.status,

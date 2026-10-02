@@ -26,7 +26,7 @@ from shared.exceptions.http import conflict, forbidden
 from shared.services.base import BaseService
 
 # SPM-63 AC1: "Planning" is the stage after approval. Event approval (SPM-69)
-# writes `approved`; seed data also uses `planning`. Both count.
+# writes `planning`; events approved before that may still read `approved`. Both count.
 PLANNING_STATUSES = ("approved", "planning")
 
 

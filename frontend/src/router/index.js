@@ -4,6 +4,7 @@ import LoginView from '../views/LoginView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import EventDetail from '../features/event-detail/EventDetail.vue'
 import EventRegistrations from '../features/event-detail/EventRegistrations.vue'
+import EventRegistrationSettings from '../features/event-detail/EventRegistrationSettings.vue'
 import RegistrationDetail from '../features/my-registrations/RegistrationDetail.vue'
 import EventVenueSelect from '../features/venue-request/EventVenueSelect.vue'
 import { session } from '../store/session.js'
@@ -24,6 +25,12 @@ const router = createRouter({
       path: '/app/events/:id/registrations',
       name: 'event-registrations',
       component: EventRegistrations,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/events/:id/registration-settings',
+      name: 'event-registration-settings',
+      component: EventRegistrationSettings,
       meta: { requiresAuth: true }
     },
     {
