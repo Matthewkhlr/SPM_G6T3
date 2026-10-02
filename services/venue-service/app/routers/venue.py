@@ -259,7 +259,7 @@ def flag_bookings_for_reverification(
     "/bookings/{booking_id}/withdraw",
     response_model=VenueBookingOut,
     summary="Withdraw a venue booking request",
-    description="The coordinator who sent it, while it is still pending. Venue Staff are notified.",
+    description="The event's assigned coordinator (SPM-46), while it is still pending. Venue Staff are notified.",
     responses=error_responses(403, 404, 409, 503),
 )
 def withdraw_booking(
@@ -268,7 +268,8 @@ def withdraw_booking(
     service: VenueService = Depends(get_venue_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
-    booking = service.withdraw_booking(booking_id, caller)
+    event = fetch_event_facts(service.get_booking(booking_id).eventId, authorization)
+    booking = service.withdraw_booking(booking_id, caller, event.coordinatorId)
     notify_venue_staff(*service.venue_staff_notice(booking, "withdrawn"), authorization)
     return booking
 

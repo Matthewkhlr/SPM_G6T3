@@ -101,7 +101,15 @@ const editNotes = ref('')
 const editError = ref('')
 const savingEdit = ref(false)
 
-const canRecord = computed(() => session.role === 'coordinator' && props.event.status !== 'draft')
+// SPM-46 AC1/AC2: only the assigned coordinator requests or changes equipment;
+// everyone else sees the requests read-only. The server enforces the same.
+const canRecord = computed(
+  () =>
+    session.role === 'coordinator' &&
+    !!props.event.coordinatorId &&
+    props.event.coordinatorId === session.userId &&
+    props.event.status !== 'draft',
+)
 const canUseWindow = computed(() => Boolean(props.event.proposedStartAt && props.event.proposedEndAt))
 const lines = computed(() => requests.value.filter((request) => request.eventId === props.event.eventId))
 const unavailable = computed(() => lines.value.filter((request) => request.status === 'unavailable'))

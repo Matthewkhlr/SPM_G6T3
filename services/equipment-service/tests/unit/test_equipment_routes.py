@@ -14,12 +14,16 @@ class TestEquipmentRoutes(ServiceTestCase):
         app.dependency_overrides[require_authenticated_user] = lambda: {"uid": "uid-1"}
         self.caller = patch("app.routers.equipment.resolve_caller", return_value=CALLER)
         self.caller.start()
+        # SPM-46: the coordinator in these flows is the one assigned to every event.
+        self.assigned = patch("app.routers.equipment.fetch_event_coordinator", return_value=COORDINATOR["userId"])
+        self.assigned.start()
         self.client = TestClient(app)
         self.client.__enter__()
         self.headers = {"Authorization": "Bearer token"}
 
     def tearDown(self):
         self.client.__exit__(None, None, None)
+        self.assigned.stop()
         self.caller.stop()
         app.dependency_overrides.clear()
         super().tearDown()

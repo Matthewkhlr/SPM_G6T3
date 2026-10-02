@@ -128,6 +128,24 @@ class TestBookingRequestRoutes(VenueCase):
         self.assertEqual(
             self.mocks["notify"].call_args.args[0], "Venue request withdrawn: AI Summit at Marina Hall A"
         )
+        self.mocks["event"].assert_called_with("e1", HEADERS["Authorization"])
+
+    def test_after_reassignment_the_previous_coordinator_cannot_withdraw_and_nobody_is_notified(self):
+        booking_id = self.send().json()["bookingId"]
+        self.mocks["notify"].reset_mock()
+        self.mocks["event"].return_value = EVENT.model_copy(update={"coordinatorId": "u-someone-else"})
+
+        refused = self.call("coordinator", "POST", f"/venues/bookings/{booking_id}/withdraw")
+
+        self.assertEqual(refused.status_code, 403)
+        self.assertEqual(
+            refused.json()["detail"], "Only the coordinator assigned to this event can withdraw its venue request."
+        )
+        self.mocks["notify"].assert_not_called()
+
+    def test_withdrawing_an_unknown_request_is_not_found(self):
+        self.assertEqual(self.call("coordinator", "POST", "/venues/bookings/nope/withdraw").status_code, 404)
+        self.mocks["event"].assert_not_called()
 
 
 class TestNotifyVenueStaff(unittest.TestCase):
