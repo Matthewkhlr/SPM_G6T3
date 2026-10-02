@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -5,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from shared.auth.deps import require_authenticated_user
 from shared.testing.cases import ServiceTestCase
-from tests.unit.support import COORDINATOR, ORGANISER, TECH
+from tests.unit.support import COORDINATOR, ORGANISER, TECH, insert_event
 
 
 class TestEventRoutes(ServiceTestCase):
@@ -74,6 +75,17 @@ class TestEventRoutes(ServiceTestCase):
                 json={"coordinatorId": "coord-1"},
             )
         self.assertEqual(assigned.status_code, 201)
+
+        done = insert_event(
+            self.db,
+            eventId="e-done",
+            status="confirmed",
+            coordinatorId=COORDINATOR["userId"],
+            proposedEndAt=datetime.utcnow() - timedelta(days=1),
+        )
+        completed = self.client.post(f"/events/{done.eventId}/complete", headers=headers)
+        self.assertEqual(completed.status_code, 200)
+        self.assertEqual(completed.json()["status"], "completed")
 
     def test_registration_access_route_returns_capacity_for_the_organiser(self):
         self.caller.stop()
