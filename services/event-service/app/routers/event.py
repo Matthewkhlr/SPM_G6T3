@@ -354,6 +354,24 @@ def reject_event(
 
 
 @router.post(
+    "/{event_id}/complete",
+    response_model=EventOut,
+    summary="Mark completed",
+    description="Assigned coordinator only (SPM-73). Only a confirmed event, and only once its "
+    "proposedEndAt has passed. Records the change in the activity log. 409 if the event is not "
+    "confirmed or has not yet ended; 403 if the caller is not the assigned coordinator.",
+    responses=error_responses(403, 404, 409),
+)
+def complete_event(
+    event_id: str = Path(..., description="Event id, e.g. `e1`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.complete_event(event_id, caller["userId"], authorization)
+
+
+@router.post(
     "/{event_id}/assign-coordinator",
     response_model=EventAssignmentOut,
     status_code=201,

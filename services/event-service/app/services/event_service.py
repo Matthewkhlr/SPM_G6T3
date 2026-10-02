@@ -835,3 +835,50 @@ class EventService(BaseService):
         authorization: str | None = None,
     ) -> EventOut:
         return self._decide_event(event_id, coordinator_id, "rejected", reason, authorization)
+
+    def complete_event(
+        self, event_id: str, coordinator_id: str, authorization: str | None = None
+    ) -> EventOut:
+        """SPM-73: the assigned coordinator closes out a confirmed event once
+        it has taken place (AC1).
+
+        Completing is just a status change (AC2, recorded via the same
+        _record_status_change history every other transition uses - that
+        history is what the activity log reads, so "who and when" needs no
+        extra column on Event). Everything downstream already keys off
+        event.status, so nothing else has to be touched for this one write:
+        - AC3 (venue/equipment availability): venue-service and
+          equipment-service only ever check bookings/reservations against a
+          *future* window, so a booking whose own dates are already in the
+          past - which is guaranteed here, since AC1 requires proposedEndAt
+          to have passed - never overlaps a future availability check,
+          whatever its own status says. No cross-service call needed.
+        - AC4 (stays readable): get_event/get_activity_log never filter by
+          status, so a completed event is still readable, log and all.
+        - AC5 (hidden from active views by default, filterable back): every
+          status-scoped list (queue, confirmed, upcoming) matches a specific
+          status/status set that no longer includes this event once its
+          status is "completed" - that happens for free as soon as the
+          status changes. /events/all already includes every non-draft,
+          non-rejected, non-discarded status (completed included), and
+          /events/{id} always works - so "filter back into view" already
+          exists; nothing new to add.
+        - AC6 (no more registering/withdrawing): registration-service's
+          eligibility() already requires status == "confirmed", and its
+          _CLOSED_EVENT_STATUSES already includes "completed" for the
+          withdrawal check - both already written, unused only because
+          nothing ever set this status before now.
+        """
+        event = self._require_event(event_id)
+        if event.coordinatorId != coordinator_id:
+            raise forbidden("Only the event's assigned coordinator can mark it completed")
+        if event.status != "confirmed":
+            raise conflict(f"Only a confirmed event can be marked completed (this one is {event.status})")
+        if event.proposedEndAt is None or event.proposedEndAt > datetime.utcnow():
+            raise conflict("This event cannot be marked completed until its end time has passed")
+        self._record_status_change(event, "completed", coordinator_id)
+        event.status = "completed"
+        event.updatedAt = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(event)
+        return _to_out(event, authorization)

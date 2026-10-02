@@ -1,9 +1,10 @@
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from fastapi import HTTPException
 
 from app.schemas.event import EventAssignmentCreate
-from tests.unit.support import EventCase, draft_payload, event_create
+from tests.unit.support import EventCase, draft_payload, event_create, insert_event
 
 
 class TestEventDecisions(EventCase):
@@ -59,3 +60,69 @@ class TestEventDecisions(EventCase):
         self.assertEqual(rejected.status, "rejected")
         self.assertEqual(log[0].note, "Dates clash")
         self.assertEqual(log[0].changedBy, "coord-1")
+
+    def test_complete_event_moves_a_confirmed_past_event_to_completed(self):
+        event = insert_event(
+            self.db,
+            eventId="e-done",
+            status="confirmed",
+            coordinatorId="coord-1",
+            proposedEndAt=datetime.utcnow() - timedelta(days=1),
+        )
+
+        completed = self.service.complete_event(event.eventId, "coord-1")
+        log = self.service.get_activity_log(event.eventId)
+
+        self.assertEqual(completed.status, "completed")
+        self.assertEqual(log[-1].toStatus, "completed")
+        self.assertEqual(log[-1].changedBy, "coord-1")
+
+    def test_complete_event_is_404_when_the_event_is_missing(self):
+        with self.assertRaises(HTTPException) as ctx:
+            self.service.complete_event("missing", "coord-1")
+
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_complete_event_is_403_for_a_coordinator_who_is_not_assigned(self):
+        event = insert_event(
+            self.db,
+            eventId="e-done",
+            status="confirmed",
+            coordinatorId="coord-1",
+            proposedEndAt=datetime.utcnow() - timedelta(days=1),
+        )
+
+        with self.assertRaises(HTTPException) as ctx:
+            self.service.complete_event(event.eventId, "coord-2")
+
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(self.service.get_event(event.eventId).status, "confirmed")
+
+    def test_complete_event_conflicts_when_it_is_not_confirmed(self):
+        event = insert_event(
+            self.db,
+            eventId="e-done",
+            status="submitted",
+            coordinatorId="coord-1",
+            proposedEndAt=datetime.utcnow() - timedelta(days=1),
+        )
+
+        with self.assertRaises(HTTPException) as ctx:
+            self.service.complete_event(event.eventId, "coord-1")
+
+        self.assertEqual(ctx.exception.status_code, 409)
+
+    def test_complete_event_conflicts_before_the_end_time_has_passed(self):
+        event = insert_event(
+            self.db,
+            eventId="e-done",
+            status="confirmed",
+            coordinatorId="coord-1",
+            proposedEndAt=datetime.utcnow() + timedelta(days=1),
+        )
+
+        with self.assertRaises(HTTPException) as ctx:
+            self.service.complete_event(event.eventId, "coord-1")
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(self.service.get_event(event.eventId).status, "confirmed")
