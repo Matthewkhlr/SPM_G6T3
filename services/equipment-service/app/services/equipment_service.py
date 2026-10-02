@@ -30,8 +30,15 @@ from app.schemas.equipment import (
     EquipmentUpdate,
     OutOfServiceCounts,
 )
-from shared.exceptions.http import conflict
+from shared.exceptions.http import conflict, forbidden
 from shared.services.base import BaseService
+
+
+def require_assigned_coordinator(event_coordinator_id: str | None, caller_id: str, action: str) -> None:
+    """SPM-46 AC1: only the coordinator assigned to the event may act on its
+    equipment. An event with no coordinator yet has nobody who may act."""
+    if not event_coordinator_id or event_coordinator_id != caller_id:
+        raise forbidden(f"Only the coordinator assigned to this event can {action}.")
 
 
 def _naive(value: datetime) -> datetime:

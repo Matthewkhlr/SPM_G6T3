@@ -13,9 +13,9 @@
 | SPM-45 | Technical Support permissions | TC-SPM45-AC02 | `e2e/spm45-api.spec.js`; `e2e/spm45-ui.contract.spec.js` | API automated; UI skipped |
 | SPM-45 | Event Coordinator permissions | TC-SPM45-AC03 | `e2e/spm45-api.spec.js`; `e2e/spm45-ui.contract.spec.js` | API automated; UI skipped |
 | SPM-45 | Wrong-role action returns 403 | TC-SPM45-AC04 | `e2e/spm45-api.spec.js`; `e2e/spm45-ui.contract.spec.js` | API automated; UI skipped |
-| SPM-46 | Assigned coordinator can act | TC-SPM46-AC01 | `e2e/spm46-api.spec.js`; `e2e/spm46-ui.contract.spec.js` | API role checks automated; assignment-gate and UI skipped |
-| SPM-46 | Unassigned staff read-only | TC-SPM46-AC02 | `e2e/spm46-api.spec.js`; `e2e/spm46-ui.contract.spec.js` | API read automated; UI skipped |
-| SPM-46 | Reassignment swaps permissions | TC-SPM46-AC03 | `e2e/spm46-api.spec.js`; `e2e/spm46-ui.contract.spec.js` | Assignment write automated; revoke/grant and UI skipped |
+| SPM-46 | Assigned coordinator can act | TC-SPM46-AC01 | `e2e/spm46-api.spec.js`; `e2e/spm46-ui.contract.spec.js` | Automated (API and UI): edit, venue request, equipment request; confirm arrangements skipped until SPM-72 |
+| SPM-46 | Unassigned staff read-only | TC-SPM46-AC02 | `e2e/spm46-api.spec.js`; `e2e/spm46-ui.contract.spec.js` | Automated (API and UI) |
+| SPM-46 | Reassignment swaps permissions | TC-SPM46-AC03 | `e2e/spm46-api.spec.js`; `e2e/spm46-ui.contract.spec.js` | Automated (API and UI) |
 | SPM-47 | Organiser list is org-scoped | TC-SPM47-AC01 | `e2e/spm47-api.spec.js`; `e2e/spm47-ui.contract.spec.js` | Automated |
 | SPM-47 | Cross-org event URL/API rejected | TC-SPM47-AC02 | `e2e/spm47-api.spec.js`; `e2e/spm47-ui.contract.spec.js` | Automated |
 | SPM-47 | Attendee public overview and own registrations | TC-SPM47-AC03 | `e2e/spm47-api.spec.js`; `e2e/spm47-ui.contract.spec.js` | Automated |

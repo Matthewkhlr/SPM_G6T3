@@ -386,12 +386,15 @@ class VenueService(BaseService):
         self.db.commit()
         return [_booking_to_out(row) for row in rows]
 
-    def withdraw_booking(self, booking_id: str, caller: dict) -> VenueBookingOut:
+    def withdraw_booking(self, booking_id: str, caller: dict, event_coordinator_id: str | None) -> VenueBookingOut:
         """SPM-63 AC8. A withdrawn request no longer counts anywhere: the
-        suitability rule and conflict checks only look at pending and approved."""
+        suitability rule and conflict checks only look at pending and approved.
+
+        SPM-46 AC3: the event's current coordinator withdraws it, so after a
+        reassignment the new coordinator can and the previous one cannot."""
         row = self._require_booking(booking_id)
-        if row.requestedBy != caller["userId"]:
-            raise forbidden("You can only withdraw venue requests that you sent.")
+        if not event_coordinator_id or event_coordinator_id != caller["userId"]:
+            raise forbidden("Only the coordinator assigned to this event can withdraw its venue request.")
         if row.status != "pending":
             raise conflict(f"Only a pending request can be withdrawn. This request is already {row.status}.")
         row.status = "withdrawn"

@@ -59,6 +59,10 @@ class BookingRequestCase(VenueCase):
         data.update(overrides)
         return self.service.request_booking(VenueBookingCreate(**data), caller, event or self.event)
 
+    def withdraw(self, booking_id, caller=COORDINATOR, assigned=COORDINATOR["userId"]):
+        """`assigned` is the event's coordinator at the moment of withdrawing."""
+        return self.service.withdraw_booking(booking_id, caller, assigned)
+
     def refused(self, status_code, **kwargs):
         with self.assertRaises(HTTPException) as ctx:
             self.request(**kwargs)
@@ -138,7 +142,7 @@ class TestWhatTheRequestCarries(BookingRequestCase):
 
     def test_when_the_organisation_name_could_not_be_loaded_its_id_still_names_the_client(self):
         without_name = self.request(event=self.event_with(organisationName=None))
-        self.service.withdraw_booking(without_name.bookingId, COORDINATOR)
+        self.withdraw(without_name.bookingId)
         without_client = self.request(event=self.event_with(organisationName=None, organisationId=None))
 
         self.assertEqual(without_name.eventSnapshot["clientOrganisation"], "org-1")
@@ -263,7 +267,7 @@ class TestOnePendingRequestPerEvent(BookingRequestCase):
 
     def test_once_the_pending_request_is_withdrawn_or_rejected_a_new_one_can_be_sent(self):
         first = self.request()
-        self.service.withdraw_booking(first.bookingId, COORDINATOR)
+        self.withdraw(first.bookingId)
         second = self.request(venueId=self.venue_named("Riverside Room").venueId)
         self.service.reject_booking(second.bookingId, "u-venue", "Closed that day")
 
@@ -278,27 +282,49 @@ class TestWithdraw(BookingRequestCase):
     def test_the_coordinator_can_withdraw_their_own_pending_request(self):
         booking = self.request()
 
-        withdrawn = self.service.withdraw_booking(booking.bookingId, COORDINATOR)
+        withdrawn = self.withdraw(booking.bookingId)
 
         self.assertEqual(withdrawn.status, "withdrawn")
         self.assertEqual(self.service.list_bookings(status="pending"), [])
 
     def test_a_withdrawn_request_no_longer_warns_other_events(self):
         booking = self.request()
-        self.service.withdraw_booking(booking.bookingId, COORDINATOR)
+        self.withdraw(booking.bookingId)
 
         other = self.request(event=self.event_with(eventName="Board Meeting"), eventId="e-other")
 
         self.assertEqual(other.warnings, [])
 
-    def test_only_the_coordinator_who_sent_it_can_withdraw_it(self):
+    def test_a_coordinator_not_assigned_to_the_event_cannot_withdraw_its_request(self):
         booking = self.request()
 
         with self.assertRaises(HTTPException) as ctx:
-            self.service.withdraw_booking(booking.bookingId, OTHER_COORDINATOR)
+            self.withdraw(booking.bookingId, caller=OTHER_COORDINATOR)
 
         self.assertEqual(ctx.exception.status_code, 403)
-        self.assertEqual(ctx.exception.detail, "You can only withdraw venue requests that you sent.")
+        self.assertEqual(
+            ctx.exception.detail, "Only the coordinator assigned to this event can withdraw its venue request."
+        )
+        self.assertEqual(self.service.get_booking(booking.bookingId).status, "pending")
+
+    def test_after_reassignment_the_new_coordinator_can_withdraw_and_the_previous_one_cannot(self):
+        """SPM-46 AC3: the request was sent by the previous coordinator."""
+        booking = self.request()
+
+        with self.assertRaises(HTTPException) as ctx:
+            self.withdraw(booking.bookingId, caller=COORDINATOR, assigned=OTHER_COORDINATOR["userId"])
+        self.assertEqual(ctx.exception.status_code, 403)
+
+        withdrawn = self.withdraw(booking.bookingId, caller=OTHER_COORDINATOR, assigned=OTHER_COORDINATOR["userId"])
+        self.assertEqual(withdrawn.status, "withdrawn")
+
+    def test_nobody_can_withdraw_while_the_event_has_no_coordinator(self):
+        booking = self.request()
+
+        with self.assertRaises(HTTPException) as ctx:
+            self.withdraw(booking.bookingId, assigned=None)
+
+        self.assertEqual(ctx.exception.status_code, 403)
         self.assertEqual(self.service.get_booking(booking.bookingId).status, "pending")
 
     def test_only_a_pending_request_can_be_withdrawn(self):
@@ -306,7 +332,7 @@ class TestWithdraw(BookingRequestCase):
         self.service.approve_booking(booking.bookingId, "u-venue", None)
 
         with self.assertRaises(HTTPException) as ctx:
-            self.service.withdraw_booking(booking.bookingId, COORDINATOR)
+            self.withdraw(booking.bookingId)
 
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(
@@ -315,7 +341,7 @@ class TestWithdraw(BookingRequestCase):
 
     def test_venue_staff_cannot_decide_on_a_withdrawn_request(self):
         booking = self.request()
-        self.service.withdraw_booking(booking.bookingId, COORDINATOR)
+        self.withdraw(booking.bookingId)
 
         with self.assertRaises(HTTPException) as ctx:
             self.service.approve_booking(booking.bookingId, "u-venue", None)
@@ -323,7 +349,7 @@ class TestWithdraw(BookingRequestCase):
         self.assertEqual(ctx.exception.status_code, 409)
 
     def test_the_withdrawal_notice_tells_venue_staff_no_action_is_needed(self):
-        booking = self.service.withdraw_booking(self.request().bookingId, COORDINATOR)
+        booking = self.withdraw(self.request().bookingId)
 
         subject, body = self.service.venue_staff_notice(booking, "withdrawn")
 

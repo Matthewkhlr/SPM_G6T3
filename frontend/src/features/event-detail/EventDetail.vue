@@ -57,7 +57,7 @@
               Registration settings
             </button>
             <button
-              v-if="session.role === 'coordinator' && event.status !== 'draft'"
+              v-if="canChooseVenue"
               class="btn btn-outline"
               data-testid="event-choose-venue"
               @click="router.push(`/app/events/${event.eventId}/venues`)"
@@ -65,7 +65,7 @@
               Choose a venue
             </button>
             <button
-              v-if="event.status === 'draft'"
+              v-if="session.role === 'organiser' && event.status === 'draft'"
               class="btn btn-outline"
               data-testid="event-discard"
               @click="openDiscardConfirm"
@@ -325,6 +325,16 @@ const canEdit = computed(
     !!event.value?.coordinatorId &&
     event.value.coordinatorId === session.userId &&
     !LOCKED_EVENT_STATUSES.includes(event.value.status),
+)
+
+// SPM-46 AC1/AC2: requesting a venue is for the assigned coordinator only;
+// every other internal user sees this page read-only. The server enforces it.
+const canChooseVenue = computed(
+  () =>
+    session.role === 'coordinator' &&
+    !!event.value?.coordinatorId &&
+    event.value.coordinatorId === session.userId &&
+    event.value.status !== 'draft',
 )
 
 const showEquipment = computed(

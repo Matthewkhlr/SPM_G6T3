@@ -25,7 +25,8 @@ from app.schemas.equipment import (
     ReservationRelease,
     ReservationReverificationRequest,
 )
-from app.services.equipment_service import EquipmentService
+from app.orchestration.clients import fetch_event_coordinator
+from app.services.equipment_service import EquipmentService, require_assigned_coordinator
 from shared.auth.deps import forwarded_bearer
 from shared.auth.roles import resolve_caller
 from shared.exceptions.http import forbidden
@@ -244,8 +245,9 @@ def list_reservations(
     response_model=EquipmentRequestOut,
     status_code=201,
     summary="Request equipment",
-    description="Coordinator only. Creates a request in status `pending`. `requestedBy` is taken from the bearer token.",
-    responses=error_responses(403, 503),
+    description="The event's assigned coordinator only (SPM-46). Creates a request in status `pending`. "
+    "`requestedBy` is taken from the bearer token. 404 if the event does not exist.",
+    responses=error_responses(403, 404, 503),
 )
 def create_request(
     body: EquipmentRequestCreate,
@@ -253,6 +255,9 @@ def create_request(
     service: EquipmentService = Depends(get_equipment_service),
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    require_assigned_coordinator(
+        fetch_event_coordinator(body.eventId, authorization), caller["userId"], "request equipment for it"
+    )
     return service.create_request(body, caller["userId"])
 
 
@@ -293,7 +298,8 @@ def mark_unavailable(
     "/requests/{request_id}/details",
     response_model=EquipmentRequestOut,
     summary="Refine a pending equipment request",
-    description="Coordinator only. Updates quantity and technical requirements while the request is still `pending`.",
+    description="The event's assigned coordinator only (SPM-46). Updates quantity and technical requirements "
+    "while the request is still `pending`.",
     responses=error_responses(403, 404, 409, 503),
 )
 def refine_request(
@@ -302,7 +308,11 @@ def refine_request(
     authorization: str | None = Depends(forwarded_bearer),
     service: EquipmentService = Depends(get_equipment_service),
 ):
-    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    event_id = service.get_request(request_id).eventId
+    require_assigned_coordinator(
+        fetch_event_coordinator(event_id, authorization), caller["userId"], "change its equipment requests"
+    )
     return service.refine_request(request_id, body.quantity, body.technicalRequirements)
 
 

@@ -18,13 +18,21 @@
         </p>
       </div>
 
+      <!-- SPM-46 AC2: everyone else may check venues but not act on this event. -->
+      <p v-if="!isAssignedCoordinator" class="read-only-note" data-testid="venue-request-read-only">
+        Only the coordinator assigned to this event can request or withdraw a venue for it. You can still check
+        how each venue suits the event.
+      </p>
+
       <!-- SPM-63 AC7 and AC8: one pending request per event; the coordinator can withdraw it. -->
       <div v-if="pendingRequest" class="pending-banner" data-testid="venue-request-pending">
         <p>
           A request for <strong>{{ venueNameFor(pendingRequest.venueId) }}</strong> is waiting for Venue Staff
-          (sent {{ formatUtc(pendingRequest.createdAt) }} UTC). Withdraw it before requesting a different venue.
+          (sent {{ formatUtc(pendingRequest.createdAt) }} UTC).
+          <template v-if="isAssignedCoordinator">Withdraw it before requesting a different venue.</template>
         </p>
         <button
+          v-if="isAssignedCoordinator"
           type="button"
           class="btn btn-ghost small"
           data-testid="venue-request-withdraw"
@@ -73,27 +81,29 @@
             <p v-else class="hint all-clear">This venue meets every requirement for this event.</p>
 
             <!-- SPM-62 AC8 and SPM-63 AC3/AC4: failures block; warnings go ahead once acknowledged. -->
-            <label v-if="result.verdict === 'suitable with warnings'" class="acknowledge">
-              <input v-model="acknowledged" type="checkbox" data-testid="suitability-acknowledge" />
-              I have read the warnings above and want to send the request anyway.
-            </label>
-            <label v-if="result.verdict !== 'not suitable'" class="notes">
-              Notes for Venue Staff (optional)
-              <textarea v-model="notes" rows="3" maxlength="1000" data-testid="venue-request-notes" />
-            </label>
-            <div class="request-row">
-              <button
-                type="button"
-                class="btn btn-solid"
-                data-testid="venue-request-submit"
-                :disabled="!canSubmit"
-                @click="requestVenue"
-              >
-                {{ submitting ? 'Sending…' : 'Request this venue' }}
-              </button>
-              <p v-if="submitHint" class="hint">{{ submitHint }}</p>
-            </div>
-            <p v-if="requestError" class="form-error request-error">{{ requestError }}</p>
+            <template v-if="isAssignedCoordinator">
+              <label v-if="result.verdict === 'suitable with warnings'" class="acknowledge">
+                <input v-model="acknowledged" type="checkbox" data-testid="suitability-acknowledge" />
+                I have read the warnings above and want to send the request anyway.
+              </label>
+              <label v-if="result.verdict !== 'not suitable'" class="notes">
+                Notes for Venue Staff (optional)
+                <textarea v-model="notes" rows="3" maxlength="1000" data-testid="venue-request-notes" />
+              </label>
+              <div class="request-row">
+                <button
+                  type="button"
+                  class="btn btn-solid"
+                  data-testid="venue-request-submit"
+                  :disabled="!canSubmit"
+                  @click="requestVenue"
+                >
+                  {{ submitting ? 'Sending…' : 'Request this venue' }}
+                </button>
+                <p v-if="submitHint" class="hint">{{ submitHint }}</p>
+              </div>
+              <p v-if="requestError" class="form-error request-error">{{ requestError }}</p>
+            </template>
           </template>
         </div>
       </div>
@@ -147,6 +157,14 @@ const withdrawing = ref(false)
 const withdrawError = ref('')
 const notice = ref('')
 
+// SPM-46 AC1: only the event's assigned coordinator requests or withdraws a
+// venue. The server enforces the same; this only decides what to offer.
+const isAssignedCoordinator = computed(
+  () =>
+    session.role === 'coordinator' &&
+    !!event.value?.coordinatorId &&
+    event.value.coordinatorId === session.userId,
+)
 const pendingRequest = computed(() => bookings.value.find((b) => b.status === 'pending') || null)
 const hasDates = computed(() => Boolean(event.value?.proposedStartAt && event.value?.proposedEndAt))
 const inPlanning = computed(() => PLANNING_STATUSES.includes(event.value?.status))
@@ -306,6 +324,10 @@ onMounted(async () => {
   background: rgba(255, 198, 109, .08); border: 1px solid rgba(255, 198, 109, .3);
 }
 .pending-banner p { margin: 0; font-size: 13px; color: var(--text); line-height: 1.6; }
+.read-only-note {
+  margin: 0 0 18px; padding: 11px 14px; border-radius: 9px; font-size: 13px; line-height: 1.6;
+  color: var(--body); background: var(--glass); border: 1px solid var(--hairline);
+}
 .success-note {
   margin: 0 0 18px; padding: 11px 14px; border-radius: 9px; font-size: 13px;
   color: var(--signal); background: rgba(56, 224, 200, .08); border: 1px solid rgba(56, 224, 200, .25);
