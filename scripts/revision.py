@@ -26,7 +26,8 @@ def main() -> None:
     cwd = ROOT / "services" / args.service
     env = os.environ.copy()
     env["DATABASE_URL"] = SERVICE_URLS[args.service]
-    env["PYTHONPATH"] = str(cwd)
+    # The service's app config imports the repo-root `shared` package.
+    env["PYTHONPATH"] = os.pathsep.join([str(cwd), str(ROOT)])
     print(f"alembic revision --autogenerate -m {args.message!r}  ({args.service})")
     subprocess.run(
         [sys.executable, "-m", "alembic", "revision", "--autogenerate", "-m", args.message],

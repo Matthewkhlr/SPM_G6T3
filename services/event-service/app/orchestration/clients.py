@@ -116,17 +116,21 @@ ARRANGEMENTS_UNREACHABLE = (
 HOLDING_RESERVATION_STATUSES = ("active", "reserved")
 
 
-def _arrangement_rows(method: str, url: str, authorization: str | None, **kwargs) -> list[dict]:
+def _arrangement_rows(
+    method: str, url: str, authorization: str | None, unreachable: str = ARRANGEMENTS_UNREACHABLE, **kwargs
+):
+    """The JSON body of a call whose answer a change depends on; 503 with
+    `unreachable` when it cannot be had, so nothing is saved unchecked."""
     headers = {"Authorization": authorization} if authorization else {}
     try:
         with httpx.Client(timeout=5.0) as client:
             response = client.request(method, url, headers=headers, **kwargs)
     except httpx.HTTPError as exc:
         logger.info("%s %s raised %r", method, url, exc)
-        raise service_unavailable(ARRANGEMENTS_UNREACHABLE) from exc
+        raise service_unavailable(unreachable) from exc
     if response.status_code != 200:
         logger.info("%s %s got status %s", method, url, response.status_code)
-        raise service_unavailable(ARRANGEMENTS_UNREACHABLE)
+        raise service_unavailable(unreachable)
     return response.json()
 
 
@@ -181,6 +185,93 @@ def flag_arrangements(event_id: str, reason: str, authorization: str | None) -> 
         "POST", f"{settings.equipment_service_url}/equipment/reservations/reverification", authorization, json=body
     )
     return [_venue_arrangement(row) for row in bookings] + [_equipment_arrangement(row) for row in reservations]
+
+
+# SPM-90: registration settings are only saved once the registrations and the
+# venue booking they depend on have been checked.
+REGISTRATIONS_UNREACHABLE = (
+    "Registrations could not be checked right now, so the change was not saved. Please try again shortly."
+)
+VENUE_UNREACHABLE = "The venue booking could not be checked right now, so the change was not saved. Please try again shortly."
+
+
+def current_registration_count(event_id: str, authorization: str | None) -> int:
+    """SPM-90 AC4/AC5: attendees currently registered. Unlike registration_count()
+    this is not best effort: a capacity check against 0 would let a change
+    through that the real count forbids."""
+    body = _arrangement_rows(
+        "GET",
+        f"{settings.registration_service_url}/registrations/count",
+        authorization,
+        REGISTRATIONS_UNREACHABLE,
+        params={"eventId": event_id},
+    )
+    return int(body["count"])
+
+
+def registered_attendees(event_id: str, authorization: str | None) -> list[dict]:
+    """SPM-90 AC5: the attendees still registered, with userId and email, so
+    they can be told registration was turned off."""
+    roster = _arrangement_rows(
+        "GET",
+        f"{settings.registration_service_url}/registrations",
+        authorization,
+        REGISTRATIONS_UNREACHABLE,
+        params={"eventId": event_id, "includeWithdrawn": "false"},
+    )
+    return [row for row in roster["attendees"] if row.get("status") == "registered"]
+
+
+def booked_venue_capacities(event_id: str, layout: str | None, authorization: str | None) -> list[dict]:
+    """SPM-90 AC3: for each confirmed venue booking of the event, the venue and
+    how many it holds in the event's layout. A booking does not record a
+    layout, so the event's own layout is the booked one; without one, or one
+    the venue does not offer, the venue's largest layout applies, as in the
+    suitability check (SPM-62)."""
+    bookings = _arrangement_rows(
+        "GET",
+        f"{settings.venue_service_url}/venues/bookings",
+        authorization,
+        VENUE_UNREACHABLE,
+        params={"eventId": event_id, "status": "approved"},
+    )
+    capacities = []
+    for booking in bookings:
+        venue = _arrangement_rows(
+            "GET", f"{settings.venue_service_url}/venues/{booking['venueId']}", authorization, VENUE_UNREACHABLE
+        )
+        by_layout = {row["name"].lower(): row["capacity"] for row in venue.get("layouts", [])}
+        in_layout = by_layout.get(layout.lower()) if layout else None
+        capacities.append(
+            {
+                "venueName": venue["name"],
+                "layout": layout if in_layout is not None else None,
+                "capacity": in_layout if in_layout is not None else venue["capacity"],
+            }
+        )
+    return capacities
+
+
+def record_notification(
+    user_id: str, event_id: str, kind: str, title: str, body: str, authorization: str | None
+) -> bool:
+    """SPM-90: put a notification in `user_id`'s in-app inbox. Staff may notify
+    another user. Best effort: callers have already saved their change."""
+    headers = {"Authorization": authorization} if authorization else {}
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.post(
+                f"{settings.notification_service_url}/notifications/records",
+                json={"userId": user_id, "eventId": event_id, "type": kind, "title": title, "body": body},
+                headers=headers,
+            )
+    except httpx.HTTPError as exc:
+        logger.warning("in-app notification to %s raised %r", user_id, exc)
+        return False
+    if response.status_code != 201:
+        logger.warning("in-app notification to %s got status %s", user_id, response.status_code)
+        return False
+    return True
 
 
 # SPM-66: who may be assigned (AC8), the candidate list (AC2), and a

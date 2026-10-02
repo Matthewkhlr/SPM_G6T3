@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RegisterRequest(BaseModel):
@@ -22,6 +22,7 @@ class RegisterRequest(BaseModel):
 class AttendeeOut(BaseModel):
     attendeeRegistrationId: str
     eventId: str
+    userId: str | None = Field(default=None, description="The attendee's account; lets staff notify them (SPM-90).")
     attendeeName: str
     attendeeEmail: str
     status: str = "registered"

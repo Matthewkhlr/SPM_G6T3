@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.services.notifier import list_for_user, record_notification, send_email
 from shared.auth.deps import forwarded_bearer
 from shared.auth.roles import resolve_caller
+from shared.exceptions.http import forbidden
 from shared.openapi import error_responses
 
 router = APIRouter(
@@ -50,7 +51,16 @@ class NotifyOut(BaseModel):
     )
 
 
+# Internal staff may notify someone else, e.g. a coordinator's change telling
+# the organiser and attendees (SPM-90). Everyone else notifies only themselves.
+STAFF_ROLES = {"coordinator", "venue", "techsupport"}
+
+
 class RecordRequest(BaseModel):
+    userId: str | None = Field(
+        default=None,
+        description="Recipient; defaults to the caller. Only staff (coordinator, venue, techsupport) may name someone else.",
+    )
     eventId: str | None = None
     type: str = "registration.withdrawn"
     title: str
@@ -112,12 +122,17 @@ def list_notifications(
     "/records",
     response_model=NotificationOut,
     status_code=201,
-    summary="Store a notification for the signed-in user",
-    description="Persists a notification for the caller. The user id is taken from the bearer token.",
+    summary="Store an in-app notification",
+    description="Persists a notification for the caller, or for `userId` when the caller is staff "
+    "(coordinator, venue, techsupport). Anyone else naming another user gets 403.",
+    responses=error_responses(403),
 )
 def record(body: RecordRequest, authorization: str | None = Depends(forwarded_bearer), db: Session = Depends(get_db)):
     caller = resolve_caller(authorization, settings.user_service_url)
-    row = record_notification(db, caller["userId"], body.eventId, body.type, body.title, body.body)
+    recipient = body.userId or caller["userId"]
+    if recipient != caller["userId"] and caller.get("role") not in STAFF_ROLES:
+        raise forbidden("Only staff can notify another user")
+    row = record_notification(db, recipient, body.eventId, body.type, body.title, body.body)
     db.commit()
     db.refresh(row)
     return row

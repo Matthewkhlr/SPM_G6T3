@@ -104,6 +104,7 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { updateEvent } from '../../api/eventService.js'
+import { EVENT_CATEGORIES, LAYOUT_TYPES } from '../../config/eventFields.js'
 import { eventStatusLabel } from '../../config/eventStatus.js'
 
 const props = defineProps({
@@ -112,13 +113,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'saved'])
 
-const CATEGORIES = ['conference', 'workshop', 'networking', 'meeting']
-// Same guided list as the venue form; any other layout can still be typed.
-const LAYOUT_TYPES = [
-  'Theatre', 'Classroom', 'Boardroom', 'U-Shape', 'Hollow Square',
-  'Banquet', 'Cabaret', 'Exhibition', 'Reception / Cocktail', 'Herringbone',
-  'Auditorium', 'Workshop / Breakout Pods',
-]
+const CATEGORIES = EVENT_CATEGORIES
 // Cleared, these go to the API as null rather than "".
 const CLEARABLE = ['category', 'layoutPreference']
 

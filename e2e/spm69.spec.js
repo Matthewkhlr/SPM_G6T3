@@ -48,7 +48,12 @@ test.describe('SPM-69 Approve a submitted request so planning can begin', () => 
     await page.goto(`/app/events/${eventId}`)
     await page.getByTestId('event-approve').click()
     await expect(page.getByTestId('approve-open-clarifications-warning')).toBeVisible()
+    // Wait for the approval the click sends, or the read below can race it.
+    const approval = page.waitForResponse(
+      (response) => response.url().endsWith(`/events/${eventId}/approve`) && response.request().method() === 'POST',
+    )
     await page.getByTestId('approve-confirm-anyway').click()
+    expect((await approval).status()).toBe(200)
     const stored = await eventApi('GET', `/${eventId}`, 'EC-01')
     expect(stored.body.status).toMatch(/planning/i)
   })

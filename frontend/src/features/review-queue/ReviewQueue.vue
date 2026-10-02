@@ -1,8 +1,8 @@
 <template>
   <div class="review-queue">
-    <!-- While a dialog floats above (assign or reject), the queue and the
-         details popup behind it are inert — otherwise their own "Assign" /
-         "Reject" buttons stay in the accessibility tree alongside the
+    <!-- While a dialog floats above (assign, approve, or reject), the queue and
+         the details popup behind it are inert — otherwise their own "Assign" /
+         "Approve" / "Reject" buttons stay in the accessibility tree alongside the
          dialog's, so a role-based lookup for either matches two elements. -->
     <div :inert="dialogOpen || null" :aria-hidden="dialogOpen ? 'true' : null">
     <div v-if="!loading && !error" class="queue-filters">
@@ -69,9 +69,10 @@
         </div>
         <div class="actions">
           <button
+            v-if="canApprove(event)"
             class="btn btn-solid"
             :disabled="isBusy(event.eventId)"
-            @click.stop="approve(event)"
+            @click.stop="approving = event"
           >
             Approve
           </button>
@@ -121,7 +122,12 @@
           <button class="btn btn-outline" :disabled="isBusy(selected.eventId)" @click="openReject(selected)">
             Reject
           </button>
-          <button class="btn btn-solid" :disabled="isBusy(selected.eventId)" @click="approve(selected)">
+          <button
+            v-if="canApprove(selected)"
+            class="btn btn-solid"
+            :disabled="isBusy(selected.eventId)"
+            @click="approving = selected"
+          >
             Approve
           </button>
         </div>
@@ -135,6 +141,14 @@
       :event="assigning"
       @close="assigning = null"
       @assigned="onAssigned"
+    />
+
+    <!-- SPM-69: approve with an optional note (stacks above the details popup) -->
+    <ApproveEventDialog
+      v-if="approving"
+      :event="approving"
+      @close="approving = null"
+      @approved="onApproved"
     />
 
     <!-- Reject reason modal (stacks above the details popup when opened from it) -->
@@ -156,8 +170,10 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { getSubmissionQueue, approveEvent, rejectEvent } from '../../api/eventService.js'
+import { getSubmissionQueue, rejectEvent } from '../../api/eventService.js'
 import { getMe } from '../../api/userService.js'
+import { IN_REVIEW_EVENT_STATUSES } from '../../config/eventStatus.js'
+import ApproveEventDialog from '../event-detail/ApproveEventDialog.vue'
 import AssignCoordinatorDialog from '../event-detail/AssignCoordinatorDialog.vue'
 
 const events = ref([])
@@ -170,7 +186,8 @@ const selected = ref(null)
 const rejecting = ref(null)
 const rejectReason = ref('')
 const assigning = ref(null)
-const dialogOpen = computed(() => Boolean(assigning.value || rejecting.value))
+const approving = ref(null)
+const dialogOpen = computed(() => Boolean(assigning.value || rejecting.value || approving.value))
 
 // 'all' | 'unassigned' | 'mine'
 const filter = ref('all')
@@ -184,6 +201,16 @@ let ticker = null
 
 function isBusy(eventId) {
   return busyIds.has(eventId)
+}
+
+// SPM-69 AC1/AC5: only the assigned coordinator approves, so an unassigned
+// request offers no Approve at all. The server enforces the same.
+function canApprove(event) {
+  return (
+    !!event.coordinatorId &&
+    event.coordinatorId === myUserId.value &&
+    IN_REVIEW_EVENT_STATUSES.includes(event.status)
+  )
 }
 
 // submittedAt is stamped with utcnow() on the server and serialised without a
@@ -314,17 +341,10 @@ function removeFromQueue(eventId) {
   if (selected.value?.eventId === eventId) selected.value = null
 }
 
-async function approve(event) {
-  busyIds.add(event.eventId)
-  delete rowErrors[event.eventId]
-  try {
-    await approveEvent(event.eventId)
-    removeFromQueue(event.eventId)
-  } catch (err) {
-    rowErrors[event.eventId] = err.response?.data?.detail || 'Could not approve this event.'
-  } finally {
-    busyIds.delete(event.eventId)
-  }
+// Approved requests move to planning, which is no longer in the queue.
+function onApproved(approved) {
+  approving.value = null
+  removeFromQueue(approved.eventId)
 }
 
 // Assigning moves a submitted request to "under review" and sets its

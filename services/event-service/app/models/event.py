@@ -42,7 +42,9 @@ class Event(Base):
         "updated_at", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    reviews: Mapped[list["EventReview"]] = relationship("EventReview", back_populates="event")
+    # Loaded with each event (one extra query per list, not per row) so every
+    # event read can say whether clarifications are open (SPM-68, SPM-69 AC4).
+    reviews: Mapped[list["EventReview"]] = relationship("EventReview", back_populates="event", lazy="selectin")
     assignments: Mapped[list["EventAssignment"]] = relationship("EventAssignment", back_populates="event")
     changeRequests: Mapped[list["EventChangeRequest"]] = relationship("EventChangeRequest", back_populates="event")
     statusHistory: Mapped[list["EventStatusHistory"]] = relationship("EventStatusHistory", back_populates="event")

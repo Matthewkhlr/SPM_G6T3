@@ -67,3 +67,37 @@ class TestNotificationRoutes(ServiceTestCase):
         self.assertIn("e1", inbox.text)
         self.assertNotIn("secret-other", inbox.text)
         self.assertNotIn("n-other", inbox.text)
+
+    def test_staff_can_notify_another_user(self):
+        self.resolve_caller.return_value = {"userId": "u-ben", "role": "coordinator"}
+
+        created = self.client.post(
+            "/notifications/records",
+            headers={"Authorization": "Bearer token"},
+            json={"userId": "u-amy", "eventId": "e3", "type": "event.registration_settings", "title": "Changed", "body": "Capacity 60."},
+        )
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.json()["userId"], "u-amy")
+        self.assertEqual(self.db.query(Notification).filter(Notification.userId == "u-amy").count(), 1)
+
+    def test_anyone_else_cannot_notify_another_user(self):
+        for role in ("attendee", "organiser"):
+            self.resolve_caller.return_value = {"userId": "u-amy", "role": role}
+            with self.subTest(role=role):
+                denied = self.client.post(
+                    "/notifications/records",
+                    headers={"Authorization": "Bearer token"},
+                    json={"userId": "u-other", "title": "Spoofed", "body": "Not from staff."},
+                )
+                self.assertEqual(denied.status_code, 403)
+        self.assertEqual(self.db.query(Notification).count(), 0)
+
+    def test_naming_yourself_is_allowed_for_anyone(self):
+        created = self.client.post(
+            "/notifications/records",
+            headers={"Authorization": "Bearer token"},
+            json={"userId": "u-amy", "title": "Mine", "body": "For me."},
+        )
+
+        self.assertEqual((created.status_code, created.json()["userId"]), (201, "u-amy"))

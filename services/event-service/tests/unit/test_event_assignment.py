@@ -180,10 +180,10 @@ class TestCandidatesAndLog(AssignmentCase):
         self.assertEqual((second.oldValue, second.newValue), ("coord-1", "coord-2"))
 
     def test_a_request_under_review_can_still_be_approved_or_rejected(self):
-        self.event(event_id="a", status="under review")
+        self.event(event_id="a", status="under review", coordinatorId="coord-1")
         self.event(event_id="b", status="under review")
 
-        self.assertEqual(self.service.approve_event("a", "coord-1").status, "approved")
+        self.assertEqual(self.service.approve_event("a", "coord-1").status, "planning")
         self.assertEqual(self.service.reject_event("b", "coord-1", "Dates clash").status, "rejected")
         with self.assertRaises(HTTPException) as ctx:
             self.service.approve_event("a", "coord-1")

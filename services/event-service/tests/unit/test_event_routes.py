@@ -54,9 +54,6 @@ class TestEventRoutes(ServiceTestCase):
         self.assertEqual(self.client.get(f"/events/{event_id}", headers=headers).status_code, 200)
         self.assertEqual(self.client.get(f"/events/{event_id}/activity-log", headers=headers).status_code, 200)
 
-        approved = self.client.post(f"/events/{event_id}/approve", headers=headers, json={})
-        self.assertEqual(approved.status_code, 200)
-
         rejected_source = self.client.post("/events", headers=headers, json=body)
         rejected = self.client.post(
             f"/events/{rejected_source.json()['eventId']}/reject",
@@ -74,7 +71,10 @@ class TestEventRoutes(ServiceTestCase):
                 headers=headers,
                 json={"coordinatorId": "coord-1"},
             )
+            approved = self.client.post(f"/events/{event_id}/approve", headers=headers, json={})
         self.assertEqual(assigned.status_code, 201)
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(approved.json()["status"], "planning")
 
         done = insert_event(
             self.db,
