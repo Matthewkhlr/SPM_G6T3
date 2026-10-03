@@ -6,17 +6,20 @@ import { reactive } from 'vue'
 export const session = reactive({
   isAuthenticated: false,
   role: null,
-  name: null
+  name: null,
+  userId: null,
 })
 
 export function loginSession(user) {
   session.isAuthenticated = true
   session.role = user.role
   session.name = user.name
+  session.userId = user.userId || null
 }
 
 export function logoutSession() {
   session.isAuthenticated = false
   session.role = null
   session.name = null
+  session.userId = null
 }

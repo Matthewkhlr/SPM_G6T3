@@ -2,6 +2,11 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LandingView from '../views/LandingView.vue'
 import LoginView from '../views/LoginView.vue'
 import DashboardView from '../views/DashboardView.vue'
+import EventDetail from '../features/event-detail/EventDetail.vue'
+import EventRegistrations from '../features/event-detail/EventRegistrations.vue'
+import EventRegistrationSettings from '../features/event-detail/EventRegistrationSettings.vue'
+import RegistrationDetail from '../features/my-registrations/RegistrationDetail.vue'
+import EventVenueSelect from '../features/venue-request/EventVenueSelect.vue'
 import { session } from '../store/session.js'
 
 const router = createRouter({
@@ -9,7 +14,37 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'landing', component: LandingView },
     { path: '/login', name: 'login', component: LoginView },
-    { path: '/app', name: 'dashboard', component: DashboardView, meta: { requiresAuth: true } }
+    { path: '/app', name: 'dashboard', component: DashboardView, meta: { requiresAuth: true } },
+    {
+      path: '/app/events/:id',
+      name: 'event-detail',
+      component: EventDetail,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/events/:id/registrations',
+      name: 'event-registrations',
+      component: EventRegistrations,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/events/:id/registration-settings',
+      name: 'event-registration-settings',
+      component: EventRegistrationSettings,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/registrations/:id',
+      name: 'registration-detail',
+      component: RegistrationDetail,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/events/:id/venues',
+      name: 'event-venue-select',
+      component: EventVenueSelect,
+      meta: { requiresAuth: true }
+    }
   ]
 })
 

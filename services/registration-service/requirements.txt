@@ -9,3 +9,4 @@ cryptography==44.0.0
 alembic==1.14.1
 firebase-admin==6.6.0
 python-dotenv==1.0.1
+coverage==7.16.1

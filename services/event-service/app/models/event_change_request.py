@@ -7,6 +7,10 @@ from app.db.session import Base
 
 
 class EventChangeRequest(Base):
+    """SPM-106: an organiser's request to change their event. `summary` is the
+    organiser's reason; reviewedBy/reviewedAt record who closed it and when
+    (the coordinator who decided, or the organiser who withdrew)."""
+
     __tablename__ = "event_change_requests"
 
     changeRequestId: Mapped[str] = mapped_column("change_request_id", String(64), primary_key=True)
@@ -15,6 +19,8 @@ class EventChangeRequest(Base):
     status: Mapped[str] = mapped_column(String(32), default="pending")
     summary: Mapped[str] = mapped_column(Text, default="")
     proposedChanges: Mapped[dict | None] = mapped_column("proposed_changes", JSON, nullable=True)
+    currentValues: Mapped[dict | None] = mapped_column("current_values", JSON, nullable=True)
+    decisionReason: Mapped[str | None] = mapped_column("decision_reason", Text, nullable=True)
     affectsVenue: Mapped[bool] = mapped_column("affects_venue", Boolean, default=False)
     affectsEquipment: Mapped[bool] = mapped_column("affects_equipment", Boolean, default=False)
     affectsRegistration: Mapped[bool] = mapped_column("affects_registration", Boolean, default=False)

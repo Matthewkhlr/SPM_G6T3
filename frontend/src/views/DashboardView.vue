@@ -9,7 +9,7 @@
           :key="tab"
           class="nav-item"
           :class="{ active: activeTab === tab }"
-          @click="activeTab = tab"
+          @click="selectTab(tab)"
         >
           {{ tab }}
         </div>
@@ -32,17 +32,24 @@
       <BrowseEvents v-else-if="activeTab === 'Browse Events'" />
       <CreateEvent v-else-if="activeTab === 'New Request'" />
       <UpcomingEventsCalendar v-else-if="activeTab === 'Upcoming Events'"/>
+      <EquipmentCatalogue v-else-if="activeTab === 'Equipment Catalogue'" />
+      <AssignedEvents v-else-if="activeTab === 'Assigned Events'" />
+      <ReviewQueue v-else-if="activeTab === 'Review Queue'" />
+      <DraftsList v-else-if="activeTab === 'Drafts'" @edit-draft="activeTab = 'New Request'" />
+      <MyEvents v-else-if="activeTab === 'My Events'" />
+      <MyRegistrations v-else-if="activeTab === 'My Registrations'" />
+      <Profile v-else-if="activeTab === 'Profile'" />
 
       <div class="not-built" v-else>
-        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }} are functional.
+        This tab isn't built yet for this sprint — only Dashboard{{ hasVenueTab ? ', Venue Catalogue' : '' }}{{ hasAssignedTab ? ', Assigned Events' : '' }}{{ hasEventsTab ? ', Browse Events' : '' }}{{ hasNewRequestTab ? ', New Request' : '' }}{{ hasEquipmentTab ? ', Equipment Catalogue' : '' }}{{ hasMyEventsTab ? ', My Events' : '' }}{{ hasRegistrationsTab ? ', My Registrations' : '' }}{{ hasProfileTab ? ', Profile' : '' }} are functional.
       </div>
     </main>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { signOut } from 'firebase/auth'
 import AppLogo from '../components/shared/AppLogo.vue'
 import DashboardHome from '../features/dashboard/DashboardHome.vue'
@@ -53,14 +60,51 @@ import { roles } from '../config/roles.js'
 import { auth } from '../firebase.js'
 import { session, logoutSession } from '../store/session.js'
 import UpcomingEventsCalendar from '../features/event-calendar/EventCalendar.vue'
+import EquipmentCatalogue from '../features/equipment-catalogue/EquipmentCatalogue.vue'
+import AssignedEvents from '../features/assigned-events/AssignedEvents.vue'
+import ReviewQueue from '../features/review-queue/ReviewQueue.vue'
+import DraftsList from '../features/drafts/DraftsList.vue'
+import MyEvents from '../features/my-events/MyEvents.vue'
+import MyRegistrations from '../features/my-registrations/MyRegistrations.vue'
+import Profile from '../features/profile/Profile.vue'
+import { draftEditor } from '../store/draftEditor.js'
 
 const router = useRouter()
-const currentData = computed(() => roles[session.role])
+const route = useRoute()
+// session.role is briefly null during logout (logoutSession() runs before
+// the router finishes navigating away from this still-mounted view), so
+// this falls back to an empty role rather than crashing on
+// "Cannot read properties of undefined" for that one render.
+const currentData = computed(() => roles[session.role] ?? { tabs: [], cards: [], label: '' })
 const activeTab = ref('Dashboard')
 
 const hasVenueTab = computed(() => currentData.value.tabs.includes('Venue Catalogue'))
+const hasAssignedTab = computed(() => currentData.value.tabs.includes('Assigned Events'))
 const hasEventsTab = computed(() => currentData.value.tabs.includes('Browse Events'))
 const hasNewRequestTab = computed(() => currentData.value.tabs.includes('New Request'))
+const hasEquipmentTab = computed(() => currentData.value.tabs.includes('Equipment Catalogue'))
+const hasMyEventsTab = computed(() => currentData.value.tabs.includes('My Events'))
+const hasRegistrationsTab = computed(() => currentData.value.tabs.includes('My Registrations'))
+const hasProfileTab = computed(() => currentData.value.tabs.includes('Profile'))
+
+// Coming back from the event detail page (e.g. after discarding a draft)
+// lands on a specific tab via ?tab= instead of always resetting to Dashboard.
+onMounted(() => {
+  const requestedTab = route.query.tab
+  if (typeof requestedTab === 'string' && currentData.value.tabs.includes(requestedTab)) {
+    activeTab.value = requestedTab
+  }
+})
+
+function selectTab(tab) {
+  if (tab === activeTab.value) return
+  // The New Request form isn't a route, so this click is the only place that
+  // can intercept an in-app "navigate away" while it has unsaved changes.
+  if (draftEditor.isDirty && !window.confirm('You have unsaved changes. Leave without saving?')) {
+    return
+  }
+  activeTab.value = tab
+}
 
 async function logout() {
   await signOut(auth)

@@ -32,8 +32,12 @@ src/
     dashboard/
       DashboardHome.vue     "Dashboard" tab
     venue-catalogue/
-      VenueCatalogue.vue    "Venue Catalogue" tab (Event Coordinator)
-      venues.data.js         its hardcoded data, co-located with the component
+      VenueCatalogue.vue    "Venue Catalogue" tab (Event Coordinator, Venue Staff)
+      VenueForm.vue          add / edit form (Venue Staff only)
+      VenueActivityLog.vue   who changed what, and when (UTC)
+      venues.data.js         old hardcoded data, no longer imported
+    venue-request/
+      EventVenueSelect.vue  /app/events/:id/venues, suitability verdict per venue
     browse-events/
       BrowseEvents.vue      "Browse Events" tab (Attendee)
       events.data.js         its hardcoded data + eligibility rule logic
@@ -85,10 +89,30 @@ pattern — don't add it to `components/shared/`.
   client-side logout + redirect, so the app never sits silently broken
 - Password input is masked, with a show/hide toggle
 
-**Event Coordinator venue catalogue**
-- `features/venue-catalogue/` — list + detail panel showing location,
-  capacity, facilities, accessibility, supported layouts, operating hours,
-  and turnaround time
+**Venue catalogue (SPM-60)**
+- `features/venue-catalogue/` reads venue-service: list + detail panel showing
+  code, location, address, description, capacity, facilities, accessibility,
+  supported layouts, operating hours, and turnaround time
+- Venue Staff can add, edit, and retire a venue; retiring a venue with a
+  confirmed upcoming booking shows those bookings and asks to confirm first.
+  Coordinators can only view (Technical Support can read venues through the
+  API but has no catalogue tab)
+- Every change is shown in the venue's activity log, with times in UTC
+
+**Venue suitability (SPM-62)**
+- `features/venue-request/` opens from "Choose a venue" on an event
+  (coordinators only). Picking a venue shows suitable, suitable with warnings,
+  or not suitable, with a reason for each point
+- "Request this venue" is disabled on any failure and allowed with warnings
+
+**Venue booking requests (SPM-63)**
+- On the same page, the assigned coordinator sends the request for an event
+  approved for planning, with optional notes for Venue Staff. With warnings,
+  they must first tick that they have read them
+- While the event has a pending request, the page shows it with a
+  "Withdraw request" button, and no other venue can be requested
+- The Venue Staff queue screen, the venue calendar, and the readiness view are
+  other stories (SPM-8/SPM-57, SPM-108, SPM-5)
 
 **Attendee registration**
 - `features/browse-events/` — 4 hardcoded events specifically chosen to
