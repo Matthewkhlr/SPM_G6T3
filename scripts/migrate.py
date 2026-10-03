@@ -58,7 +58,6 @@ def upgrade(service: str, url: str) -> None:
     env = os.environ.copy()
     env["DATABASE_URL"] = url
     cwd = ROOT / "services" / service
-    # The service's app config imports the repo-root `shared` package.
     env["PYTHONPATH"] = os.pathsep.join([str(cwd), str(ROOT)])
     print(f"alembic upgrade head  ({service})")
     subprocess.run(
