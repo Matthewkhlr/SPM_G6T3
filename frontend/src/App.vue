@@ -1,5 +1,6 @@
 <template>
   <CosmicBackdrop />
+  <NotificationBell v-if="session.isAuthenticated" />
   <div class="app-layer">
     <router-view v-slot="{ Component }">
       <transition name="page" mode="out-in">
@@ -11,6 +12,8 @@
 
 <script setup>
 import CosmicBackdrop from './components/shared/CosmicBackdrop.vue'
+import NotificationBell from './components/shared/NotificationBell.vue'
+import { session } from './store/session.js'
 </script>
 
 <style scoped>
