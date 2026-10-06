@@ -45,10 +45,13 @@
       <p v-if="withdrawError" class="form-error">{{ withdrawError }}</p>
       <p v-if="notice" class="success-note" data-testid="venue-request-result">{{ notice }}</p>
 
+      <!-- SPM-61: search narrows the list below; until then every venue is listed. -->
+      <VenueSearch :event="event" :venues="venues" @results="searchResults = $event" />
+
       <div class="layout">
         <div class="venue-list">
           <div
-            v-for="venue in venues"
+            v-for="venue in shownVenues"
             :key="venue.venueId"
             class="venue-row"
             :class="{ active: selectedId === venue.venueId }"
@@ -56,9 +59,20 @@
             @click="selectVenue(venue)"
           >
             <div class="venue-name">{{ venue.name }}</div>
-            <div class="venue-meta">{{ venue.location }} · Capacity {{ venue.capacity }}</div>
+            <div v-if="searchResults" class="venue-meta">
+              {{ venue.location }} · Capacity {{ venue.layoutCapacity }}
+              {{ venue.layout ? `in ${venue.layout}` : 'at most' }} · {{ venue.headroom }} spare
+            </div>
+            <div v-else class="venue-meta">{{ venue.location }} · Capacity {{ venue.capacity }}</div>
+            <span
+              v-if="venue.contested"
+              class="contested"
+              :data-testid="`venue-contested-${venue.venueId}`"
+            >Contested: another event's request for this time is waiting for Venue Staff</span>
           </div>
-          <p v-if="!venues.length" class="empty-note">No venues are currently available.</p>
+          <p v-if="!shownVenues.length" class="empty-note">
+            {{ searchResults ? 'No venue fits these requirements.' : 'No venues are currently available.' }}
+          </p>
         </div>
 
         <div class="verdict-panel">
@@ -123,6 +137,7 @@ import {
   withdrawVenueBooking,
 } from '../../api/venueService.js'
 import { session } from '../../store/session.js'
+import VenueSearch from './VenueSearch.vue'
 
 const VERDICT_LABELS = {
   suitable: 'Suitable',
@@ -137,6 +152,9 @@ const eventId = route.params.id
 const canCheck = computed(() => session.role === 'coordinator')
 const event = ref(null)
 const venues = ref([])
+// SPM-61: the shortlist from the last search, or null to list every venue.
+const searchResults = ref(null)
+const shownVenues = computed(() => searchResults.value ?? venues.value)
 const loading = ref(true)
 const error = ref('')
 
@@ -363,6 +381,10 @@ onMounted(async () => {
 }
 .venue-name { font-family: 'Space Grotesk', sans-serif; font-weight: 500; color: var(--text); font-size: 14px; }
 .venue-meta { font-size: 12px; margin-top: 3px; color: var(--muted); }
+.contested {
+  display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+  color: var(--text); background: rgba(255, 198, 109, .12); border: 1px solid rgba(255, 198, 109, .35);
+}
 
 .verdict-panel {
   background: var(--glass); border: 1px solid var(--hairline);

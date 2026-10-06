@@ -105,6 +105,13 @@ pattern — don't add it to `components/shared/`.
   or not suitable, with a reason for each point
 - "Request this venue" is disabled on any failure and allowed with warnings
 
+**Venue search (SPM-61)**
+- The same page has a search panel filled in from the event (dates, attendance,
+  layout, and any listed facility or accessibility feature named in the event's
+  requirements). Searching narrows the venue list; "Show all venues" restores it
+- Each result shows its capacity in the layout and the spare places, and a
+  "Contested" tag when another event's request for that time is waiting
+
 **Venue booking requests (SPM-63)**
 - On the same page, the assigned coordinator sends the request for an event
   approved for planning, with optional notes for Venue Staff. With warnings,

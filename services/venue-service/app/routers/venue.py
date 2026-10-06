@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.orm import Session
 
@@ -18,6 +20,7 @@ from app.schemas.venue import (
     VenueBookingOut,
     VenueCreate,
     VenueOut,
+    VenueSearchResult,
     VenueUpdate,
 )
 from app.services.venue_service import VenueService
@@ -40,6 +43,9 @@ CATALOGUE_READER_ROLES = {"coordinator", "venue", "techsupport"}
 SUITABILITY_ROLES = {"coordinator", "venue"}
 # SPM-63: coordinators follow their requests; Venue Staff work the pending queue.
 BOOKING_READER_ROLES = {"coordinator", "venue"}
+# SPM-61: coordinators shortlist venues for their events; Venue Staff can use the
+# same search to find an alternative to suggest when they reject a request (SPM-10).
+SEARCH_ROLES = {"coordinator", "venue"}
 
 
 def get_venue_service(db: Session = Depends(get_db)) -> VenueService:
@@ -102,6 +108,44 @@ def get_booking(
 ):
     resolve_caller(authorization, settings.user_service_url, allowed_roles=BOOKING_READER_ROLES)
     return service.get_booking(booking_id)
+
+
+@router.get(
+    "/search",
+    response_model=list[VenueSearchResult],
+    summary="Search venues against an event's requirements",
+    description=(
+        "SPM-61. Active venues that fit every filter, ordered by name. With `startsAt` and `endsAt` (UTC), "
+        "a venue is left out when the period falls outside its opening hours, or when a confirmed booking or "
+        "an unavailability period overlaps the period widened by the venue's setup and turnaround time; "
+        "another event's pending request only marks it `contested`. Pass `eventId` to ignore that event's own "
+        "requests. `facility` and `accessibility` can be repeated. Coordinators and venue staff."
+    ),
+    responses=error_responses(403, 422, 503),
+)
+def search_venues(
+    startsAt: datetime | None = Query(None, description="Start of the period, e.g. `2027-03-03T10:00:00Z`."),
+    endsAt: datetime | None = Query(None, description="End of the period. Required when `startsAt` is given."),
+    minCapacity: int = Query(0, ge=0, description="Expected attendance; capacity in the layout must reach it."),
+    location: str | None = Query(None, description="Part of the venue's location, e.g. `HarbourFront`."),
+    layout: str | None = Query(None, description="Required layout, e.g. `Theatre`."),
+    facility: list[str] = Query(default=[], description="A required facility. Repeat for more than one."),
+    accessibility: list[str] = Query(default=[], description="A required accessibility feature. Repeat for more."),
+    eventId: str | None = Query(None, description="The event searching, so its own requests are not counted."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles=SEARCH_ROLES)
+    return service.search_venues(
+        starts_at=startsAt,
+        ends_at=endsAt,
+        min_capacity=minCapacity,
+        location=location,
+        layout=layout,
+        facilities=facility,
+        accessibility=accessibility,
+        exclude_event_id=eventId,
+    )
 
 
 @router.get(

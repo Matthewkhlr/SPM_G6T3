@@ -287,6 +287,26 @@ class SuitabilityRequest(BaseModel):
     )
 
 
+class VenueSearchResult(BaseModel):
+    """SPM-61: one venue on the shortlist for an event's requirements."""
+
+    venueId: str
+    code: str
+    name: str
+    location: str
+    capacity: int
+    layout: str | None = Field(default=None, description="The layout searched for, when one was given.")
+    layoutCapacity: int = Field(
+        description="Capacity in the layout searched for, or the venue's overall capacity when no layout was given."
+    )
+    headroom: int = Field(description="`layoutCapacity` minus the expected attendance searched for.")
+    setupMinutes: int
+    turnaroundMinutes: int
+    contested: bool = Field(
+        description="True when another event's pending request overlaps this period. The venue is still shown."
+    )
+
+
 class SuitabilityReason(BaseModel):
     severity: Literal["failure", "warning"]
     check: str = Field(description="Which rule produced this point, e.g. `capacity` or `clash`.")
