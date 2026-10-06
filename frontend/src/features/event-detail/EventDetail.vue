@@ -87,7 +87,7 @@
         >
           <p>
             <strong>Approved</strong><template v-if="decidedByName"> by {{ decidedByName }}</template>
-            on {{ formatUtc(decision.decidedAt) }}. ConnectSphere has taken this event on and planning has started.
+            on {{ formatUtc(decision.decidedAt) }}. ConnectSphere has taken this event on and preparation has started.
           </p>
           <p v-if="decision.decisionNote">
             {{ session.role === 'organiser' ? 'Note from your coordinator' : 'Note to the organiser' }}:
@@ -96,6 +96,51 @@
           <p v-if="event.status === 'planning'">Venue and equipment are still being arranged.</p>
         </div>
         <p v-if="savedNote" class="notice" data-testid="event-edit-saved">{{ savedNote }}</p>
+
+        <section
+          v-if="session.role === 'organiser'"
+          class="panel"
+          data-testid="organiser-arrangements"
+        >
+          <h2>Arrangements</h2>
+          <p>The venue booking is in place where it has been confirmed. Safety checks are still needed.</p>
+          <p v-if="releasedOutcome">Equipment was released and needs attention. {{ releasedOutcome.reason }}</p>
+        </section>
+        <section
+          v-if="session.role === 'organiser' && event.status === 'confirmed'"
+          class="panel"
+          data-testid="organiser-confirmed-arrangements"
+        >
+          <h2>Confirmed arrangements</h2>
+          <p>{{ venue.venueName }}</p>
+          <p v-if="venue.location">{{ venue.location }}</p>
+          <p data-testid="organiser-confirmed-date">{{ confirmedDate }}</p>
+          <p data-testid="organiser-confirmed-time">{{ confirmedTime }}</p>
+          <p v-if="event.layoutPreference">Layout: {{ event.layoutPreference }}</p>
+          <p>Equipment: {{ equipmentSummary }}</p>
+        </section>
+        <button
+          v-if="session.role === 'organiser' && event.hasOpenClarifications"
+          type="button"
+          class="notice attention"
+          data-testid="organiser-needs-action"
+        >
+          A clarification needs action.
+        </button>
+        <section v-if="reservations.length" class="panel" data-testid="event-reservations">
+          <h2>Reservations</h2>
+          <p v-for="row in reservations" :key="row.reservationId || row.requestId">
+            {{ row.equipmentName || row.equipmentId }} · {{ row.quantity }} · {{ row.status }}
+          </p>
+        </section>
+        <section v-if="outcomes.length" class="panel" data-testid="equipment-request-outcome">
+          <h2>Equipment requests</h2>
+          <p v-for="row in outcomes" :key="row.requestId || row.reservationId">
+            {{ row.equipmentName || row.equipmentId }} · {{ row.status }}
+            <template v-if="row.reason"> · {{ row.reason }}</template>
+            <template v-if="row.alternativeEquipmentId"> · {{ row.alternativeEquipmentId }}</template>
+          </p>
+        </section>
 
         <div class="layout" :class="{ split: showEquipment }">
           <section class="panel">
@@ -162,6 +207,27 @@
                 <dt>Accessibility needs</dt>
                 <dd>{{ event.accessibilityNeeds }}</dd>
               </div>
+              <div v-if="event.preferredLocation" class="wide">
+                <dt>Preferred location</dt>
+                <dd>{{ event.preferredLocation }}</dd>
+              </div>
+              <div v-if="event.requiredFacilities?.length" class="wide">
+                <dt>Facilities</dt>
+                <dd>{{ event.requiredFacilities.join(', ') }}</dd>
+              </div>
+              <div v-if="event.accessibilityNote" class="wide">
+                <dt>Accessibility note</dt>
+                <dd>{{ event.accessibilityNote }}</dd>
+              </div>
+              <div v-if="event.equipmentLines?.length" class="wide">
+                <dt>Equipment</dt>
+                <dd>
+                  <span v-for="line in event.equipmentLines" :key="line.equipmentId">
+                    {{ line.quantity }} × {{ line.equipmentId }}
+                    <template v-if="line.technicalNotes"> ({{ line.technicalNotes }})</template>
+                  </span>
+                </dd>
+              </div>
               <div v-if="event.equipmentRequirements" class="wide">
                 <dt>Equipment notes</dt>
                 <dd>{{ event.equipmentRequirements }}</dd>
@@ -172,6 +238,12 @@
               </div>
             </dl>
           </section>
+
+          <EventRequirements
+            v-if="session.role === 'organiser' && event.status === 'draft'"
+            :event="event"
+            @saved="onRequirementsSaved"
+          />
 
           <EventEquipment v-if="showEquipment" :event="event" />
         </div>
@@ -236,6 +308,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { getReservationSummary, getEventReservations } from '../../api/equipmentService.js'
 import {
   getEvent,
   discardEvent,
@@ -243,6 +316,7 @@ import {
   getEventDecision,
   getInternalNotes,
 } from '../../api/eventService.js'
+import { getPublicVenue } from '../../api/venueService.js'
 import {
   IN_REVIEW_EVENT_STATUSES,
   LOCKED_EVENT_STATUSES,
@@ -257,6 +331,7 @@ import EventChangeRequests from './EventChangeRequests.vue'
 import EventClarifications from './EventClarifications.vue'
 import EventEditForm from './EventEditForm.vue'
 import EventEquipment from './EventEquipment.vue'
+import EventRequirements from './EventRequirements.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -277,6 +352,11 @@ const coordinator = ref(null)
 const assigning = ref(false)
 const decision = ref(null)
 const approving = ref(false)
+function onRequirementsSaved(updated) {
+  event.value = updated
+  savedNote.value = 'Requirements saved.'
+}
+
 const dialogOpen = computed(
   () => assigning.value || approving.value || editing.value || confirming.value,
 )
@@ -316,6 +396,29 @@ const canAssign = computed(
 )
 // Who may see the coordinator's contact; the server enforces the organisation check.
 const CONTACT_ROLES = ['organiser', 'coordinator', 'venue', 'techsupport']
+const outcomes = ref([])
+const reservations = ref([])
+const venue = ref({ venueName: '', location: '' })
+
+const releasedOutcome = computed(() => outcomes.value.find((row) => row.status === 'released') || null)
+
+const confirmedDate = computed(() => {
+  if (!event.value?.proposedStartAt) return ''
+  return new Date(event.value.proposedStartAt).toLocaleDateString()
+})
+
+const confirmedTime = computed(() => {
+  if (!event.value?.proposedStartAt) return ''
+  return new Date(event.value.proposedStartAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+})
+
+const equipmentSummary = computed(() => {
+  const lines = event.value?.equipmentLines || []
+  if (lines.length) return lines.map((line) => line.equipmentId).join(', ')
+  if (event.value?.equipmentRequirements) return event.value.equipmentRequirements
+  if (outcomes.value.length) return outcomes.value.map((row) => row.equipmentName || row.equipmentId).join(', ')
+  return 'listed with the request'
+})
 
 // SPM-71: only the assigned coordinator edits, and never a finished event.
 // The server enforces both; this only decides whether to offer the button.
@@ -377,6 +480,29 @@ async function load() {
   if (event.value && CONTACT_ROLES.includes(session.role)) {
     loadCoordinator()
     loadDecision()
+    loadArrangements()
+  }
+}
+
+async function loadArrangements() {
+  const eventId = event.value.eventId
+  try {
+    const { data } = await getPublicVenue(eventId)
+    venue.value = data
+  } catch {
+    venue.value = { venueName: '', location: '' }
+  }
+  try {
+    const { data } = await getReservationSummary(eventId)
+    outcomes.value = data
+  } catch {
+    outcomes.value = []
+  }
+  try {
+    const { data } = await getEventReservations(eventId)
+    reservations.value = data
+  } catch {
+    reservations.value = outcomes.value.filter((row) => row.reservationId)
   }
 }
 

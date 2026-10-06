@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_serializer, model_validator
 
 
 class EventCreate(BaseModel):
@@ -18,7 +18,7 @@ class EventCreate(BaseModel):
     category: str | None = None
     proposedStartAt: datetime
     proposedEndAt: datetime
-    expectedAttendance: int = Field(ge=0)
+    expectedAttendance: int = Field(ge=1, description="At least one. A draft may still save zero.")
     venueRequirements: str = ""
     accessibilityNeeds: str = ""
     equipmentRequirements: str = ""
@@ -74,6 +74,11 @@ class EventOut(BaseModel):
     accessibilityNeeds: str = ""
     equipmentRequirements: str
     layoutPreference: str | None = None
+    preferredLocation: str = ""
+    requiredFacilities: list[str] = Field(default_factory=list)
+    accessibilityNote: str = ""
+    accessibilitySelections: list[str] = Field(default_factory=list)
+    equipmentLines: list[dict] = Field(default_factory=list)
     registrationEnabled: bool
     registrationOpensAt: datetime | None = None
     registrationClosesAt: datetime | None = None
@@ -101,6 +106,14 @@ class EventOut(BaseModel):
         description="True while any clarification on the event is still open (SPM-68). "
         "Approving it then needs `confirmOpenClarifications`.",
     )
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_internal_notes(self, handler):
+        # Organisers and attendees must not see the staff-notes field at all (SPM-15).
+        data = handler(self)
+        if data.get("internalNotes") is None:
+            data.pop("internalNotes", None)
+        return data
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -548,6 +561,111 @@ class EventInternalNotesOut(BaseModel):
     internalNotes: str = ""
 
 
+class EquipmentLineIn(BaseModel):
+    """One equipment requirement. A type from the catalogue, never a unit id."""
+
+    equipmentId: str = Field(min_length=1)
+    quantity: int = Field(ge=1)
+    technicalNotes: str = ""
+
+    @field_validator("quantity", mode="before")
+    @classmethod
+    def whole_quantity(cls, value):
+        if isinstance(value, bool) or isinstance(value, float):
+            raise ValueError("quantity must be a whole number of at least 1")
+        return value
+
+
+class OrganiserDraftPatch(BaseModel):
+    """Fields an organiser can change on their own draft (SPM-80). Only fields sent are saved."""
+
+    eventName: str | None = Field(default=None, min_length=1, max_length=255)
+    purpose: str | None = None
+    description: str | None = None
+    category: str | None = None
+    proposedStartAt: datetime | None = None
+    proposedEndAt: datetime | None = None
+    expectedAttendance: int | None = Field(default=None, ge=0)
+    venueRequirements: str | None = None
+    equipmentRequirements: str | None = None
+    layoutPreference: str | None = None
+    preferredLocation: str | None = None
+    requiredFacilities: list[str] | None = None
+    accessibilityNeeds: str | list[str] | None = None
+    accessibilityNote: str | None = None
+    equipmentLines: list[EquipmentLineIn] | None = None
+
+    @field_validator("proposedStartAt", "proposedEndAt")
+    @classmethod
+    def as_naive_utc(cls, value: datetime | None) -> datetime | None:
+        return _naive_utc(value)
+
+    @model_validator(mode="after")
+    def check_windows(self):
+        if self.proposedStartAt and self.proposedEndAt and self.proposedEndAt <= self.proposedStartAt:
+            raise ValueError("proposedEndAt must be after proposedStartAt")
+        return self
+
+
+class RequirementOptionsOut(BaseModel):
+    layouts: list[str]
+    facilities: list[str]
+    accessibility: list[str]
+
+
+class EventIntake(BaseModel):
+    """POST /events. A name alone saves a draft; dates and attendance submit it."""
+
+    eventName: str = Field(min_length=1, max_length=255)
+    purpose: str = ""
+    description: str = ""
+    category: str | None = None
+    proposedStartAt: datetime | None = None
+    proposedEndAt: datetime | None = None
+    expectedAttendance: int | None = Field(default=None, ge=0)
+    venueRequirements: str = ""
+    accessibilityNeeds: str = ""
+    equipmentRequirements: str = ""
+    layoutPreference: str | None = None
+    registrationEnabled: bool = False
+    registrationOpensAt: datetime | None = None
+    registrationClosesAt: datetime | None = None
+    capacity: int = Field(default=0, ge=0)
+
+    def to_create(self) -> EventCreate:
+        return EventCreate(
+            eventName=self.eventName,
+            purpose=self.purpose,
+            description=self.description,
+            category=self.category,
+            proposedStartAt=self.proposedStartAt,
+            proposedEndAt=self.proposedEndAt,
+            expectedAttendance=self.expectedAttendance if self.expectedAttendance is not None else 1,
+            venueRequirements=self.venueRequirements,
+            accessibilityNeeds=self.accessibilityNeeds,
+            equipmentRequirements=self.equipmentRequirements,
+            layoutPreference=self.layoutPreference,
+            registrationEnabled=self.registrationEnabled,
+            registrationOpensAt=self.registrationOpensAt,
+            registrationClosesAt=self.registrationClosesAt,
+            capacity=self.capacity,
+        )
+
+    def to_draft(self) -> "EventDraftUpsert":
+        return EventDraftUpsert(
+            eventName=self.eventName,
+            purpose=self.purpose,
+            description=self.description,
+            category=self.category,
+            proposedStartAt=self.proposedStartAt,
+            proposedEndAt=self.proposedEndAt,
+            expectedAttendance=self.expectedAttendance,
+            venueRequirements=self.venueRequirements,
+            equipmentRequirements=self.equipmentRequirements,
+            layoutPreference=self.layoutPreference,
+        )
+
+
 class EventDraftUpsert(BaseModel):
     """Fields an organiser can save at draft stage — only eventName is required.
 
@@ -564,6 +682,12 @@ class EventDraftUpsert(BaseModel):
     expectedAttendance: int | None = Field(default=None, ge=0)
     venueRequirements: str = ""
     equipmentRequirements: str = ""
+    layoutPreference: str | None = None
+    preferredLocation: str = ""
+    requiredFacilities: list[str] = Field(default_factory=list)
+    accessibilityNeeds: str | list[str] = ""
+    accessibilityNote: str = ""
+    equipmentLines: list[EquipmentLineIn] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def check_windows(self):

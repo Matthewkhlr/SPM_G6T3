@@ -8,7 +8,7 @@ export const getRegistrationRoster = (eventId) =>
 export const registerForEvent = (eventId, name, email) =>
   axiosClient.post("/registrations", { eventId, name, email });
 
-export const getMyRegistrations = () => axiosClient.get("/registrations/mine");
+export const getMyRegistrations = () => axiosClient.get("/registrations/me");
 
 export const getRegistration = (registrationId) =>
   axiosClient.get(`/registrations/${registrationId}`);

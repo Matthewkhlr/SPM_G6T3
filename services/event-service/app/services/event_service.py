@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from fastapi import HTTPException, status
@@ -29,6 +29,7 @@ from app.orchestration.clients import (
     list_users,
     organisation_names,
     record_notification,
+    release_event_holds,
     registered_attendees,
     registration_count,
     send_notification,
@@ -56,6 +57,8 @@ from app.schemas.event import (
     EventDraftUpsert,
     EventInternalNotesOut,
     EventOut,
+    OrganiserDraftPatch,
+    RequirementOptionsOut,
     EventUpdate,
     EventUpdateOut,
     RegistrationAccessOut,
@@ -108,6 +111,11 @@ DECISIONS = {"approve": "approved", "reject": "rejected"}
 # Staff who can see an event's coordinator; organisers see it only for their
 # own organisation's events, and attendees not at all (SPM-59 AC5).
 STAFF_ROLES = ("coordinator", "venue", "techsupport")
+
+# SPM-80: published lists the organiser picks from. "No preference" is a real choice.
+LAYOUT_OPTIONS = ["Theatre", "Boardroom", "Classroom", "Banquet", "U-shape", "No preference"]
+FACILITY_OPTIONS = ["Projector", "PA system", "Video-conferencing", "Stage"]
+ACCESSIBILITY_OPTIONS = ["Wheelchair accessible", "Hearing loop", "Accessible restrooms nearby"]
 
 # SPM-71 AC1: these save without any warning.
 QUIET_FIELDS = ("eventName", "description", "purpose", "category", "internalNotes", "organiserContact")
@@ -274,10 +282,64 @@ def _has_open_clarifications(event: Event) -> bool:
     return any(review.action == CLARIFICATION and review.status == OPEN for review in event.reviews)
 
 
+def _equipment_line_dicts(lines) -> list[dict]:
+    """One line per equipment type. A repeat of the same type replaces the earlier line."""
+    ordered: list[str] = []
+    by_id: dict[str, dict] = {}
+    for line in lines or []:
+        data = line.model_dump() if hasattr(line, "model_dump") else dict(line)
+        equipment_id = data["equipmentId"]
+        if equipment_id not in by_id:
+            ordered.append(equipment_id)
+        by_id[equipment_id] = {
+            "equipmentId": equipment_id,
+            "quantity": data["quantity"],
+            "technicalNotes": data.get("technicalNotes") or "",
+        }
+    return [by_id[equipment_id] for equipment_id in ordered]
+
+
+def _accessibility_pair(value) -> tuple[str, list]:
+    if isinstance(value, list):
+        chosen = [str(item) for item in value if str(item).strip()]
+        return ", ".join(chosen), chosen
+    text = (value or "").strip()
+    return text, [text] if text else []
+
+
+def _write_requirements(event: Event, data, only_sent: bool) -> None:
+    sent = data.model_fields_set
+
+    def include(name: str) -> bool:
+        return name in sent if only_sent else True
+
+    if include("layoutPreference"):
+        event.layoutPreference = data.layoutPreference
+    if include("preferredLocation"):
+        event.preferredLocation = data.preferredLocation or ""
+    if include("requiredFacilities"):
+        event.requiredFacilities = list(data.requiredFacilities or [])
+    if include("accessibilityNote"):
+        event.accessibilityNote = data.accessibilityNote or ""
+    if include("accessibilityNeeds"):
+        text, chosen = _accessibility_pair(data.accessibilityNeeds)
+        event.accessibilityNeeds = text
+        event.accessibilitySelections = chosen
+    if include("equipmentLines"):
+        event.equipmentLines = _equipment_line_dicts(data.equipmentLines)
+
+
 def _date_near(proposed_start: datetime | None) -> bool:
+    """True when the proposed start is within the configured lead, inclusive.
+
+    ``timedelta.days`` drops the leftover hours, so a start 14 days and 23
+    hours away would still look like 14 days. Compare the full span instead:
+    the instant exactly ``event_proposed_date_near_days`` ahead is near, and
+    one second later is not. A start already in the past is near.
+    """
     if proposed_start is None:
         return False
-    return (proposed_start - datetime.utcnow()).days <= settings.event_proposed_date_near_days
+    return proposed_start - datetime.utcnow() <= timedelta(days=settings.event_proposed_date_near_days)
 
 
 def _to_out(
@@ -304,6 +366,11 @@ def _to_out(
         accessibilityNeeds=row.accessibilityNeeds or "",
         equipmentRequirements=row.equipmentRequirements,
         layoutPreference=row.layoutPreference,
+        preferredLocation=row.preferredLocation or "",
+        requiredFacilities=list(row.requiredFacilities or []),
+        accessibilityNote=row.accessibilityNote or "",
+        accessibilitySelections=list(row.accessibilitySelections or []),
+        equipmentLines=list(row.equipmentLines or []),
         registrationEnabled=row.registrationEnabled,
         registrationOpensAt=row.registrationOpensAt,
         registrationClosesAt=row.registrationClosesAt,
@@ -538,7 +605,7 @@ class EventService(BaseService):
             venueRequirements=data.venueRequirements,
             accessibilityNeeds="",
             equipmentRequirements=data.equipmentRequirements,
-            layoutPreference=None,
+            layoutPreference=data.layoutPreference,
             registrationEnabled=False,
             registrationOpensAt=None,
             registrationClosesAt=None,
@@ -548,6 +615,7 @@ class EventService(BaseService):
             createdAt=now,
             updatedAt=now,
         )
+        _write_requirements(row, data, only_sent=False)
         self.event_dao.add(row)
         self.db.commit()
         self.db.refresh(row)
@@ -578,7 +646,78 @@ class EventService(BaseService):
         event.expectedAttendance = data.expectedAttendance or 0
         event.venueRequirements = data.venueRequirements
         event.equipmentRequirements = data.equipmentRequirements
+        _write_requirements(event, data, only_sent=True)
         event.updatedAt = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(event)
+        return _to_out(event, authorization)
+
+    def requirement_options(self) -> RequirementOptionsOut:
+        return RequirementOptionsOut(
+            layouts=list(LAYOUT_OPTIONS),
+            facilities=list(FACILITY_OPTIONS),
+            accessibility=list(ACCESSIBILITY_OPTIONS),
+        )
+
+    def patch_own_draft(
+        self,
+        event_id: str,
+        data: OrganiserDraftPatch,
+        organiser_id: str,
+        authorization: str | None = None,
+    ) -> EventOut:
+        """SPM-80: the owning organiser records structured requirements on a draft."""
+        event = self._get_own_draft(event_id, organiser_id)
+        sent = data.model_fields_set
+        for field in (
+            "eventName",
+            "purpose",
+            "description",
+            "category",
+            "proposedStartAt",
+            "proposedEndAt",
+            "venueRequirements",
+            "equipmentRequirements",
+        ):
+            if field in sent:
+                setattr(event, field, getattr(data, field))
+        if "expectedAttendance" in sent and data.expectedAttendance is not None:
+            event.expectedAttendance = data.expectedAttendance
+        _write_requirements(event, data, only_sent=True)
+        event.updatedAt = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(event)
+        return _to_out(event, authorization)
+
+    def submit_stored_draft(
+        self, event_id: str, organiser_id: str, authorization: str | None = None
+    ) -> EventOut:
+        """Submit a draft from the fields already saved on it."""
+        event = self._get_own_draft(event_id, organiser_id)
+        missing = []
+        if not event.eventName:
+            missing.append("eventName")
+        if event.proposedStartAt is None:
+            missing.append("proposedStartAt")
+        if event.proposedEndAt is None:
+            missing.append("proposedEndAt")
+        if not event.expectedAttendance or event.expectedAttendance < 1:
+            missing.append("expectedAttendance")
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Missing {', '.join(missing)}",
+            )
+        if event.proposedEndAt <= event.proposedStartAt:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="proposedEndAt must be after proposedStartAt",
+            )
+        now = datetime.utcnow()
+        self._record_status_change(event, "submitted", organiser_id)
+        event.status = "submitted"
+        event.submittedAt = now
+        event.updatedAt = now
         self.db.commit()
         self.db.refresh(event)
         return _to_out(event, authorization)
@@ -1295,6 +1434,8 @@ class EventService(BaseService):
         event.updatedAt = datetime.utcnow()
         self.db.commit()
         self.db.refresh(event)
+        if new_status in ("rejected", "cancelled", "completed"):
+            release_event_holds(event.eventId, authorization)
         return _to_out(event, authorization)
 
     def approve_event(
@@ -1638,4 +1779,5 @@ class EventService(BaseService):
         event.updatedAt = datetime.utcnow()
         self.db.commit()
         self.db.refresh(event)
+        release_event_holds(event.eventId, authorization)
         return _to_out(event, authorization)

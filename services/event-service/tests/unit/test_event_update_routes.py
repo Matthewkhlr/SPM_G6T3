@@ -98,6 +98,6 @@ class TestEventUpdateRoutes(ServiceTestCase):
         shared = self.client.get("/events/e1", headers=HEADERS)
         notes = self.client.get("/events/e1/internal-notes", headers=HEADERS)
 
-        self.assertIsNone(shared.json()["internalNotes"])
+        self.assertNotIn("internalNotes", shared.json())
         self.assertEqual(notes.status_code, 200)
         self.assertEqual(notes.json(), {"eventId": "e1", "internalNotes": "Staff only"})
