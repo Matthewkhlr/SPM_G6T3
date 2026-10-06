@@ -9,6 +9,7 @@ export const venues = [
     accessibility: 'Wheelchair accessible, accessible restrooms nearby',
     layouts: ['Theatre', 'Classroom', 'Banquet'],
     operatingHours: 'Mon–Sun, 8:00 AM – 10:00 PM',
+    setupMinutes: 30,
     turnaroundMinutes: 60
   },
   {
@@ -20,6 +21,7 @@ export const venues = [
     accessibility: 'Wheelchair accessible',
     layouts: ['Boardroom', 'Classroom'],
     operatingHours: 'Mon–Sat, 8:00 AM – 8:00 PM',
+    setupMinutes: 15,
     turnaroundMinutes: 30
   },
   {
@@ -31,6 +33,7 @@ export const venues = [
     accessibility: 'Wheelchair accessible, accessible restrooms nearby',
     layouts: ['Exhibition', 'Theatre'],
     operatingHours: 'Mon–Sun, 7:00 AM – 11:00 PM',
+    setupMinutes: 45,
     turnaroundMinutes: 120
   },
   {
@@ -42,6 +45,7 @@ export const venues = [
     accessibility: 'Wheelchair accessible',
     layouts: ['Boardroom'],
     operatingHours: 'Mon–Fri, 8:00 AM – 6:00 PM',
+    setupMinutes: 10,
     turnaroundMinutes: 15
   }
 ]

@@ -20,7 +20,8 @@ class VenueInfo(Base):
     accessibility: Mapped[list] = mapped_column(JSON, default=list)
     layouts: Mapped[list] = mapped_column(JSON, default=list)
     operatingHours: Mapped[list] = mapped_column("operating_hours", JSON, default=list)
-    turnaroundMinutes: Mapped[int] = mapped_column("turnaround_minutes", Integer, default=0)
+    setupMinutes: Mapped[int] = mapped_column("setup_minutes", Integer, nullable=False)
+    turnaroundMinutes: Mapped[int] = mapped_column("turnaround_minutes", Integer, nullable=False)
     isActive: Mapped[bool] = mapped_column("is_active", Boolean, default=True)
     createdAt: Mapped[datetime] = mapped_column("created_at", DateTime, default=datetime.utcnow)
 

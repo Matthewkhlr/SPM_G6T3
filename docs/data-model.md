@@ -242,7 +242,8 @@ Venue Staff create, edit, and retire venues (SPM-60); coordinators, venue staff,
 | accessibility | JSON | Array of strings |
 | layouts | JSON | Array of `{name, capacity}`; capacity must be at least 1 |
 | operating_hours | JSON | Array of `{day, opens, closes}`: day `Mon` to `Sun`, times `HH:MM` read as UTC |
-| turnaround_minutes | INT | |
+| setup_minutes | INT | Whole minutes of preparation before a booking. Required, zero or greater (SPM-110) |
+| turnaround_minutes | INT | Whole minutes of reset after a booking. Required, zero or greater (SPM-110) |
 | is_active | BOOLEAN | False once retired |
 | created_at | DATETIME | |
 
@@ -571,6 +572,7 @@ erDiagram
     json accessibility
     json layouts
     json operating_hours
+    int setup_minutes
     int turnaround_minutes
     boolean is_active
     datetime created_at

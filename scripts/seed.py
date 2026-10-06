@@ -570,6 +570,7 @@ def seed_venue() -> None:
                 _layouts([("Theatre", 300), ("Classroom", 180), ("Banquet", 220)]),
                 _hours(ALL_DAYS, "08:00", "22:00"),
                 60,
+                30,
             ),
             (
                 "v2", "RS-204", "Riverside Room 204", "HarbourFront Centre",
@@ -580,6 +581,7 @@ def seed_venue() -> None:
                 _layouts([("Boardroom", 20), ("Classroom", 80)]),
                 _hours(WEEKDAYS + ["Sat"], "08:00", "20:00"),
                 30,
+                15,
             ),
             (
                 "v3", "EH-B", "Exhibition Hall B", "Suntec Singapore Convention & Exhibition Centre",
@@ -590,6 +592,7 @@ def seed_venue() -> None:
                 _layouts([("Exhibition", 500), ("Theatre", 350)]),
                 _hours(ALL_DAYS, "07:00", "23:00"),
                 120,
+                45,
             ),
             (
                 "v4", "SB-18", "Skyline Boardroom", "One Raffles Place",
@@ -600,6 +603,7 @@ def seed_venue() -> None:
                 _layouts([("Boardroom", 20)]),
                 _hours(WEEKDAYS, "08:00", "18:00"),
                 15,
+                10,
             ),
             ]
             for row in venues:
@@ -607,10 +611,10 @@ def seed_venue() -> None:
                     text(
                         "INSERT INTO venues (venue_id, code, name, location, address, floor, description, "
                         "facilities, accessibility, layouts, operating_hours, turnaround_minutes, "
-                        "is_active, created_at) VALUES ("
+                        "setup_minutes, is_active, created_at) VALUES ("
                         ":venue_id, :code, :name, :location, :address, :floor, :description, "
-                        ":facilities, :accessibility, :layouts, :operating_hours, :turnaround_minutes, 1, "
-                        ":created_at)"
+                        ":facilities, :accessibility, :layouts, :operating_hours, :turnaround_minutes, "
+                        ":setup_minutes, 1, :created_at)"
                     ),
                     {
                         "venue_id": row[0],
@@ -625,6 +629,7 @@ def seed_venue() -> None:
                         "layouts": json.dumps(row[9]),
                         "operating_hours": json.dumps(row[10]),
                         "turnaround_minutes": row[11],
+                        "setup_minutes": row[12],
                         "created_at": now,
                     },
                 )

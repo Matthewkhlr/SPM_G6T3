@@ -15,6 +15,8 @@ class TestVenueConflicts(VenueCase):
                 location="HarbourFront",
                 facilities=["PA", "Stage"],
                 layouts=[Layout(name="Theatre", capacity=100), Layout(name="Classroom", capacity=40)],
+                setupMinutes=30,
+                turnaroundMinutes=60,
             ),
             CALLER,
         )
@@ -65,6 +67,8 @@ class TestVenueConflicts(VenueCase):
                 location="City",
                 facilities=["Whiteboard"],
                 layouts=[Layout(name="Boardroom", capacity=12)],
+                setupMinutes=10,
+                turnaroundMinutes=15,
             ),
             CALLER,
         )

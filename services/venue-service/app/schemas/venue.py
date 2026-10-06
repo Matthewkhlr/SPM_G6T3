@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class OperatingHours(BaseModel):
@@ -34,6 +34,7 @@ class VenueOut(BaseModel):
     accessibility: list[str]
     layouts: list[Layout]
     operatingHours: list[OperatingHours]
+    setupMinutes: int
     turnaroundMinutes: int
     isActive: bool
 
@@ -56,11 +57,30 @@ class VenueOut(BaseModel):
                     {"name": "Banquet", "capacity": 220},
                 ],
                 "operatingHours": [{"day": "Mon", "opens": "08:00", "closes": "22:00"}],
+                "setupMinutes": 30,
                 "turnaroundMinutes": 60,
                 "isActive": True,
             }
         }
     )
+
+
+def _required_text(value):
+    """Name and location have to be real text, not a blank string."""
+    if isinstance(value, str):
+        value = value.strip()
+    if not isinstance(value, str) or not value:
+        raise ValueError("cannot be empty")
+    return value
+
+
+def _whole_minutes(value):
+    """A setup or turnaround time is a whole number of minutes, zero or greater."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("must be a whole number of minutes")
+    if value < 0:
+        raise ValueError("must be zero or greater")
+    return value
 
 
 class VenueCreate(BaseModel):
@@ -74,7 +94,18 @@ class VenueCreate(BaseModel):
     accessibility: list[str] = []
     layouts: list[Layout] = []
     operatingHours: list[OperatingHours] = []
-    turnaroundMinutes: int = 0
+    setupMinutes: int
+    turnaroundMinutes: int
+
+    @field_validator("name", "location", mode="before")
+    @classmethod
+    def text_is_present(cls, value):
+        return _required_text(value)
+
+    @field_validator("setupMinutes", "turnaroundMinutes", mode="before")
+    @classmethod
+    def minutes_are_whole(cls, value):
+        return _whole_minutes(value)
 
 
 class VenueUpdate(BaseModel):
@@ -88,7 +119,22 @@ class VenueUpdate(BaseModel):
     accessibility: list[str] | None = None
     layouts: list[Layout] | None = None
     operatingHours: list[OperatingHours] | None = None
+    setupMinutes: int | None = None
     turnaroundMinutes: int | None = None
+
+    @field_validator("name", "location", mode="before")
+    @classmethod
+    def text_is_present(cls, value):
+        if value is None:
+            raise ValueError("cannot be empty")
+        return _required_text(value)
+
+    @field_validator("setupMinutes", "turnaroundMinutes", mode="before")
+    @classmethod
+    def minutes_are_whole(cls, value):
+        if value is None:
+            raise ValueError("must be a whole number of minutes")
+        return _whole_minutes(value)
 
 
 class VenueActivityLogOut(BaseModel):
@@ -110,7 +156,10 @@ class VenueActivityLogOut(BaseModel):
                 "changedBy": "u3",
                 "changedByName": "Carol Venue",
                 "changedByRole": "venue",
-                "changes": {"turnaroundMinutes": {"old": 45, "new": 60}},
+                "changes": {
+                    "setupMinutes": {"old": 15, "new": 30},
+                    "turnaroundMinutes": {"old": 45, "new": 60},
+                },
                 "createdAt": "2026-09-20T10:00:00",
             }
         }

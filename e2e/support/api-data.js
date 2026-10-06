@@ -65,6 +65,7 @@ export function newVenuePayload(label = `AUTO-VENUE-${Date.now()}`) {
       { name: 'Classroom', capacity: 20 },
     ],
     operatingHours: [{ day: 'Mon', opens: '08:00', closes: '18:00' }],
+    setupMinutes: 15,
     turnaroundMinutes: 15,
   }
 }
