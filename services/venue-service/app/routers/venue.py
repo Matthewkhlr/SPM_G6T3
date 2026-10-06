@@ -95,6 +95,20 @@ def list_bookings(
 
 
 @router.get(
+    "/bookings/public-summary",
+    summary="Approved venue name and location for an event",
+    description="Any signed-in user. Does not include the venue catalogue or booking notes.",
+)
+def public_booking_summary(
+    eventId: str = Query(..., description="Event id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    resolve_caller(authorization, settings.user_service_url)
+    return service.public_summary(eventId)
+
+
+@router.get(
     "/bookings/{booking_id}",
     response_model=VenueBookingOut,
     summary="Get a venue booking request",

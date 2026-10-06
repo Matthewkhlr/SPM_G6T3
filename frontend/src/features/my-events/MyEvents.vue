@@ -2,19 +2,32 @@
   <div class="my-events">
     <p v-if="loading" class="empty-note">Loading your events…</p>
     <p v-else-if="error" class="form-error">{{ error }}</p>
-    <p v-else-if="!events.length" class="empty-note">No requests yet — create one from New Request.</p>
+    <div v-else-if="!events.length" data-testid="organiser-events-empty">
+      <p class="empty-note">Create your first request to get started.</p>
+      <button type="button" class="btn btn-solid" data-testid="organiser-empty-create" @click="create">
+        New request
+      </button>
+    </div>
 
-    <div
-      v-for="event in events"
-      :key="event.eventId"
-      class="event-card"
-      :data-testid="`organiser-event-${event.eventId}`"
-      @click="open(event.eventId)"
-    >
-      <div class="event-name">{{ event.eventName || 'Untitled event' }}</div>
-      <div class="event-meta">
-        {{ formatRange(event.proposedStartAt, event.proposedEndAt) }} ·
-        <span class="status-pill">{{ eventStatusLabel(event.status) }}</span>
+    <div v-else data-testid="organiser-event-list" class="list">
+      <div
+        v-for="event in events"
+        :key="event.eventId"
+        class="event-card"
+        :data-testid="`organiser-event-${event.eventId}`"
+        :data-lifecycle="lifecycle(event.status)"
+        @click="open(event.eventId)"
+      >
+        <div class="event-name">{{ event.eventName || 'Untitled event' }}</div>
+        <div class="event-meta">
+          <span :data-testid="`organiser-event-${event.eventId}-date`">
+            {{ formatRange(event.proposedStartAt, event.proposedEndAt) }}
+          </span>
+          ·
+          <span class="status-pill" :data-testid="`organiser-event-${event.eventId}-status`">
+            {{ eventStatusLabel(event.status) }}
+          </span>
+        </div>
       </div>
     </div>
   </div>
@@ -27,10 +40,17 @@ import { getMyEvents } from '../../api/eventService.js'
 import { eventStatusLabel } from '../../config/eventStatus.js'
 
 const router = useRouter()
+const emit = defineEmits(['create'])
 
 const events = ref([])
 const loading = ref(true)
 const error = ref('')
+
+function lifecycle(status) {
+  if (status === 'draft') return 'draft'
+  if (status === 'submitted') return 'submitted'
+  return status
+}
 
 function formatRange(start, end) {
   if (!start && !end) return 'No date set yet'
@@ -40,6 +60,10 @@ function formatRange(start, end) {
 
 function open(eventId) {
   router.push(`/app/events/${eventId}`)
+}
+
+function create() {
+  emit('create')
 }
 
 async function load() {
@@ -59,8 +83,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.my-events { display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
-
+.my-events, .list { display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
 .empty-note { font-size: 14px; color: var(--muted); }
 .form-error {
   color: #FF8A76;
@@ -70,30 +93,13 @@ onMounted(load)
   border-radius: 9px;
   padding: 11px 14px;
 }
-
 .event-card {
   background: var(--glass);
   border: 1px solid var(--hairline);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   border-radius: 14px;
   padding: 18px 20px;
   cursor: pointer;
-  transition: border-color .4s var(--ease-out), background .4s var(--ease-out);
 }
-.event-card:hover { border-color: rgba(167, 139, 250, .3); background: var(--glass-strong); }
-.event-name { font-family: 'Space Grotesk', sans-serif; font-weight: 500; color: var(--text); font-size: 15px; }
-.event-meta { font-size: 12px; margin-top: 4px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
-
-.status-pill {
-  display: inline-block;
-  font-size: 11px;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--halo);
-  background: rgba(124, 77, 255, .18);
-  border: 1px solid rgba(167, 139, 250, .3);
-  border-radius: 999px;
-  padding: 3px 10px;
-}
+.event-name { font-size: 15px; color: var(--text); }
+.event-meta { margin-top: 6px; font-size: 13px; color: var(--muted); }
 </style>

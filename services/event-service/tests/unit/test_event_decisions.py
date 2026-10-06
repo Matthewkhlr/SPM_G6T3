@@ -136,3 +136,30 @@ class TestEventDecisions(EventCase):
 
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(self.service.get_event(event.eventId).status, "confirmed")
+
+    def test_complete_is_allowed_at_the_end_instant_and_refused_one_microsecond_before(self):
+        now = datetime(2026, 10, 3, 18, 0)
+        on_time = insert_event(
+            self.db,
+            eventId="e-on-time",
+            status="confirmed",
+            coordinatorId="coord-1",
+            proposedEndAt=now,
+        )
+        still_running = insert_event(
+            self.db,
+            eventId="e-running",
+            status="confirmed",
+            coordinatorId="coord-1",
+            proposedEndAt=now + timedelta(microseconds=1),
+        )
+
+        with patch("app.services.event_service.datetime") as clock:
+            clock.utcnow.return_value = now
+            completed = self.service.complete_event(on_time.eventId, "coord-1")
+            with self.assertRaises(HTTPException) as ctx:
+                self.service.complete_event(still_running.eventId, "coord-1")
+
+        self.assertEqual(completed.status, "completed")
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(self.service.get_event(still_running.eventId).status, "confirmed")

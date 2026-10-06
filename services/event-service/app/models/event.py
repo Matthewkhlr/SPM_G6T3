@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -24,6 +24,12 @@ class Event(Base):
     accessibilityNeeds: Mapped[str] = mapped_column("accessibility_needs", Text, default="")
     equipmentRequirements: Mapped[str] = mapped_column("equipment_requirements", Text, default="")
     layoutPreference: Mapped[str | None] = mapped_column("layout_preference", String(64), nullable=True)
+    # SPM-80: structured venue, accessibility, and equipment requirements.
+    preferredLocation: Mapped[str] = mapped_column("preferred_location", String(255), default="")
+    requiredFacilities: Mapped[list] = mapped_column("required_facilities", JSON, default=list)
+    accessibilityNote: Mapped[str] = mapped_column("accessibility_note", Text, default="")
+    accessibilitySelections: Mapped[list] = mapped_column("accessibility_selections", JSON, default=list)
+    equipmentLines: Mapped[list] = mapped_column("equipment_lines", JSON, default=list)
     # SPM-71 AC1: staff-only notes, and how to reach the organiser for this event.
     internalNotes: Mapped[str | None] = mapped_column("internal_notes", Text, nullable=True)
     organiserContact: Mapped[str | None] = mapped_column("organiser_contact", String(255), nullable=True)

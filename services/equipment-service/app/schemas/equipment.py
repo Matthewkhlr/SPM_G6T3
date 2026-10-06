@@ -135,10 +135,22 @@ class EquipmentRequestCreate(BaseModel):
 class EquipmentRequestUnavailable(BaseModel):
     reason: str = Field(min_length=1)
     note: str = ""
+    alternativeEquipmentId: str | None = None
+
+
+class EquipmentPartialFulfillment(BaseModel):
+    reservedQuantity: int = Field(ge=0)
+    reason: str = ""
+
+
+class EquipmentReservationAdjust(BaseModel):
+    quantity: int = Field(ge=0)
 
 
 class EquipmentRequestStatusPatch(BaseModel):
-    status: str
+    status: str | None = None
+    quantity: int | None = Field(default=None, ge=1)
+    resubmit: bool = False
 
 
 class EquipmentRequestRefine(BaseModel):
@@ -168,6 +180,12 @@ class EquipmentRequestOut(BaseModel):
     reviewedBy: str | None
     reviewedAt: datetime | None = None
     reviewNote: str
+    decisionReason: str = ""
+    reason: str = ""
+    alternativeEquipmentId: str | None = None
+    suggestedAlternative: str | None = None
+    shortfall: int = 0
+    reservedQuantity: int = 0
     createdAt: datetime
 
     model_config = ConfigDict(
@@ -220,3 +238,20 @@ class EquipmentReservationOut(BaseModel):
             }
         }
     )
+
+
+class EquipmentOutcomeOut(BaseModel):
+    reservationId: str = ""
+    requestId: str = ""
+    eventId: str
+    equipmentId: str
+    equipmentName: str = ""
+    quantity: int = 0
+    status: str
+    reason: str = ""
+    alternativeEquipmentId: str = ""
+
+
+class EventHoldsRelease(BaseModel):
+    eventId: str
+    reason: str = "The event was closed"

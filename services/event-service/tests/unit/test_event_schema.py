@@ -43,11 +43,11 @@ class TestEventSchema(unittest.TestCase):
         self.assertEqual(accepted.proposedEndAt, START + timedelta(seconds=1))
 
     def test_event_name_and_attendance_accept_their_limits(self):
-        shortest = event_create(eventName="A", expectedAttendance=0, capacity=0)
+        shortest = event_create(eventName="A", expectedAttendance=1, capacity=0)
         longest = event_create(eventName="A" * 255)
 
         self.assertEqual(shortest.eventName, "A")
-        self.assertEqual(shortest.expectedAttendance, 0)
+        self.assertEqual(shortest.expectedAttendance, 1)
         self.assertEqual(shortest.capacity, 0)
         self.assertEqual(len(longest.eventName), 255)
 
@@ -56,9 +56,18 @@ class TestEventSchema(unittest.TestCase):
         with self.assertRaises(ValidationError):
             event_create(eventName="A" * 256)
         with self.assertRaises(ValidationError):
+            event_create(expectedAttendance=0)
+        with self.assertRaises(ValidationError):
             event_create(expectedAttendance=-1)
         with self.assertRaises(ValidationError):
             event_create(capacity=-1)
+
+    def test_a_draft_may_save_zero_attendance_but_submission_may_not(self):
+        draft = draft_payload(expectedAttendance=0)
+
+        self.assertEqual(draft.expectedAttendance, 0)
+        with self.assertRaises(ValidationError):
+            event_create(expectedAttendance=0)
 
     def test_decision_and_assignment_models_keep_optional_fields(self):
         decision = EventDecision()

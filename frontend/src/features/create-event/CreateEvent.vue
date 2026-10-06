@@ -79,7 +79,33 @@
         placeholder="e.g. Large hall with a stage"
       />
 
-      <label for="equipmentRequirements">Equipment requirements</label>
+      <label for="layoutPreference">Room layout</label>
+      <select id="layoutPreference" v-model="form.layoutPreference" data-testid="create-layout-preference">
+        <option v-for="layout in layouts" :key="layout" :value="layout">{{ layout }}</option>
+      </select>
+
+      <label for="preferredLocation">Preferred location or region</label>
+      <input id="preferredLocation" v-model.trim="form.preferredLocation" type="text" placeholder="e.g. HarbourFront" />
+
+      <fieldset class="checks">
+        <legend>Facilities</legend>
+        <label v-for="facility in facilities" :key="facility">
+          <input v-model="form.requiredFacilities" type="checkbox" :value="facility" />
+          {{ facility }}
+        </label>
+      </fieldset>
+
+      <fieldset class="checks">
+        <legend>Accessibility</legend>
+        <label v-for="need in accessibility" :key="need">
+          <input v-model="form.accessibilityNeeds" type="checkbox" :value="need" />
+          {{ need }}
+        </label>
+      </fieldset>
+      <label for="accessibilityNote">Accessibility note</label>
+      <input id="accessibilityNote" v-model.trim="form.accessibilityNote" type="text" />
+
+      <label for="equipmentRequirements">Equipment notes</label>
       <input
         id="equipmentRequirements"
         v-model.trim="form.equipmentRequirements"
@@ -110,10 +136,13 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { createEvent, getEvent, saveDraft, submitDraft, updateDraft } from '../../api/eventService.js'
+import { createEvent, getEvent, getRequirementOptions, saveDraft, submitDraft, updateDraft } from '../../api/eventService.js'
 import { consumeEditingId, setDirty } from '../../store/draftEditor.js'
 
 const categories = ['conference', 'workshop', 'networking', 'meeting']
+const layouts = ref(['No preference', 'Theatre', 'Boardroom', 'Classroom', 'Banquet'])
+const facilities = ref(['Projector', 'PA system', 'Video-conferencing', 'Stage'])
+const accessibility = ref(['Wheelchair accessible', 'Hearing loop'])
 
 function blankForm() {
   return {
@@ -125,7 +154,12 @@ function blankForm() {
     proposedEndAt: '',
     expectedAttendance: null,
     venueRequirements: '',
-    equipmentRequirements: ''
+    equipmentRequirements: '',
+    layoutPreference: 'No preference',
+    preferredLocation: '',
+    requiredFacilities: [],
+    accessibilityNeeds: [],
+    accessibilityNote: ''
   }
 }
 
@@ -189,6 +223,11 @@ function populateFormFromEvent(data) {
   form.expectedAttendance = data.expectedAttendance ?? null
   form.venueRequirements = data.venueRequirements || ''
   form.equipmentRequirements = data.equipmentRequirements || ''
+  form.layoutPreference = data.layoutPreference || 'No preference'
+  form.preferredLocation = data.preferredLocation || ''
+  form.requiredFacilities = [...(data.requiredFacilities || [])]
+  form.accessibilityNeeds = [...(data.accessibilitySelections || [])]
+  form.accessibilityNote = data.accessibilityNote || ''
 }
 
 function buildPayload() {
@@ -201,7 +240,12 @@ function buildPayload() {
     proposedEndAt: toPayloadDatetime(form.proposedEndAt),
     expectedAttendance: form.expectedAttendance,
     venueRequirements: form.venueRequirements,
-    equipmentRequirements: form.equipmentRequirements
+    equipmentRequirements: form.equipmentRequirements,
+    layoutPreference: form.layoutPreference,
+    preferredLocation: form.preferredLocation,
+    requiredFacilities: form.requiredFacilities,
+    accessibilityNeeds: form.accessibilityNeeds,
+    accessibilityNote: form.accessibilityNote
   }
 }
 
@@ -270,6 +314,14 @@ async function submit() {
 }
 
 onMounted(async () => {
+  try {
+    const { data } = await getRequirementOptions()
+    if (data.layouts?.length) layouts.value = data.layouts
+    if (data.facilities?.length) facilities.value = data.facilities
+    if (data.accessibility?.length) accessibility.value = data.accessibility
+  } catch {
+    // The published fallback lists above still let a draft be saved.
+  }
   const id = consumeEditingId()
   if (id) {
     try {
@@ -304,6 +356,9 @@ onUnmounted(() => {
 }
 
 .form-intro { font-size: 13px; line-height: 1.7; color: var(--muted); margin: 0 0 14px; }
+.checks { border: 0; padding: 0; margin: 12px 0 0; }
+.checks label { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.checks input { width: auto; }
 .draft-banner {
   font-size: 12px;
   color: var(--halo);

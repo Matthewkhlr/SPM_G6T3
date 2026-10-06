@@ -23,6 +23,12 @@ class EquipmentRequest(Base):
     reviewedBy: Mapped[str | None] = mapped_column("reviewed_by", String(64), nullable=True)
     reviewedAt: Mapped[datetime | None] = mapped_column("reviewed_at", DateTime, nullable=True)
     reviewNote: Mapped[str] = mapped_column("review_note", Text, default="")
+    decisionReason: Mapped[str] = mapped_column("decision_reason", Text, default="")
+    alternativeEquipmentId: Mapped[str | None] = mapped_column(
+        "alternative_equipment_id", String(64), nullable=True
+    )
+    shortfall: Mapped[int] = mapped_column(Integer, default=0)
+    reservedQuantity: Mapped[int] = mapped_column("reserved_quantity", Integer, default=0)
     createdAt: Mapped[datetime] = mapped_column("created_at", DateTime, default=datetime.utcnow)
 
     equipment: Mapped["EquipmentInfo"] = relationship("EquipmentInfo", back_populates="requests")

@@ -295,6 +295,23 @@ def list_users(authorization: str | None) -> list[dict]:
     return response.json()
 
 
+def release_event_holds(event_id: str, authorization: str | None) -> None:
+    """Ask equipment-service to return stock when an event is rejected or completed.
+
+    Best effort: the status change is already saved, so a down service is logged.
+    """
+    headers = {"Authorization": authorization} if authorization else {}
+    try:
+        with httpx.Client(timeout=0.8) as client:
+            client.post(
+                f"{settings.equipment_service_url}/equipment/reservations/release-for-event",
+                json={"eventId": event_id, "reason": "The event was closed"},
+                headers=headers,
+            )
+    except httpx.HTTPError as exc:
+        logger.info("release_event_holds(%s) raised %r", event_id, exc)
+
+
 def send_notification(to: str, subject: str, body: str, authorization: str | None) -> bool:
     """Queue an email through notification-service. Best effort: callers have
     already saved their change, so a failure is logged rather than raised."""

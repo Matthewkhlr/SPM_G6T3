@@ -14,6 +14,15 @@ export const checkEquipmentAvailability = (body) => axiosClient.post("/equipment
 
 export const getEquipmentRequests = () => axiosClient.get("/equipment/requests");
 
+export const getEventReservations = (eventId) =>
+  axiosClient.get("/equipment/reservations", { params: { eventId } });
+
+export const getReservationSummary = (eventId) =>
+  axiosClient.get("/equipment/reservations/summary", { params: { eventId } });
+
+export const getEquipmentReservations = (equipmentId) =>
+  axiosClient.get(`/equipment/${equipmentId}/reservations`);
+
 export const createEquipmentRequest = (body) => axiosClient.post("/equipment/requests", body);
 
 export const refineEquipmentRequest = (requestId, body) =>
