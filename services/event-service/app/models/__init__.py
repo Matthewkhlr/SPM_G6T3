@@ -1,4 +1,5 @@
 from .event import Event
+from .event_readiness import EventReadinessItem
 from .event_assignment import EventAssignment
 from .event_change_request import EventChangeRequest
 from .event_clarification_reply import EventClarificationReply

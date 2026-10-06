@@ -1,3 +1,6 @@
+from datetime import datetime
+
+import httpx
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -25,6 +28,58 @@ router = APIRouter(
 
 def get_registration_service(db: Session = Depends(get_db)) -> RegistrationService:
     return RegistrationService(db, AttendeeRegistrationDAO(db), RegistrationWindowDAO(db))
+
+
+def _parse_time(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None) if value.tzinfo else value
+    text = str(value).replace("Z", "")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+
+
+def _event_card(event_id: str, authorization: str | None) -> dict | None:
+    if not authorization:
+        return None
+    try:
+        response = httpx.get(
+            f"{settings.event_service_url}/events/{event_id}/attendee-card",
+            headers={"Authorization": authorization},
+            timeout=0.8,
+        )
+    except httpx.HTTPError:
+        return None
+    if response.status_code != 200:
+        return None
+    return response.json()
+
+
+def _enrich(row, authorization: str | None) -> AttendeeOut:
+    base = _to_attendee(row)
+    card = _event_card(row.eventId, authorization)
+    if not card:
+        return base
+    changed_at = _parse_time(card.get("changedAt"))
+    created = row.createdAt.replace(tzinfo=None) if row.createdAt and row.createdAt.tzinfo else row.createdAt
+    changed = bool(changed_at and created and changed_at > created)
+    return base.model_copy(
+        update={
+            "eventName": card.get("eventName") or "",
+            "proposedStartAt": _parse_time(card.get("proposedStartAt")),
+            "startsAt": _parse_time(card.get("startsAt") or card.get("proposedStartAt")),
+            "proposedEndAt": _parse_time(card.get("proposedEndAt")),
+            "endsAt": _parse_time(card.get("endsAt") or card.get("proposedEndAt")),
+            "venueName": card.get("venueName") or "",
+            "venueLocation": card.get("venueLocation") or "",
+            "cancelled": card.get("status") == "cancelled",
+            "changed": changed,
+        }
+    )
 
 
 def _to_attendee(row) -> AttendeeOut:
@@ -95,7 +150,20 @@ def my_registrations(
 ):
     caller = resolve_caller(authorization, settings.user_service_url)
     rows = service.list_owned(caller.get("userId"), caller.get("email"))
-    return [_to_attendee(row) for row in rows]
+    return [_enrich(row, authorization) for row in rows]
+
+
+@router.get(
+    "/me",
+    response_model=list[AttendeeOut],
+    summary="List the caller's registrations",
+    description="Same as /mine, with the event's current date, venue, and whether it was cancelled or changed.",
+)
+def my_registrations_alias(
+    authorization: str | None = Depends(forwarded_bearer),
+    service: RegistrationService = Depends(get_registration_service),
+):
+    return my_registrations(authorization, service)
 
 
 @router.get(

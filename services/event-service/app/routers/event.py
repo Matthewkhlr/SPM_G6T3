@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Request
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -28,17 +30,22 @@ from app.schemas.event import (
     EventCoordinatorOut,
     EventCreate,
     EventDecision,
+    EventIntake,
     EventDecisionOut,
     EventDraftUpsert,
     EventInternalNotesOut,
     EventOut,
     EventUpdate,
+    OrganiserDraftPatch,
+    RequirementOptionsOut,
     EventUpdateOut,
     RegistrationAccessOut,
     RegistrationSettingsOut,
     RegistrationSettingsUpdate,
     SignificantFieldsOut,
 )
+from app.schemas.followup import OpenEventOut, ReadinessCreate, ReadinessItemOut, ReadinessPatch
+from app.services.event_followup import EventFollowUp
 from app.services.event_service import EventService
 from shared.auth.deps import forwarded_bearer
 from shared.auth.roles import resolve_caller
@@ -49,6 +56,10 @@ router = APIRouter(
     tags=["events"],
     responses=error_responses(401),
 )
+
+
+def get_followup(db: Session = Depends(get_db)) -> EventFollowUp:
+    return EventFollowUp(db)
 
 
 def get_event_service(db: Session = Depends(get_db)) -> EventService:
@@ -85,12 +96,18 @@ def list_events(
     responses=error_responses(403, 503),
 )
 def create_event(
-    body: EventCreate,
+    body: EventIntake,
     authorization: str | None = Depends(forwarded_bearer),
     service: EventService = Depends(get_event_service),
 ):
     organiser = current_organiser(authorization)
-    return service.create_event(body, organiser["userId"], organiser.get("organisationId"), authorization)
+    if body.proposedStartAt is None or body.proposedEndAt is None:
+        return service.create_draft(
+            body.to_draft(), organiser["userId"], organiser.get("organisationId"), authorization
+        )
+    return service.create_event(
+        body.to_create(), organiser["userId"], organiser.get("organisationId"), authorization
+    )
 
 @router.post("/drafts", response_model=EventOut, status_code=201)
 def create_draft(
@@ -123,13 +140,20 @@ def update_draft(
 
 
 @router.post("/{event_id}/submit", response_model=EventOut)
-def submit_draft(
+async def submit_draft(
     event_id: str,
-    body: EventCreate,
+    request: Request,
     authorization: str | None = Depends(forwarded_bearer),
     service: EventService = Depends(get_event_service),
 ):
     organiser = current_organiser(authorization)
+    raw = await request.body()
+    if not raw or not raw.strip():
+        return service.submit_stored_draft(event_id, organiser["userId"], authorization)
+    try:
+        body = EventCreate.model_validate_json(raw)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
     return service.submit_draft(event_id, body, organiser["userId"], authorization)
 
 
@@ -214,6 +238,16 @@ def get_significant_fields():
 
 
 @router.get(
+    "/requirement-options",
+    response_model=RequirementOptionsOut,
+    summary="Published requirement lists",
+    description="Layouts, facilities, and accessibility needs an organiser can choose (SPM-80).",
+)
+def get_requirement_options(service: EventService = Depends(get_event_service)):
+    return service.requirement_options()
+
+
+@router.get(
     "/changeable-fields",
     response_model=ChangeableFieldsOut,
     summary="Fields an organiser can ask to change",
@@ -240,6 +274,37 @@ def list_coordinator_candidates(
 
 
 @router.get(
+    "/open-for-registration",
+    response_model=list[OpenEventOut],
+    summary="Events an attendee can browse",
+)
+def list_open_for_registration(
+    search: str = Query("", description="Match on the event name."),
+    category: str = Query("", description="Category, matched exactly."),
+    fromDate: str = Query("", alias="from", description="YYYY-MM-DD. Events starting on or after this date."),
+    authorization: str | None = Depends(forwarded_bearer),
+    followup: EventFollowUp = Depends(get_followup),
+):
+    resolve_caller(authorization, settings.user_service_url)
+    return followup.list_open(authorization, search, category, fromDate)
+
+
+@router.get(
+    "/open-for-registration/{event_id}",
+    response_model=OpenEventOut,
+    summary="One event that is open for registration",
+    responses=error_responses(404),
+)
+def get_open_for_registration(
+    event_id: str,
+    authorization: str | None = Depends(forwarded_bearer),
+    followup: EventFollowUp = Depends(get_followup),
+):
+    resolve_caller(authorization, settings.user_service_url)
+    return followup.get_open(event_id, authorization)
+
+
+@router.get(
     "/{event_id}",
     response_model=EventOut,
     summary="Get event",
@@ -252,6 +317,76 @@ def get_event(
     service: EventService = Depends(get_event_service),
 ):
     return service.get_event(event_id, authorization)
+
+
+@router.get("/{event_id}/attendee-card", response_model=OpenEventOut)
+def attendee_card(
+    event_id: str,
+    authorization: str | None = Depends(forwarded_bearer),
+    followup: EventFollowUp = Depends(get_followup),
+):
+    resolve_caller(authorization, settings.user_service_url)
+    return followup.attendee_card(event_id, authorization)
+
+
+@router.get("/{event_id}/readiness", response_model=list[ReadinessItemOut])
+def list_readiness(
+    event_id: str,
+    dueSoon: bool = Query(False),
+    authorization: str | None = Depends(forwarded_bearer),
+    followup: EventFollowUp = Depends(get_followup),
+):
+    resolve_caller(
+        authorization, settings.user_service_url, allowed_roles={"coordinator", "organiser", "techsupport"}
+    )
+    return followup.list_readiness(event_id, authorization, dueSoon)
+
+
+@router.post("/{event_id}/readiness-items", response_model=ReadinessItemOut, status_code=201)
+def create_readiness_item(
+    event_id: str,
+    body: ReadinessCreate,
+    authorization: str | None = Depends(forwarded_bearer),
+    followup: EventFollowUp = Depends(get_followup),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return followup.create_item(event_id, body, authorization)
+
+
+@router.get("/{event_id}/readiness-items/{item_id}", response_model=ReadinessItemOut)
+def get_readiness_item(
+    event_id: str,
+    item_id: str,
+    authorization: str | None = Depends(forwarded_bearer),
+    followup: EventFollowUp = Depends(get_followup),
+):
+    resolve_caller(
+        authorization, settings.user_service_url, allowed_roles={"coordinator", "organiser", "techsupport"}
+    )
+    return followup.get_item(event_id, item_id)
+
+
+@router.patch("/{event_id}/readiness-items/{item_id}", response_model=ReadinessItemOut)
+def update_readiness_item(
+    event_id: str,
+    item_id: str,
+    body: ReadinessPatch,
+    authorization: str | None = Depends(forwarded_bearer),
+    followup: EventFollowUp = Depends(get_followup),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return followup.update_item(event_id, item_id, body, authorization)
+
+
+@router.delete("/{event_id}/readiness-items/{item_id}", status_code=204)
+def delete_readiness_item(
+    event_id: str,
+    item_id: str,
+    authorization: str | None = Depends(forwarded_bearer),
+    followup: EventFollowUp = Depends(get_followup),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    followup.delete_item(event_id, item_id)
 
 
 @router.get(
@@ -286,13 +421,25 @@ def registration_access(
     "be edited. 503 when the arrangements cannot be checked; nothing is saved then.",
     responses=error_responses(403, 404, 409, 503),
 )
-def update_event(
-    body: EventUpdate,
+async def update_event(
+    request: Request,
     event_id: str = Path(..., description="Event id, e.g. `e1`."),
     authorization: str | None = Depends(forwarded_bearer),
     service: EventService = Depends(get_event_service),
 ):
+    payload = await request.json()
+    caller = resolve_caller(authorization, settings.user_service_url)
+    if caller.get("role") == "organiser":
+        try:
+            draft = OrganiserDraftPatch.model_validate(payload)
+        except ValidationError as exc:
+            raise RequestValidationError(exc.errors()) from exc
+        return service.patch_own_draft(event_id, draft, caller["userId"], authorization)
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    try:
+        body = EventUpdate.model_validate(payload)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
     return service.update_event(event_id, body, caller["userId"], authorization)
 
 

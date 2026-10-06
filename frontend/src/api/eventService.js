@@ -62,6 +62,19 @@ export const updateEvent = (eventId, changes, confirmSignificantChange = false) 
 // { fields: [...significant], quietFields: [...] }
 export const getSignificantFields = () => axiosClient.get("/events/significant-fields");
 
+export const getRequirementOptions = () => axiosClient.get("/events/requirement-options");
+
+export const getOpenEvents = (params = {}) => axiosClient.get("/events/open-for-registration", { params });
+
+export const getOpenEvent = (eventId) => axiosClient.get(`/events/open-for-registration/${eventId}`);
+
+export const getReadiness = (eventId) => axiosClient.get(`/events/${eventId}/readiness`);
+
+export const updateReadinessItem = (eventId, itemId, body) =>
+  axiosClient.patch(`/events/${eventId}/readiness-items/${itemId}`, body);
+
+export const saveDraftRequirements = (eventId, body) => axiosClient.patch(`/events/${eventId}`, body);
+
 // SPM-66: coordinators who can be assigned, each with { userId, name, email,
 // activeEventCount } — the count is information only, there is no limit.
 export const getCoordinatorCandidates = () => axiosClient.get("/events/coordinators");

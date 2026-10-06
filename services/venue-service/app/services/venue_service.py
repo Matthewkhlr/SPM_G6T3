@@ -452,6 +452,18 @@ class VenueService(BaseService):
     ) -> list[VenueBookingOut]:
         return [_booking_to_out(row) for row in self.booking_dao.list(status, event_id, venue_id)]
 
+    def public_summary(self, event_id: str) -> dict:
+        """Approved booking's venue name and location, for attendees (SPM-91)."""
+        bookings = self.booking_dao.list("approved", event_id, None)
+        if not bookings:
+            return {"eventId": event_id, "venueName": "", "location": ""}
+        venue = self.venue_dao.get_by_id(bookings[0].venueId)
+        return {
+            "eventId": event_id,
+            "venueName": venue.name if venue else "",
+            "location": venue.location if venue else "",
+        }
+
     def get_booking(self, booking_id: str) -> VenueBookingOut:
         return _booking_to_out(self._require_booking(booking_id))
 

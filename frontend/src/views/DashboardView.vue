@@ -36,7 +36,7 @@
       <AssignedEvents v-else-if="activeTab === 'Assigned Events'" />
       <ReviewQueue v-else-if="activeTab === 'Review Queue'" />
       <DraftsList v-else-if="activeTab === 'Drafts'" @edit-draft="activeTab = 'New Request'" />
-      <MyEvents v-else-if="activeTab === 'My Events'" />
+      <MyEvents v-else-if="activeTab === 'My Events'" @create="activeTab = 'New Request'" />
       <MyRegistrations v-else-if="activeTab === 'My Registrations'" />
       <Profile v-else-if="activeTab === 'Profile'" />
 
