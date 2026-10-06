@@ -26,6 +26,7 @@ def venue_create(**overrides):
         accessibility=["Ramp"],
         layouts=[Layout(name="Theatre", capacity=100), Layout(name="Classroom", capacity=40)],
         operatingHours=[OperatingHours(day="Mon", opens="08:00", closes="18:00")],
+        setupMinutes=30,
         turnaroundMinutes=60,
     )
     data.update(overrides)

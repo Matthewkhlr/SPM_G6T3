@@ -54,7 +54,7 @@
         <dl>
           <dt>Code</dt><dd>{{ selected.code }}</dd>
           <dt>Location</dt><dd>{{ selected.location }}</dd>
-          <dt>Address</dt><dd>{{ selected.address }}, Level {{ selected.floor }}</dd>
+          <dt>Address</dt><dd>{{ addressLine(selected) }}</dd>
           <dt>Description</dt><dd>{{ selected.description }}</dd>
           <dt>Capacity</dt><dd>{{ selected.capacity }} people</dd>
           <dt>Facilities</dt><dd>{{ selected.facilities.join(', ') }}</dd>
@@ -63,11 +63,12 @@
           <dd>{{ selected.layouts.map(l => `${l.name} (${l.capacity})`).join(', ') }}</dd>
           <dt>Operating hours</dt>
           <dd>{{ selected.operatingHours.map(h => `${h.day} ${h.opens}–${h.closes}`).join(', ') }}</dd>
+          <dt>Setup needed</dt><dd>{{ selected.setupMinutes }} minutes before the event</dd>
           <dt>Turnaround needed</dt><dd>{{ selected.turnaroundMinutes }} minutes between bookings</dd>
         </dl>
 
         <div v-if="confirmingRetire" class="retire-warning">
-          <p>Retire "{{ selected.name }}"? It will be hidden from the catalogue's default list (Venue Staff can
+          <p>Retire "{{ selected.name || 'this venue' }}"? It will be hidden from the catalogue's default list (Venue Staff can
             still find it with "Show retired venues"), and its booking history is kept.</p>
           <div class="actions">
             <button type="button" class="btn btn-ghost small" @click="confirmingRetire = false">Cancel</button>
@@ -115,6 +116,13 @@ const retireWarning = ref('')
 const loadingDetail = ref(false)
 
 const canWrite = computed(() => session.role === 'venue')
+
+function addressLine(venue) {
+  const parts = []
+  if (venue.address) parts.push(venue.address)
+  if (venue.floor) parts.push(`Level ${venue.floor}`)
+  return parts.join(', ')
+}
 
 // Every one of selectVenue()'s network calls, plus the auto-pick of the
 // first venue on mount, run asynchronously and can resolve in any order.
@@ -308,9 +316,14 @@ dd { margin: 0; font-size: 14px; line-height: 1.6; color: var(--body); }
 
 .detail-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; }
 .detail-actions { display: flex; gap: 8px; flex-shrink: 0; }
-.btn.small { padding: 6px 14px; font-size: 12px; }
+.btn.small { padding: 8px 16px; font-size: 12px; }
 .btn.danger { color: #FF8A76; }
-.btn-solid.danger { background: linear-gradient(135deg, #FF8A76, #E5533D); }
+.btn-solid.danger {
+  background: linear-gradient(135deg, #FF8A76, #E5533D);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .16) inset, 0 8px 24px rgba(229, 83, 61, .4);
+}
+.btn-solid.danger:hover { color: #fff; }
 
 .retire-warning {
   margin-top: 20px;
@@ -320,7 +333,8 @@ dd { margin: 0; font-size: 14px; line-height: 1.6; color: var(--body); }
   border: 1px solid rgba(255, 138, 118, .3);
 }
 .retire-warning p { margin: 0 0 12px; font-size: 13px; color: var(--text); line-height: 1.6; }
-.retire-warning .actions { display: flex; justify-content: flex-end; gap: 10px; }
+.retire-warning .actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; }
+.retire-warning .actions .btn { white-space: nowrap; }
 
 @media (max-width: 720px) {
   .catalogue { grid-template-columns: 1fr; }

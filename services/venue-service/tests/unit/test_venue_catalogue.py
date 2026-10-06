@@ -1,6 +1,9 @@
-from fastapi import HTTPException
+import unittest
 
-from app.schemas.venue import Layout, OperatingHours, VenueUpdate
+from fastapi import HTTPException
+from pydantic import ValidationError
+
+from app.schemas.venue import Layout, OperatingHours, VenueCreate, VenueUpdate
 from tests.unit.support import CALLER, VenueCase, venue_create
 
 
@@ -13,8 +16,13 @@ class TestVenueCatalogue(VenueCase):
 
         self.assertEqual(created.capacity, 100)
         self.assertEqual(created.name, "Marina Hall A")
+        self.assertEqual(created.setupMinutes, 30)
+        self.assertEqual(created.turnaroundMinutes, 60)
         self.assertTrue(created.isActive)
-        self.assertEqual(len(self.service.get_activity_log(created.venueId)), 1)
+        created_log = self.service.get_activity_log(created.venueId)
+        self.assertEqual(len(created_log), 1)
+        self.assertEqual(created_log[0].changes["setupMinutes"], 30)
+        self.assertEqual(created_log[0].changes["turnaroundMinutes"], 60)
 
     def test_missing_venue_and_booking_are_404(self):
         with self.assertRaises(HTTPException) as ctx:
@@ -48,6 +56,7 @@ class TestVenueCatalogue(VenueCase):
                 accessibility=["Lift"],
                 layouts=[Layout(name="Theatre", capacity=80)],
                 operatingHours=[OperatingHours(day="Tue", opens="09:00", closes="17:00")],
+                setupMinutes=15,
                 turnaroundMinutes=30,
             ),
             CALLER,
@@ -55,6 +64,8 @@ class TestVenueCatalogue(VenueCase):
 
         self.assertEqual(updated.name, "Marina Hall B")
         self.assertEqual(updated.capacity, 80)
+        self.assertEqual(updated.setupMinutes, 15)
+        self.assertEqual(updated.turnaroundMinutes, 30)
         entry = next(row for row in self.service.get_activity_log(created.venueId) if row.action == "updated")
         self.assertEqual(entry.changedBy, "u-venue")
         self.assertEqual(
@@ -71,6 +82,7 @@ class TestVenueCatalogue(VenueCase):
                     "Mon": {"removed": {"opens": "08:00", "closes": "18:00"}},
                     "Tue": {"added": {"opens": "09:00", "closes": "17:00"}},
                 },
+                "setupMinutes": {"old": 30, "new": 15},
                 "turnaroundMinutes": {"old": 60, "new": 30},
             },
         )
@@ -114,3 +126,62 @@ class TestVenueCatalogue(VenueCase):
 
         self.assertEqual(updated.capacity, 12)
         self.assertEqual(updated.operatingHours[0].day, "Mon")
+
+
+class TestVenueMinutes(unittest.TestCase):
+    def test_zero_minutes_are_accepted(self):
+        created = VenueCreate(name="Room", location="City", setupMinutes=0, turnaroundMinutes=0)
+        self.assertEqual(created.setupMinutes, 0)
+        self.assertEqual(created.turnaroundMinutes, 0)
+
+    def test_a_blank_name_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            VenueCreate(name="  ", location="City", setupMinutes=0, turnaroundMinutes=0)
+
+    def test_a_blank_location_on_edit_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            VenueUpdate(location="")
+
+    def test_clearing_the_name_on_edit_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            VenueUpdate.model_validate({"name": None})
+
+    def test_surrounding_spaces_are_trimmed(self):
+        created = VenueCreate(name="  Room  ", location=" City ", setupMinutes=0, turnaroundMinutes=0)
+        self.assertEqual(created.name, "Room")
+        self.assertEqual(created.location, "City")
+
+    def test_a_missing_time_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            VenueCreate(name="Room", location="City", turnaroundMinutes=15)
+
+    def test_a_negative_time_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            VenueCreate(name="Room", location="City", setupMinutes=-1, turnaroundMinutes=15)
+
+    def test_a_fraction_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            VenueCreate(name="Room", location="City", setupMinutes=1.5, turnaroundMinutes=15)
+
+    def test_a_text_time_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            VenueCreate(name="Room", location="City", setupMinutes="30", turnaroundMinutes=15)
+
+    def test_a_boolean_time_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            VenueCreate(name="Room", location="City", setupMinutes=True, turnaroundMinutes=15)
+
+    def test_clearing_a_time_on_edit_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            VenueUpdate.model_validate({"setupMinutes": None})
+
+    def test_a_negative_edit_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            VenueUpdate(turnaroundMinutes=-5)
+
+    def test_an_edit_can_set_zero_minutes(self):
+        self.assertEqual(VenueUpdate(setupMinutes=0).setupMinutes, 0)
+
+    def test_an_edit_can_omit_both_times(self):
+        self.assertIsNone(VenueUpdate(name="Room").setupMinutes)
+        self.assertIsNone(VenueUpdate(name="Room").turnaroundMinutes)

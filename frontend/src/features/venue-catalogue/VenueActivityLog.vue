@@ -90,6 +90,7 @@ const FIELD_LABELS = {
   accessibility: 'Accessibility',
   layouts: 'Supported layouts',
   operatingHours: 'Operating hours',
+  setupMinutes: 'Setup (minutes)',
   turnaroundMinutes: 'Turnaround (minutes)',
   isActive: 'Active',
 }

@@ -51,6 +51,8 @@ class TestVenueRoutes(ServiceTestCase):
                 ],
                 "facilities": ["PA"],
                 "accessibility": ["Ramp"],
+                "setupMinutes": 30,
+                "turnaroundMinutes": 60,
             },
         )
         self.assertEqual(created.status_code, 201)

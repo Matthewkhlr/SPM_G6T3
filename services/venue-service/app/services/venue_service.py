@@ -61,6 +61,7 @@ def _to_out(row: VenueInfo) -> VenueOut:
         accessibility=_as_list(row.accessibility),
         layouts=layouts,
         operatingHours=_as_list(row.operatingHours),
+        setupMinutes=row.setupMinutes,
         turnaroundMinutes=row.turnaroundMinutes,
         isActive=row.isActive,
     )
@@ -197,6 +198,7 @@ class VenueService(BaseService):
             accessibility=[a for a in data.accessibility],
             layouts=[layout.model_dump() for layout in data.layouts],
             operatingHours=[hours.model_dump() for hours in data.operatingHours],
+            setupMinutes=data.setupMinutes,
             turnaroundMinutes=data.turnaroundMinutes,
             isActive=True,
             createdAt=datetime.utcnow(),
