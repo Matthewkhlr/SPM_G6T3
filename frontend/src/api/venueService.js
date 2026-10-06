@@ -26,3 +26,5 @@ export const requestVenueBooking = (body) => axiosClient.post("/venues/bookings"
 export const getVenueBookings = (params = {}) => axiosClient.get("/venues/bookings", { params });
 
 export const withdrawVenueBooking = (bookingId) => axiosClient.post(`/venues/bookings/${bookingId}/withdraw`);
+
+export const cancelVenueBooking = (bookingId) => axiosClient.post(`/venues/bookings/${bookingId}/cancel`);

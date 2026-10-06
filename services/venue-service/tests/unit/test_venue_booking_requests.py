@@ -249,31 +249,120 @@ class TestPendingDoesNotBlockOthers(BookingRequestCase):
         self.assertNotIn("e-mine", warned + clashed)
 
 
-class TestOnePendingRequestPerEvent(BookingRequestCase):
-    """AC7: withdraw the pending request before requesting a different venue."""
+class TestSeveralVenuesPerEvent(BookingRequestCase):
+    """SPM-114: one event can use several venues at the same time."""
 
-    def test_a_second_request_while_one_is_pending_is_refused_naming_the_pending_venue(self):
-        self.request()
-        other_venue = self.venue_named("Riverside Room")
+    def test_an_event_in_planning_can_hold_several_venues_at_once(self):
+        first = self.request()
+        second = self.request(venueId=self.venue_named("Riverside Room").venueId)
 
-        detail = self.refused(409, venueId=other_venue.venueId)
+        rows = self.service.list_bookings(event_id="e-mine")
 
-        self.assertEqual(
-            detail,
-            "This event already has a pending venue request for Marina Hall A. "
-            "Withdraw it before requesting a different venue.",
-        )
+        self.assertEqual({row.bookingId for row in rows}, {first.bookingId, second.bookingId})
+        self.assertTrue(all(row.eventId == "e-mine" and row.status == "pending" for row in rows))
+
+    def test_the_same_venue_cannot_be_requested_again_while_that_booking_is_still_live(self):
+        booking = self.request()
+
+        pending = self.refused(409)
+
+        self.service.approve_booking(booking.bookingId, "u-venue", None)
+        approved = self.refused(409)
+
+        self.assertIn("already has a pending booking for Marina Hall A", pending)
+        self.assertIn("already has an approved booking for Marina Hall A", approved)
         self.assertEqual(len(self.service.list_bookings(event_id="e-mine")), 1)
 
-    def test_once_the_pending_request_is_withdrawn_or_rejected_a_new_one_can_be_sent(self):
+    def test_a_venue_can_be_requested_again_after_withdraw_reject_or_cancel(self):
+        withdrawn = self.request()
+        self.withdraw(withdrawn.bookingId)
+        after_withdraw = self.request()
+        self.service.reject_booking(after_withdraw.bookingId, "u-venue", "Closed that day")
+        approved = self.request()
+        self.service.approve_booking(approved.bookingId, "u-venue", None)
+        self.service.cancel_booking(approved.bookingId, COORDINATOR, COORDINATOR["userId"])
+
+        once_more = self.request()
+
+        self.assertEqual(once_more.status, "pending")
+
+
+class TestOneBookingCanBeReleased(BookingRequestCase):
+    """SPM-114: withdrawing, rejecting, or cancelling one booking leaves the others."""
+
+    def test_releasing_one_booking_leaves_the_event_s_other_bookings(self):
+        pending = self.request()
+        still_pending = self.request(venueId=self.venue_named("Riverside Room").venueId)
+        self.withdraw(pending.bookingId)
+        self.assertEqual(self.service.get_booking(still_pending.bookingId).status, "pending")
+
+        self.service.reject_booking(still_pending.bookingId, "u-venue", "Closed that day")
+        approved = self.request(venueId=self.venue_named("Harbour Room").venueId)
+        kept = self.request(venueId=self.venue_named("Garden Room").venueId)
+        self.service.approve_booking(approved.bookingId, "u-venue", None)
+
+        cancelled = self.service.cancel_booking(approved.bookingId, COORDINATOR, COORDINATOR["userId"])
+
+        self.assertEqual(cancelled.status, "cancelled")
+        self.assertEqual(self.service.get_booking(kept.bookingId).status, "pending")
+        self.assertEqual(self.service.get_booking(still_pending.bookingId).status, "rejected")
+
+    def test_only_an_approved_booking_can_be_cancelled_by_the_assigned_coordinator_or_venue_staff(self):
+        booking = self.request()
+
+        with self.assertRaises(HTTPException) as pending:
+            self.service.cancel_booking(booking.bookingId, COORDINATOR, COORDINATOR["userId"])
+        self.assertEqual(pending.exception.status_code, 409)
+        self.assertIn("already pending", pending.exception.detail)
+
+        with self.assertRaises(HTTPException) as other:
+            self.service.cancel_booking(booking.bookingId, OTHER_COORDINATOR, COORDINATOR["userId"])
+        self.assertEqual(other.exception.status_code, 403)
+
+        self.service.approve_booking(booking.bookingId, "u-venue", None)
+        by_staff = self.service.cancel_booking(booking.bookingId, CALLER, None)
+
+        self.assertEqual(by_staff.status, "cancelled")
+        subject, body = self.service.venue_staff_notice(by_staff, "cancelled")
+        self.assertEqual(subject, "Venue booking cancelled: AI Summit at Marina Hall A")
+        self.assertIn("The venue is free for that time.", body)
+
+
+class TestReleaseEveryBooking(BookingRequestCase):
+    """SPM-114: cancelling the event frees every open venue booking for it."""
+
+    def test_releasing_an_event_cancels_open_bookings_and_leaves_closed_ones(self):
+        pending = self.request()
+        approved = self.request(venueId=self.venue_named("Riverside Room").venueId)
+        self.service.approve_booking(approved.bookingId, "u-venue", None)
+        rejected = self.request(venueId=self.venue_named("Harbour Room").venueId)
+        self.service.reject_booking(rejected.bookingId, "u-venue", "Closed that day")
+        withdrawn = self.request(venueId=self.venue_named("Garden Room").venueId)
+        self.withdraw(withdrawn.bookingId)
+
+        released = self.service.release_event_bookings("e-mine")
+
+        self.assertEqual({row.bookingId for row in released}, {pending.bookingId, approved.bookingId})
+        self.assertTrue(all(row.status == "cancelled" for row in released))
+        self.assertEqual(self.service.get_booking(rejected.bookingId).status, "rejected")
+        self.assertEqual(self.service.get_booking(withdrawn.bookingId).status, "withdrawn")
+        self.assertEqual(self.service.release_event_bookings("e-mine"), [])
+
+    def test_arrangements_are_complete_only_when_every_requested_venue_is_approved(self):
+        self.assertFalse(self.service.arrangements_complete("e-mine"))
         first = self.request()
-        self.withdraw(first.bookingId)
         second = self.request(venueId=self.venue_named("Riverside Room").venueId)
-        self.service.reject_booking(second.bookingId, "u-venue", "Closed that day")
+        self.assertFalse(self.service.arrangements_complete("e-mine"))
 
-        third = self.request(venueId=self.venue_named("Harbour Room").venueId)
+        self.service.approve_booking(first.bookingId, "u-venue", None)
+        self.assertFalse(self.service.arrangements_complete("e-mine"))
+        self.service.approve_booking(second.bookingId, "u-venue", None)
+        self.assertTrue(self.service.arrangements_complete("e-mine"))
 
-        self.assertEqual(third.status, "pending")
+        self.service.cancel_booking(second.bookingId, CALLER, None)
+        self.assertTrue(self.service.arrangements_complete("e-mine"))
+        self.service.cancel_booking(first.bookingId, CALLER, None)
+        self.assertFalse(self.service.arrangements_complete("e-mine"))
 
 
 class TestWithdraw(BookingRequestCase):

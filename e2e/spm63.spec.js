@@ -5,8 +5,8 @@ import { notificationRequest, venueRequest } from './support/venue.js'
 import { THEATRE_EVENT, approvedEvent, freshPeriod, requestVenue } from './support/venue-request.js'
 
 // Each test makes its own event approved for planning and assigned to EC-01
-// (AC1), and books venues that suit it, so AC3 and AC7 never refuse the test
-// data itself. See support/venue-request.js.
+// (AC1), and books venues that suit it, so a failed suitability check never
+// refuses the test data itself. See support/venue-request.js.
 
 test.describe('SPM-63 Submit a venue booking request', () => {
   test('TC-SPM63-AC01 the assigned coordinator can request a venue for a planning event', async () => {
@@ -87,13 +87,19 @@ test.describe('SPM-63 Submit a venue booking request', () => {
     expect((search.body || []).map((row) => row.venueId)).toContain('v3')
   })
 
-  test('TC-SPM63-AC07 an event can have only one pending venue request at a time', async () => {
+  test('TC-SPM63-AC07 an event can request a second venue while the first is still pending', async () => {
+    // SPM-114 replaced the one-pending-per-event rule. A second venue is allowed;
+    // requesting the same venue again while that booking is still live is not.
     const event = await approvedEvent(THEATRE_EVENT)
     const first = await requestVenue(event, 'v1')
     expect(first.status).toBe(201)
     const second = await requestVenue(event, 'v3')
-    expect(second.status).toBe(409)
-    expect(JSON.stringify(second.body)).toMatch(/pending|withdraw/i)
+    expect(second.status, JSON.stringify(second.body)).toBe(201)
+    expect(second.body.eventId).toBe(event.eventId)
+    expect(second.body.status).toBe('pending')
+    const same = await requestVenue(event, 'v1')
+    expect(same.status).toBe(409)
+    expect(JSON.stringify(same.body)).toMatch(/pending|booking/i)
   })
 
   test('TC-SPM63-AC08 the coordinator can withdraw their pending request', async () => {

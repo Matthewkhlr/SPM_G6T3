@@ -35,12 +35,28 @@ class VenueBookingDAO(BaseDAO):
             .all()
         )
 
-    def find_pending_for_event(self, event_id: str) -> VenueBooking | None:
+    def find_live_for_event_venue(self, event_id: str, venue_id: str) -> VenueBooking | None:
+        """A pending or approved booking of this venue for this event.
+
+        Withdrawn, rejected, and cancelled rows do not count, so the event can
+        request the same venue again after one of those.
+        """
         return (
             self.db.query(VenueBooking)
             .filter(VenueBooking.eventId == event_id)
-            .filter(VenueBooking.status == "pending")
+            .filter(VenueBooking.venueId == venue_id)
+            .filter(VenueBooking.status.in_(("pending", "approved")))
             .first()
+        )
+
+    def list_open_for_event(self, event_id: str) -> list[VenueBooking]:
+        """Pending requests and approved bookings still holding a venue."""
+        return (
+            self.db.query(VenueBooking)
+            .filter(VenueBooking.eventId == event_id)
+            .filter(VenueBooking.status.in_(("pending", "approved")))
+            .order_by(VenueBooking.createdAt, VenueBooking.bookingId)
+            .all()
         )
 
     def list(self, status: str | None, event_id: str | None, venue_id: str | None) -> list[VenueBooking]:
