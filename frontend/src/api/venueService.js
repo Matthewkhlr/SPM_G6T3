@@ -34,3 +34,5 @@ export const getPublicVenue = (eventId) =>
   axiosClient.get("/venues/bookings/public-summary", { params: { eventId } });
 
 export const withdrawVenueBooking = (bookingId) => axiosClient.post(`/venues/bookings/${bookingId}/withdraw`);
+
+export const cancelVenueBooking = (bookingId) => axiosClient.post(`/venues/bookings/${bookingId}/cancel`);

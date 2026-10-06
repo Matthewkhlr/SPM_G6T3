@@ -201,6 +201,21 @@ class VenueBookingDecision(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"reason": "Hall A is free that day."}})
 
 
+class BookingReleaseRequest(BaseModel):
+    """SPM-114: event cancellation asks venue-service to free every open booking."""
+
+    eventId: str = Field(min_length=1)
+
+    model_config = ConfigDict(json_schema_extra={"example": {"eventId": "e1"}})
+
+
+class VenueArrangementOut(BaseModel):
+    eventId: str
+    complete: bool = Field(
+        description="True only when the event has requested venues and every one of them is approved."
+    )
+
+
 class BookingReverificationRequest(BaseModel):
     """SPM-71 AC4: event-service asks for an event's confirmed bookings to be re-verified."""
 
@@ -217,7 +232,9 @@ class VenueBookingOut(BaseModel):
     venueId: str
     eventId: str
     requestedBy: str
-    status: str = Field(description="`pending`, `approved`, `rejected`, or `withdrawn`.")
+    status: str = Field(
+        description="`pending`, `approved`, `rejected`, `withdrawn`, or `cancelled`."
+    )
     startsAt: datetime
     endsAt: datetime
     setupStartsAt: datetime

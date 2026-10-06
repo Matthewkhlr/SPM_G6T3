@@ -147,6 +147,79 @@ class TestBookingRequestRoutes(VenueCase):
         self.assertEqual(self.call("coordinator", "POST", "/venues/bookings/nope/withdraw").status_code, 404)
         self.mocks["event"].assert_not_called()
 
+    def another_venue(self):
+        return self.service.create_venue(
+            venue_create(operatingHours=[OperatingHours(day=d, opens="08:00", closes="18:00") for d in ALL_DAYS]),
+            CALLER,
+        ).venueId
+
+    def test_a_second_venue_can_be_requested_while_the_first_is_still_pending(self):
+        first = self.send()
+        second = self.send(venueId=self.another_venue())
+        same_again = self.send()
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+        self.assertNotEqual(first.json()["venueId"], second.json()["venueId"])
+        self.assertEqual(second.json()["eventId"], "e1")
+        self.assertEqual(same_again.status_code, 409)
+        self.assertIn("pending booking", same_again.json()["detail"])
+
+    def test_cancelling_one_approved_booking_leaves_the_other_and_tells_venue_staff(self):
+        first_id = self.send().json()["bookingId"]
+        second_id = self.send(venueId=self.another_venue()).json()["bookingId"]
+        self.service.approve_booking(first_id, "u-venue", None)
+        self.mocks["notify"].reset_mock()
+
+        cancelled = self.call("coordinator", "POST", f"/venues/bookings/{first_id}/cancel")
+        still = self.call("coordinator", "GET", f"/venues/bookings/{second_id}")
+
+        self.assertEqual(cancelled.status_code, 200)
+        self.assertEqual(cancelled.json()["status"], "cancelled")
+        self.assertEqual(still.json()["status"], "pending")
+        self.assertEqual(
+            self.mocks["notify"].call_args.args[0], "Venue booking cancelled: AI Summit at Marina Hall A"
+        )
+
+    def test_a_pending_booking_cannot_be_cancelled_and_an_unknown_one_is_not_found(self):
+        booking_id = self.send().json()["bookingId"]
+        self.mocks["notify"].reset_mock()
+
+        pending = self.call("coordinator", "POST", f"/venues/bookings/{booking_id}/cancel")
+
+        self.assertEqual(pending.status_code, 409)
+        self.assertEqual(self.call("venue", "POST", "/venues/bookings/nope/cancel").status_code, 404)
+        self.assertEqual(self.call("organiser", "POST", f"/venues/bookings/{booking_id}/cancel").status_code, 403)
+        self.mocks["notify"].assert_not_called()
+
+    def test_releasing_an_event_cancels_every_open_booking(self):
+        first_id = self.send().json()["bookingId"]
+        self.service.approve_booking(first_id, "u-venue", None)
+        second_id = self.send(venueId=self.another_venue()).json()["bookingId"]
+
+        with signed_in_as("organiser"):
+            released = self.client.post("/venues/bookings/release", headers=HEADERS, json={"eventId": "e1"})
+
+        self.assertEqual(released.status_code, 200)
+        self.assertEqual(
+            {row["bookingId"]: row["status"] for row in released.json()},
+            {first_id: "cancelled", second_id: "cancelled"},
+        )
+        with signed_in_as("techsupport"):
+            refused = self.client.post("/venues/bookings/release", headers=HEADERS, json={"eventId": "e1"})
+        self.assertEqual(refused.status_code, 403)
+
+    def test_arrangements_are_complete_only_after_every_requested_venue_is_approved(self):
+        booking_id = self.send().json()["bookingId"]
+        waiting = self.call("coordinator", "GET", "/venues/bookings/arrangement?eventId=e1")
+        self.assertEqual(waiting.json(), {"eventId": "e1", "complete": False})
+
+        self.service.approve_booking(booking_id, "u-venue", None)
+        done = self.call("venue", "GET", "/venues/bookings/arrangement?eventId=e1")
+
+        self.assertEqual(done.json()["complete"], True)
+        self.assertEqual(self.call("organiser", "GET", "/venues/bookings/arrangement?eventId=e1").status_code, 403)
+
 
 class TestNotifyVenueStaff(unittest.TestCase):
     USERS = [

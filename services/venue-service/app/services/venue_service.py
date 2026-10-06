@@ -413,12 +413,14 @@ class VenueService(BaseService):
                 f"This event is currently {event.status or 'not yet approved'}."
             )
 
-        # AC7: one pending request per event at a time.
-        pending = self.booking_dao.find_pending_for_event(data.eventId)
-        if pending:
+        # SPM-114: an event may hold several venues at once. The same venue is
+        # not requested again while a pending or approved booking for it remains.
+        live = self.booking_dao.find_live_for_event_venue(data.eventId, data.venueId)
+        if live:
+            article = "an" if live.status == "approved" else "a"
             raise conflict(
-                f"This event already has a pending venue request for {self._venue_name(pending.venueId)}. "
-                "Withdraw it before requesting a different venue."
+                f"This event already has {article} {live.status} booking for {self._venue_name(data.venueId)}. "
+                "Withdraw, reject, or cancel that booking before requesting this venue again."
             )
 
         # AC3 and AC4: the SPM-62 rule decides; failures block, warnings need an acknowledgement.
@@ -491,6 +493,41 @@ class VenueService(BaseService):
         self.db.refresh(row)
         return _booking_to_out(row)
 
+    def cancel_booking(self, booking_id: str, caller: dict, event_coordinator_id: str | None) -> VenueBookingOut:
+        """SPM-114: release one approved booking. The event's other bookings stay."""
+        row = self._require_booking(booking_id)
+        assigned = event_coordinator_id and event_coordinator_id == caller["userId"]
+        if caller.get("role") != "venue" and not assigned:
+            raise forbidden(
+                "Only the coordinator assigned to this event, or Venue Staff, can cancel an approved booking."
+            )
+        if row.status != "approved":
+            raise conflict(f"Only an approved booking can be cancelled. This booking is already {row.status}.")
+        row.status = "cancelled"
+        self.db.commit()
+        self.db.refresh(row)
+        return _booking_to_out(row)
+
+    def release_event_bookings(self, event_id: str) -> list[VenueBookingOut]:
+        """SPM-114: cancelling the event frees every pending request and approved booking.
+
+        Rejected, withdrawn, and already cancelled rows are left as they are.
+        """
+        rows = self.booking_dao.list_open_for_event(event_id)
+        for row in rows:
+            row.status = "cancelled"
+        self.db.commit()
+        return [_booking_to_out(row) for row in rows]
+
+    def arrangements_complete(self, event_id: str) -> bool:
+        """True only when the event has requested venues and every one of them is approved.
+
+        Pending requests are still requested. Withdrawn, rejected, and cancelled
+        rows are no longer part of the arrangement.
+        """
+        requested = self.booking_dao.list_open_for_event(event_id)
+        return bool(requested) and all(row.status == "approved" for row in requested)
+
     def _venue_name(self, venue_id: str) -> str:
         row = self.venue_dao.get_by_id(venue_id)
         return row.name if row else venue_id
@@ -505,6 +542,11 @@ class VenueService(BaseService):
             return (
                 f"New venue request: {event} at {venue}",
                 f"A coordinator has requested {venue} for {event}, {when}. It is waiting in your pending queue.",
+            )
+        if action == "cancelled":
+            return (
+                f"Venue booking cancelled: {event} at {venue}",
+                f"The booking of {venue} for {event}, {when}, has been cancelled. The venue is free for that time.",
             )
         return (
             f"Venue request withdrawn: {event} at {venue}",

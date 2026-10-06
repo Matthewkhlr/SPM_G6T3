@@ -11,12 +11,14 @@ from app.dao.venue_unavailability_dao import VenueUnavailabilityDAO
 from app.db.session import get_db
 from app.orchestration.clients import fetch_event_facts, notify_venue_staff
 from app.schemas.venue import (
+    BookingReleaseRequest,
     BookingReverificationRequest,
     SuitabilityOut,
     SuitabilityRequest,
     VenueActivityLogOut,
     VenueBookingCreate,
     VenueBookingDecision,
+    VenueArrangementOut,
     VenueBookingOut,
     VenueCreate,
     VenueOut,
@@ -84,7 +86,9 @@ def list_venues(
     responses=error_responses(403, 503),
 )
 def list_bookings(
-    status: str | None = Query(None, description="`pending`, `approved`, `rejected`, or `withdrawn`."),
+    status: str | None = Query(
+        None, description="`pending`, `approved`, `rejected`, `withdrawn`, or `cancelled`."
+    ),
     eventId: str | None = Query(None, description="Only this event's requests."),
     venueId: str | None = Query(None, description="Only this venue's requests."),
     authorization: str | None = Depends(forwarded_bearer),
@@ -92,6 +96,25 @@ def list_bookings(
 ):
     resolve_caller(authorization, settings.user_service_url, allowed_roles=BOOKING_READER_ROLES)
     return service.list_bookings(status, eventId, venueId)
+
+
+@router.get(
+    "/bookings/arrangement",
+    response_model=VenueArrangementOut,
+    summary="Whether an event's venue arrangements are complete",
+    description=(
+        "Complete only when the event has at least one requested venue and every pending or approved "
+        "booking is approved. Withdrawn, rejected, and cancelled bookings are not part of the arrangement."
+    ),
+    responses=error_responses(403, 503),
+)
+def venue_arrangement(
+    eventId: str = Query(..., description="The event whose venue bookings to judge."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles=BOOKING_READER_ROLES)
+    return VenueArrangementOut(eventId=eventId, complete=service.arrangements_complete(eventId))
 
 
 @router.get(
@@ -279,7 +302,8 @@ def check_suitability(
     description=(
         "Only the event's assigned coordinator, for an event approved for planning. Refused with 409 when the "
         "venue fails the suitability check, when warnings are not acknowledged (`acknowledgeWarnings`), or when "
-        "the event already has a pending request. Venue Staff are notified."
+        "this event already has a pending or approved booking for the same venue. Other venues can be "
+        "requested at the same time. Each venue is checked on its own. Venue Staff are notified."
     ),
     responses=error_responses(403, 404, 409, 503),
 )
@@ -314,6 +338,25 @@ def flag_bookings_for_reverification(
 
 
 @router.post(
+    "/bookings/release",
+    response_model=list[VenueBookingOut],
+    summary="Release every open venue booking for an event",
+    description=(
+        "Organisers and coordinators. For event cancellation: every pending request and approved booking "
+        "for the event becomes `cancelled`. Rejected, withdrawn, and already cancelled rows stay as they are."
+    ),
+    responses=error_responses(403, 503),
+)
+def release_event_bookings(
+    body: BookingReleaseRequest,
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"organiser", "coordinator"})
+    return service.release_event_bookings(body.eventId)
+
+
+@router.post(
     "/bookings/{booking_id}/withdraw",
     response_model=VenueBookingOut,
     summary="Withdraw a venue booking request",
@@ -329,6 +372,28 @@ def withdraw_booking(
     event = fetch_event_facts(service.get_booking(booking_id).eventId, authorization)
     booking = service.withdraw_booking(booking_id, caller, event.coordinatorId)
     notify_venue_staff(*service.venue_staff_notice(booking, "withdrawn"), authorization)
+    return booking
+
+
+@router.post(
+    "/bookings/{booking_id}/cancel",
+    response_model=VenueBookingOut,
+    summary="Cancel one approved venue booking",
+    description=(
+        "The event's assigned coordinator, or Venue Staff. Only an `approved` booking can be cancelled. "
+        "The event's other bookings stay. Venue Staff are notified."
+    ),
+    responses=error_responses(403, 404, 409, 503),
+)
+def cancel_booking(
+    booking_id: str = Path(..., description="Booking id of an approved booking."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator", "venue"})
+    event = fetch_event_facts(service.get_booking(booking_id).eventId, authorization)
+    booking = service.cancel_booking(booking_id, caller, event.coordinatorId)
+    notify_venue_staff(*service.venue_staff_notice(booking, "cancelled"), authorization)
     return booking
 
 

@@ -62,7 +62,7 @@
               data-testid="event-choose-venue"
               @click="router.push(`/app/events/${event.eventId}/venues`)"
             >
-              Choose a venue
+              Choose venues
             </button>
             <button
               v-if="session.role === 'organiser' && event.status === 'draft'"
