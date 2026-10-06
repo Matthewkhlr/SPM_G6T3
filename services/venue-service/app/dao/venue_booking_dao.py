@@ -35,12 +35,24 @@ class VenueBookingDAO(BaseDAO):
             .all()
         )
 
-    def find_live_for_event_venue(self, event_id: str, venue_id: str) -> VenueBooking | None:
-        """A pending or approved booking of this venue for this event.
+    def find_event_times_overlapping(
+        self, venue_id: str, starts_at: datetime, ends_at: datetime, exclude_event_id: str | None
+    ) -> list[VenueBooking]:
+        """Pending or approved bookings on the venue whose event times overlap
+        [starts_at, ends_at). Touching times do not overlap. The searching
+        event's own bookings are left out when it is named."""
+        query = (
+            self.db.query(VenueBooking)
+            .filter(VenueBooking.venueId == venue_id)
+            .filter(VenueBooking.status.in_(("approved", "pending")))
+            .filter(VenueBooking.startsAt < ends_at)
+            .filter(VenueBooking.endsAt > starts_at)
+        )
+        if exclude_event_id:
+            query = query.filter(VenueBooking.eventId != exclude_event_id)
+        return query.all()
 
-        Withdrawn, rejected, and cancelled rows do not count, so the event can
-        request the same venue again after one of those.
-        """
+    def find_pending_for_event(self, event_id: str) -> VenueBooking | None:
         return (
             self.db.query(VenueBooking)
             .filter(VenueBooking.eventId == event_id)

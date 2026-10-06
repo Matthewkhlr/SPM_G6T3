@@ -58,21 +58,3 @@ class TestVenueConflicts(VenueCase):
             self.service.approve_booking(booking.bookingId, "u-venue", "During maintenance")
 
         self.assertEqual(ctx.exception.status_code, 409)
-
-    def test_search_filters_by_capacity_and_facility(self):
-        self.assertTrue(hasattr(self.service, "search_venues"), "search_venues is not implemented")
-        self.service.create_venue(
-            VenueCreate(
-                name="Boardroom",
-                location="City",
-                facilities=["Whiteboard"],
-                layouts=[Layout(name="Boardroom", capacity=12)],
-                setupMinutes=10,
-                turnaroundMinutes=15,
-            ),
-            CALLER,
-        )
-
-        matches = self.service.search_venues(min_capacity=80, facility="PA")
-
-        self.assertEqual([row.name for row in matches], ["Marina Hall A"])

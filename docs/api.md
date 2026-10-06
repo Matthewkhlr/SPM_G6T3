@@ -46,6 +46,7 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `GET /events/significant-fields` | signed-in caller |
 | `GET /venues`, `GET /venues/{id}`, `GET /venues/{id}/activity-log` | `coordinator`, `venue`, `techsupport` |
 | `POST /venues`, `PATCH /venues/{id}`, `POST /venues/{id}/retire` | `venue` |
+| `GET /venues/search` | `coordinator`, `venue` (SPM-61) |
 | `POST /venues/suitability` | `coordinator`, `venue` |
 | `POST /venues/bookings` | `coordinator` assigned to the event (SPM-63) |
 | `GET /venues/bookings`, `GET /venues/bookings/{id}` | `coordinator`, `venue` |
