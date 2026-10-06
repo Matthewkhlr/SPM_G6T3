@@ -20,6 +20,11 @@ export const getVenueActivityLog = (venueId) => axiosClient.get(`/venues/${venue
 export const checkSuitability = (eventId, venueId, body = {}) =>
   axiosClient.post("/venues/suitability", { eventId, venueId, ...body });
 
+// SPM-61: `facility` and `accessibility` are lists, sent as repeated keys
+// (facility=A&facility=B), which is the form the server reads.
+export const searchVenues = (params = {}) =>
+  axiosClient.get("/venues/search", { params, paramsSerializer: { indexes: null } });
+
 // SPM-63: venue booking requests.
 export const requestVenueBooking = (body) => axiosClient.post("/venues/bookings", body);
 

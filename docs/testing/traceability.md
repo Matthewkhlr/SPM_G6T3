@@ -91,14 +91,15 @@
 | SPM-60 | Only venue staff can write | TC-SPM60-AC07 | `e2e/spm60.spec.js` | Automated |
 | SPM-60 | Seeded published catalogue | TC-SPM60-AC08 | `e2e/spm60.spec.js` | Automated |
 | SPM-60 | Changes written to activity log | TC-SPM60-AC09 | `e2e/spm60.spec.js` | Automated |
-| SPM-61 | Search pre-filled from event | TC-SPM61-AC01 | `e2e/spm61.spec.js` | Automated |
+| SPM-61 | Search pre-filled from event | TC-SPM61-AC01 | `e2e/spm61.spec.js` | Automated (UI) |
 | SPM-61 | Published filters | TC-SPM61-AC02 | `e2e/spm61.spec.js` | Automated |
-| SPM-61 | Confirmed or unavailable excluded | TC-SPM61-AC03 | `e2e/spm61.spec.js` | Automated |
-| SPM-61 | Layout or capacity mismatch excluded | TC-SPM61-AC04 | `e2e/spm61.spec.js` | Automated |
-| SPM-61 | Missing facility or access excluded | TC-SPM61-AC05 | `e2e/spm61.spec.js` | Automated |
-| SPM-61 | Outside hours excluded | TC-SPM61-AC06 | `e2e/spm61.spec.js` | Automated |
-| SPM-61 | Layout capacity and headroom | TC-SPM61-AC07 | `e2e/spm61.spec.js` | Automated |
-| SPM-61 | Pending overlap marked contested | TC-SPM61-AC08 | `e2e/spm61.spec.js` | Automated |
+| SPM-61 | Confirmed booking, unavailability, or active hold excluded (with setup and turnaround) | TC-SPM61-AC03 | `e2e/spm61.spec.js` | Confirmed booking automated; unavailability unit-tested until SPM-9; holds wait on SPM-116 |
+| SPM-61 | Expired hold does not exclude | TC-SPM61-AC04 | `e2e/spm61.spec.js` | Skipped until SPM-116 (tentative holds) |
+| SPM-61 | Layout or capacity mismatch excluded | TC-SPM61-AC05 | `e2e/spm61.spec.js` | Automated |
+| SPM-61 | Missing facility or access excluded | TC-SPM61-AC06 | `e2e/spm61.spec.js` | Automated |
+| SPM-61 | Outside hours excluded | TC-SPM61-AC07 | `e2e/spm61.spec.js` | Automated |
+| SPM-61 | Layout capacity and headroom | TC-SPM61-AC08 | `e2e/spm61.spec.js` | Automated (API and UI) |
+| SPM-61 | Pending overlap marked contested | TC-SPM61-AC09 | `e2e/spm61.spec.js` | Automated (API and UI); the "not an active hold" part waits on SPM-116 |
 | SPM-62 | Verdict with reasons | TC-SPM62-AC01 | `e2e/spm62.spec.js` | Automated |
 | SPM-62 | Over-capacity names both numbers | TC-SPM62-AC02 | `e2e/spm62.spec.js` | Automated |
 | SPM-62 | Missing layout, facility, access | TC-SPM62-AC03 | `e2e/spm62.spec.js` | Automated |
@@ -107,13 +108,13 @@
 | SPM-62 | Tight fit is a warning | TC-SPM62-AC06 | `e2e/spm62.spec.js` | Automated |
 | SPM-62 | Pending overlap is a warning | TC-SPM62-AC07 | `e2e/spm62.spec.js` | Automated |
 | SPM-62 | Failures block submit; warnings do not | TC-SPM62-AC08 | `e2e/spm62.spec.js` | Automated |
-| SPM-62 | Shared suitability rule | TC-SPM62-AC09 | `e2e/spm62.spec.js` | Automated; fails until SPM-61 search exists |
+| SPM-62 | Shared suitability rule | TC-SPM62-AC09 | `e2e/spm62.spec.js` | Automated; fails until search results carry the suitability verdict (SPM-62 follow-up with SPM-112) |
 | SPM-63 | Request venue for planning event | TC-SPM63-AC01 | `e2e/spm63.spec.js` | Automated |
 | SPM-63 | Request carries event facts | TC-SPM63-AC02 | `e2e/spm63.spec.js` | Automated |
 | SPM-63 | Failed suitability blocks submit | TC-SPM63-AC03 | `e2e/spm63.spec.js` | Automated |
 | SPM-63 | Warnings acknowledged and carried | TC-SPM63-AC04 | `e2e/spm63.spec.js` | Automated; the Venue Staff queue screen step fails until SPM-8/SPM-57 |
 | SPM-63 | Notify staff and pending queue | TC-SPM63-AC05 | `e2e/spm63.spec.js` | Automated; the notification list step fails until an in-app notification list exists |
-| SPM-63 | Pending on calendar, not locking | TC-SPM63-AC06 | `e2e/spm63.spec.js` | Automated; fails until the SPM-108 calendar and SPM-61 search exist |
+| SPM-63 | Pending on calendar, not locking | TC-SPM63-AC06 | `e2e/spm63.spec.js` | Automated; fails until the SPM-108 calendar exists |
 | SPM-63 | One pending request per event | TC-SPM63-AC07 | `e2e/spm63.spec.js` | Automated |
 | SPM-63 | Coordinator can withdraw | TC-SPM63-AC08 | `e2e/spm63.spec.js` | Automated; the calendar step fails until SPM-108 |
 | SPM-63 | Readiness in progress while pending | TC-SPM63-AC09 | `e2e/spm63.spec.js` | Automated; fails until the SPM-5 readiness view exists |

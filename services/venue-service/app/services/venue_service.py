@@ -1,7 +1,8 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.dao.venue_activity_log_dao import VenueActivityLogDAO
@@ -19,9 +20,10 @@ from app.schemas.venue import (
     VenueBookingOut,
     VenueCreate,
     VenueOut,
+    VenueSearchResult,
     VenueUpdate,
 )
-from app.services import suitability
+from app.services import suitability, venue_search
 from shared.exceptions.http import conflict, forbidden
 from shared.services.base import BaseService
 
@@ -297,6 +299,79 @@ class VenueService(BaseService):
             unavailability = self.unavailability_dao.find_overlapping(venue.venueId, *window)
         verdict, reasons = suitability.assess(venue, needs, bookings, unavailability)
         return SuitabilityOut(eventId=request.eventId, venueId=venue.venueId, verdict=verdict, reasons=reasons)
+
+    def search_venues(
+        self,
+        starts_at: datetime | None = None,
+        ends_at: datetime | None = None,
+        min_capacity: int = 0,
+        location: str | None = None,
+        layout: str | None = None,
+        facilities: list[str] | None = None,
+        accessibility: list[str] | None = None,
+        exclude_event_id: str | None = None,
+    ) -> list[VenueSearchResult]:
+        """SPM-61: the shortlist of active venues that fit the requirements and,
+        when a period is given, are free for it. Without a period only the
+        venue's own facts are checked."""
+        if (starts_at is None) != (ends_at is None):
+            raise HTTPException(
+                status_code=422,
+                detail="Give both a start and an end time to search a period, or leave both out.",
+            )
+        starts_at, ends_at = suitability._utc(starts_at), suitability._utc(ends_at)
+        if starts_at is not None and ends_at <= starts_at:
+            raise HTTPException(
+                status_code=422,
+                detail="The end time must be after the start time.",
+            )
+        filters = venue_search.SearchFilters(
+            starts_at=starts_at,
+            ends_at=ends_at,
+            min_capacity=min_capacity,
+            location=location,
+            layout=layout,
+            facilities=facilities or [],
+            accessibility=accessibility or [],
+        )
+        results = []
+        for venue in self.list_venues():
+            capacity = venue_search.fits(venue, filters)
+            if capacity is None:
+                continue
+            contested = False
+            if filters.has_period:
+                occupied_from, occupied_until = venue_search.occupied_window(starts_at, ends_at, venue)
+                # AC3: an unavailability period overlapping the occupied window excludes the venue.
+                if self.unavailability_dao.find_overlapping(venue.venueId, occupied_from, occupied_until):
+                    continue
+                # Another booking's occupied window is its own event times widened by the
+                # same setup and turnaround, so the two windows overlap exactly when the
+                # event times come within setup plus turnaround of each other.
+                reach = timedelta(minutes=venue.setupMinutes + venue.turnaroundMinutes)
+                nearby = self.booking_dao.find_event_times_overlapping(
+                    venue.venueId, starts_at - reach, ends_at + reach, exclude_event_id
+                )
+                # AC3: a confirmed booking excludes the venue; AC9: a pending one only marks it contested.
+                if any(booking.status == "approved" for booking in nearby):
+                    continue
+                contested = bool(nearby)
+            results.append(
+                VenueSearchResult(
+                    venueId=venue.venueId,
+                    code=venue.code,
+                    name=venue.name,
+                    location=venue.location,
+                    capacity=venue.capacity,
+                    layout=layout.strip() if layout and layout.strip() else None,
+                    layoutCapacity=capacity,
+                    headroom=capacity - min_capacity,
+                    setupMinutes=venue.setupMinutes,
+                    turnaroundMinutes=venue.turnaroundMinutes,
+                    contested=contested,
+                )
+            )
+        return sorted(results, key=lambda row: row.name.casefold())
 
     def create_booking(
         self,
