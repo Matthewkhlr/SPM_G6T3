@@ -342,17 +342,19 @@ def flag_bookings_for_reverification(
     response_model=list[VenueBookingOut],
     summary="Release every open venue booking for an event",
     description=(
-        "Organisers and coordinators. For event cancellation: every pending request and approved booking "
-        "for the event becomes `cancelled`. Rejected, withdrawn, and already cancelled rows stay as they are."
+        "The event's assigned coordinator, or an organiser from the event's own client organisation. For event "
+        "cancellation: every pending request and approved booking for the event becomes `cancelled`. Rejected, "
+        "withdrawn, and already cancelled rows stay as they are."
     ),
-    responses=error_responses(403, 503),
+    responses=error_responses(403, 404, 503),
 )
 def release_event_bookings(
     body: BookingReleaseRequest,
     authorization: str | None = Depends(forwarded_bearer),
     service: VenueService = Depends(get_venue_service),
 ):
-    resolve_caller(authorization, settings.user_service_url, allowed_roles={"organiser", "coordinator"})
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"organiser", "coordinator"})
+    service.check_release_allowed(caller, fetch_event_facts(body.eventId, authorization))
     return service.release_event_bookings(body.eventId)
 
 
@@ -393,7 +395,8 @@ def cancel_booking(
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator", "venue"})
     event = fetch_event_facts(service.get_booking(booking_id).eventId, authorization)
     booking = service.cancel_booking(booking_id, caller, event.coordinatorId)
-    notify_venue_staff(*service.venue_staff_notice(booking, "cancelled"), authorization)
+    # SPM-93 AC5: whoever cancelled is not told about their own action.
+    notify_venue_staff(*service.venue_staff_notice(booking, "cancelled"), authorization, skip_user_id=caller["userId"])
     return booking
 
 

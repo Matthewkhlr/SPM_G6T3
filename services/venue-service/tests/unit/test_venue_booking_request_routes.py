@@ -197,7 +197,8 @@ class TestBookingRequestRoutes(VenueCase):
         self.service.approve_booking(first_id, "u-venue", None)
         second_id = self.send(venueId=self.another_venue()).json()["bookingId"]
 
-        with signed_in_as("organiser"):
+        # The event's assigned coordinator; who may release is covered in test_venue_release_access.py.
+        with signed_in_as("coordinator"):
             released = self.client.post("/venues/bookings/release", headers=HEADERS, json={"eventId": "e1"})
 
         self.assertEqual(released.status_code, 200)

@@ -30,12 +30,13 @@ def fetch_event_facts(event_id: str, authorization: str) -> EventFacts:
 logger = logging.getLogger("venue.notifications")
 
 
-def notify_venue_staff(subject: str, body: str, authorization: str) -> int:
+def notify_venue_staff(subject: str, body: str, authorization: str, skip_user_id: str | None = None) -> int:
     """SPM-63 AC5 and AC8: email every Venue Staff user through notification-service.
 
     Best effort: the request itself is already saved, so a notification that
     cannot be sent is logged rather than undoing the coordinator's request.
-    Returns how many notifications were accepted.
+    Returns how many notifications were accepted. `skip_user_id` leaves out the
+    Venue Staff member who took the action themselves.
     """
     try:
         users = httpx.get(
@@ -46,7 +47,7 @@ def notify_venue_staff(subject: str, body: str, authorization: str) -> int:
             return 0
         sent = 0
         for user in users.json():
-            if user.get("role") != "venue":
+            if user.get("role") != "venue" or (skip_user_id and user.get("userId") == skip_user_id):
                 continue
             response = httpx.post(
                 f"{settings.notification_service_url}/notifications",

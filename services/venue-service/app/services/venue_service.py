@@ -551,6 +551,16 @@ class VenueService(BaseService):
         self.db.refresh(row)
         return _booking_to_out(row)
 
+    def check_release_allowed(self, caller: dict, event: EventFacts) -> None:
+        """Only the people who can cancel the event (SPM-88 AC1) may release its
+        bookings: its assigned coordinator, or an organiser from its own client
+        organisation. Anyone else would be freeing another event's rooms."""
+        if caller.get("role") == "coordinator" and event.coordinatorId and caller["userId"] == event.coordinatorId:
+            return
+        if caller.get("role") == "organiser" and event.organisationId and caller.get("organisationId") == event.organisationId:
+            return
+        raise forbidden("Only the coordinator assigned to this event, or its organiser, can release its venue bookings.")
+
     def release_event_bookings(self, event_id: str) -> list[VenueBookingOut]:
         """SPM-114: cancelling the event frees every pending request and approved booking.
 
