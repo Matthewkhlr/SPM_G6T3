@@ -5,6 +5,9 @@ re-verification after a change (SPM-86) all call, so the three always agree
 (AC9). It only judges: the caller loads the venue and the bookings and
 unavailability that overlap the event, and passes them in.
 
+Clashes use the shared occupied window (SPM-64): the event's times widened by
+the venue's own setup and turnaround time.
+
 All times are UTC, and a venue's opening hours are read as UTC hours.
 """
 
@@ -14,6 +17,7 @@ from datetime import datetime, time, timedelta, timezone
 from app.models.venue_booking import VenueBooking
 from app.models.venue_unavailability import VenueUnavailability
 from app.schemas.venue import EventFacts, SuitabilityReason, SuitabilityRequest, VenueOut
+from app.services.occupancy import occupied_window
 
 # Matches datetime.weekday(), and the day keys venues store their hours under.
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -27,16 +31,6 @@ class Needs:
     accessibility: list[str] = field(default_factory=list)
     starts_at: datetime | None = None
     ends_at: datetime | None = None
-    setup_starts_at: datetime | None = None
-    teardown_ends_at: datetime | None = None
-
-    @property
-    def occupied_from(self) -> datetime | None:
-        return self.setup_starts_at or self.starts_at
-
-    @property
-    def occupied_until(self) -> datetime | None:
-        return self.teardown_ends_at or self.ends_at
 
 
 def _utc(value: datetime | None) -> datetime | None:
@@ -57,8 +51,6 @@ def needs_for(request: SuitabilityRequest, event: EventFacts) -> Needs:
         accessibility=request.requiredAccessibility,
         starts_at=_utc(request.startsAt or event.proposedStartAt),
         ends_at=_utc(request.endsAt or event.proposedEndAt),
-        setup_starts_at=_utc(request.setupStartsAt),
-        teardown_ends_at=_utc(request.teardownEndsAt),
     )
 
 
@@ -70,19 +62,15 @@ def _schedule_problem(needs: Needs) -> SuitabilityReason | None:
         )
     if needs.ends_at <= needs.starts_at:
         return _failure("schedule", "The event's end time must be after its start time.")
-    if needs.occupied_from > needs.starts_at or needs.occupied_until < needs.ends_at:
-        return _failure(
-            "schedule", "Setup must start no later than the event, and teardown must end no earlier than the event."
-        )
     return None
 
 
-def occupied_window(needs: Needs) -> tuple[datetime, datetime] | None:
-    """The span the venue is tied up, setup to teardown, or None if the
-    event's times are missing or invalid (so there is nothing to clash with)."""
+def event_period(needs: Needs) -> tuple[datetime, datetime] | None:
+    """The event's own times, or None if they are missing or invalid (so there
+    is nothing to clash with)."""
     if _schedule_problem(needs):
         return None
-    return needs.occupied_from, needs.occupied_until
+    return needs.starts_at, needs.ends_at
 
 
 def _failure(check: str, message: str) -> SuitabilityReason:
@@ -184,16 +172,18 @@ def _event_label(booking: VenueBooking) -> str:
     return f'"{name}"' if name else f"event {booking.eventId}"
 
 
-def _clashes(bookings: list[VenueBooking], unavailability: list[VenueUnavailability]) -> list[SuitabilityReason]:
+def _clashes(
+    venue: VenueOut, bookings: list[VenueBooking], unavailability: list[VenueUnavailability]
+) -> list[SuitabilityReason]:
     reasons = []
     for booking in bookings:
-        when = _span(booking.setupStartsAt, booking.teardownEndsAt)
+        when = _span(*occupied_window(booking.startsAt, booking.endsAt, venue.setupMinutes, venue.turnaroundMinutes))
         if booking.status == "approved":
             reasons.append(
                 _failure(
                     "clash",
                     f"This venue already has a confirmed booking for {_event_label(booking)} at an overlapping "
-                    f"time ({when}, including setup and teardown).",
+                    f"time ({when}, including setup and turnaround).",
                 )
             )
         else:
@@ -238,7 +228,7 @@ def assess(
         reasons.append(problem)
     else:
         reasons += _opening_hours(venue, needs.starts_at, needs.ends_at)
-        reasons += _clashes(bookings, unavailability)
+        reasons += _clashes(venue, bookings, unavailability)
 
     reasons.sort(key=lambda reason: reason.severity != "failure")
     if any(reason.severity == "failure" for reason in reasons):

@@ -1,164 +1,140 @@
 import { test, expect } from '@playwright/test'
-import { venueBookingPayload, venuePeriod } from './support/api-data.js'
-import { createPendingBooking, venueRequest } from './support/venue.js'
+import { venueRequest } from './support/venue.js'
+import { THEATRE_EVENT, approvedEvent, freshPeriod, requestVenue } from './support/venue-request.js'
+
+// Seeded Marina Hall A (v1) has 30 minutes setup and 60 minutes turnaround, so a
+// 10:00 to 12:00 booking occupies it from 09:30 to 13:00. Every test uses its own
+// events on a random day years ahead, so runs never meet each other's bookings.
+
+const MINUTE = 60 * 1000
+
+function shift(iso, minutes) {
+  return new Date(new Date(iso).getTime() + minutes * MINUTE).toISOString()
+}
+
+// The server returns UTC times without a zone marker.
+function utc(value) {
+  return new Date(/Z|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`).toISOString()
+}
+
+function slot(base, fromMinutes, toMinutes) {
+  return { startsAt: shift(base.startsAt, fromMinutes), endsAt: shift(base.startsAt, toMinutes) }
+}
+
+// A pending request for a new event approved for planning. Later requests at an
+// overlapping time carry a warning about the earlier one, so they acknowledge it.
+async function pending(period, venueId = 'v1') {
+  const event = await approvedEvent(THEATRE_EVENT)
+  const sent = await requestVenue(event, venueId, period, { acknowledgeWarnings: true })
+  expect(sent.status, JSON.stringify(sent.body)).toBe(201)
+  return { event, booking: sent.body }
+}
+
+function approve(booking) {
+  return venueRequest('POST', `/venues/bookings/${booking.bookingId}/approve`, 'VS-01', { reason: 'SPM-64 test' })
+}
 
 test.describe('SPM-64 Prevent double-booking of a venue', () => {
-  test('TC-SPM64-AC01 one shared conflict rule is used by search, suitability, approval, blocking, and rescheduling', async () => {
-    const created = await createPendingBooking('EC-01', 270, { venueId: 'v2' })
-    await venueRequest('POST', `/venues/bookings/${created.bookingId}/approve`, 'VS-01', {
-      reason: 'shared rule',
-    })
-    const window = venuePeriod(270, 2)
+  test('TC-SPM64-AC01 search, suitability, and approval apply the same rule', async () => {
+    const base = freshPeriod()
+    const first = await pending(base)
+    const second = await pending(slot(base, 150, 240)) // 12:30 to 14:00
+    expect((await approve(first.booking)).status).toBe(200)
+
     const search = await venueRequest(
       'GET',
-      `/venues/search?startsAt=${encodeURIComponent(window.startsAt)}&endsAt=${encodeURIComponent(window.endsAt)}`,
+      `/venues/search?startsAt=${encodeURIComponent(shift(base.startsAt, 150))}&endsAt=${encodeURIComponent(shift(base.startsAt, 240))}`,
       'EC-01',
     )
     const suitability = await venueRequest('POST', '/venues/suitability', 'EC-01', {
-      eventId: 'e4',
-      venueId: 'v2',
-      ...window,
+      eventId: second.event.eventId,
+      venueId: 'v1',
+      ...slot(base, 150, 240),
     })
-    const clash = await createPendingBooking('EC-01', 270, { venueId: 'v2', eventId: 'e4' })
-    const approved = await venueRequest('POST', `/venues/bookings/${clash.bookingId}/approve`, 'VS-01', {
-      reason: 'should conflict',
-    })
+    const approval = await approve(second.booking)
+
     expect(search.status).toBe(200)
-    expect((search.body || []).map((row) => row.venueId)).not.toContain('v2')
-    expect(suitability.body.verdict).toMatch(/not suitable/i)
-    expect(approved.status).toBe(409)
+    expect(search.body.map((row) => row.venueId)).not.toContain('v1')
+    expect(suitability.body.verdict).toBe('not suitable')
+    expect(approval.status).toBe(409)
   })
 
-  test('TC-SPM64-AC02 two confirmed bookings for the same venue never overlap', async () => {
-    const first = await createPendingBooking('EC-01', 271, { venueId: 'v3' })
-    expect(
-      (await venueRequest('POST', `/venues/bookings/${first.bookingId}/approve`, 'VS-01', { reason: 'a' }))
-        .status,
-    ).toBe(200)
-    const second = await createPendingBooking('EC-01', 271, { venueId: 'v3', eventId: 'e4' })
-    const blocked = await venueRequest('POST', `/venues/bookings/${second.bookingId}/approve`, 'VS-01', {
-      reason: 'b',
-    })
-    expect(blocked.status).toBe(409)
+  test('TC-SPM64-AC02 the occupied window adds the venue setup and turnaround time', async () => {
+    const base = freshPeriod()
+    const { booking } = await pending(base)
+
+    expect(utc(booking.setupStartsAt)).toBe(shift(base.startsAt, -30))
+    expect(utc(booking.teardownEndsAt)).toBe(shift(base.endsAt, 60))
   })
 
-  test('TC-SPM64-AC03 a confirmed booking conflicts with an overlapping unavailability period', async () => {
-    const created = await createPendingBooking('EC-01', 272, { venueId: 'v2' })
-    await venueRequest('POST', `/venues/bookings/${created.bookingId}/approve`, 'VS-01', {
-      reason: 'then block',
-    })
-    const window = venuePeriod(272, 2)
-    const block = await venueRequest('POST', '/venues/v2/unavailability', 'VS-01', {
-      startsAt: window.startsAt,
-      endsAt: window.endsAt,
-      reason: 'maintenance',
-    })
-    expect(block.status).toBe(409)
+  test('TC-SPM64-AC03 a second overlapping booking cannot be confirmed and the clash is named', async () => {
+    const base = freshPeriod()
+    const first = await pending(base)
+    const second = await pending(slot(base, 60, 180))
+    expect((await approve(first.booking)).status).toBe(200)
+
+    const refused = await approve(second.booking)
+
+    expect(refused.status).toBe(409)
+    expect(refused.body.detail).toContain(`Marina Hall A is already confirmed for "${first.event.eventName}"`)
+    // The database refusing an overlap on its own is proven in
+    // services/venue-service/tests/integration/test_double_booking_mysql.py.
   })
 
-  test('TC-SPM64-AC04 ranges that only touch do not conflict', async () => {
-    const firstWindow = venuePeriod(273, 2)
-    const first = await venueRequest('POST', '/venues/bookings', 'EC-01', {
-      ...venueBookingPayload(273, 'e1', 'v4'),
-      ...firstWindow,
-    })
-    expect(first.status).toBe(201)
-    await venueRequest('POST', `/venues/bookings/${first.body.bookingId}/approve`, 'VS-01', {
-      reason: 'first',
-    })
-
-    const touchStart = firstWindow.endsAt
-    const touchEnd = new Date(new Date(touchStart).getTime() + 2 * 60 * 60 * 1000).toISOString()
-    const second = await venueRequest('POST', '/venues/bookings', 'EC-01', {
-      venueId: 'v4',
-      eventId: 'e4',
-      startsAt: touchStart,
-      endsAt: touchEnd,
-      setupStartsAt: touchStart,
-      teardownEndsAt: touchEnd,
-      requirementsSnapshot: 'touching range',
-    })
-    expect(second.status).toBe(201)
-    const approved = await venueRequest('POST', `/venues/bookings/${second.body.bookingId}/approve`, 'VS-01', {
-      reason: 'touching is ok',
-    })
-    expect(approved.status).toBe(200)
+  test('TC-SPM64-AC04 a confirmed booking conflicts with unavailability and with an active hold', async () => {
+    test.skip(
+      true,
+      'Recording unavailability is SPM-9 and tentative holds are SPM-116, neither built yet. The unavailability rule is unit-tested in test_venue_double_booking.py.',
+    )
   })
 
-  test('TC-SPM64-AC05 simultaneous conflicting approvals allow exactly one success', async () => {
-    const a = await createPendingBooking('EC-01', 274, { venueId: 'v3', eventId: 'e1' })
-    const b = await createPendingBooking('EC-01', 274, { venueId: 'v3', eventId: 'e4' })
-    const [first, second] = await Promise.all([
-      venueRequest('POST', `/venues/bookings/${a.bookingId}/approve`, 'VS-01', { reason: 'race-a' }),
-      venueRequest('POST', `/venues/bookings/${b.bookingId}/approve`, 'VS-01', { reason: 'race-b' }),
-    ])
-    const statuses = [first.status, second.status].sort()
-    expect(statuses).toEqual([200, 409])
+  test('TC-SPM64-AC05 an expired tentative hold does not conflict', async () => {
+    test.skip(true, 'Tentative holds are SPM-116, not built yet; remove this skip when it ships.')
   })
 
-  test('TC-SPM64-AC06 cancelling, rejecting, completing, or withdrawing releases the hold', async () => {
-    const created = await createPendingBooking('EC-01', 275, { venueId: 'v2' })
-    await venueRequest('POST', `/venues/bookings/${created.bookingId}/reject`, 'VS-01', {
-      reason: 'other',
-      explanation: 'release',
-    })
-    const next = await createPendingBooking('EC-01', 275, { venueId: 'v2', eventId: 'e4' })
-    const approved = await venueRequest('POST', `/venues/bookings/${next.bookingId}/approve`, 'VS-01', {
-      reason: 'reused slot',
-    })
-    expect(approved.status).toBe(200)
+  test('TC-SPM64-AC06 touching windows are fine, touching event times can still clash', async () => {
+    const base = freshPeriod()
+    const first = await pending(base)
+    const touchingWindow = await pending(slot(base, 210, 240)) // 13:30 to 14:00, set up from 13:00
+    const touchingTimes = await pending(slot(base, 120, 180)) // 12:00 to 13:00, set up from 11:30
+    expect((await approve(first.booking)).status).toBe(200)
+
+    expect((await approve(touchingWindow.booking)).status).toBe(200)
+    expect((await approve(touchingTimes.booking)).status).toBe(409)
   })
 
-  test('TC-SPM64-AC07 overlap boundaries are covered', async () => {
-    const base = venuePeriod(276, 2)
-    const mid = new Date(
-      (new Date(base.startsAt).getTime() + new Date(base.endsAt).getTime()) / 2,
-    ).toISOString()
-    const cases = [
-      { name: 'identical', startsAt: base.startsAt, endsAt: base.endsAt, conflicts: true },
-      {
-        name: 'partial-start',
-        startsAt: new Date(new Date(base.startsAt).getTime() - 60 * 60 * 1000).toISOString(),
-        endsAt: mid,
-        conflicts: true,
-      },
-      {
-        name: 'contained',
-        startsAt: new Date(new Date(base.startsAt).getTime() + 15 * 60 * 1000).toISOString(),
-        endsAt: new Date(new Date(base.endsAt).getTime() - 15 * 60 * 1000).toISOString(),
-        conflicts: true,
-      },
-      { name: 'touching', startsAt: base.endsAt, endsAt: new Date(new Date(base.endsAt).getTime() + 2 * 60 * 60 * 1000).toISOString(), conflicts: false },
-    ]
+  test('TC-SPM64-AC07 two approvals for clashing requests at once: exactly one succeeds', async () => {
+    const base = freshPeriod()
+    const a = await pending(base)
+    const b = await pending(slot(base, 30, 150))
 
-    const first = await venueRequest('POST', '/venues/bookings', 'EC-01', {
-      ...venueBookingPayload(276, 'e1', 'v4'),
-      ...base,
-    })
-    expect(first.status).toBe(201)
-    await venueRequest('POST', `/venues/bookings/${first.body.bookingId}/approve`, 'VS-01', {
-      reason: 'boundary base',
-    })
+    const results = await Promise.all([approve(a.booking), approve(b.booking)])
 
-    for (const row of cases) {
-      const created = await venueRequest('POST', '/venues/bookings', 'EC-01', {
-        venueId: 'v4',
-        eventId: 'e4',
-        startsAt: row.startsAt,
-        endsAt: row.endsAt,
-        setupStartsAt: row.startsAt,
-        teardownEndsAt: row.endsAt,
-        requirementsSnapshot: row.name,
-      })
-      expect(created.status, row.name).toBe(201)
-      const approved = await venueRequest(
-        'POST',
-        `/venues/bookings/${created.body.bookingId}/approve`,
-        'VS-01',
-        { reason: row.name },
-      )
-      if (row.conflicts) expect(approved.status, row.name).toBe(409)
-      else expect(approved.status, row.name).toBe(200)
-    }
+    expect(results.map((result) => result.status).sort()).toEqual([200, 409])
+    expect(results.find((result) => result.status === 409).body.detail).toMatch(/cannot be approved/)
+  })
+
+  test('TC-SPM64-AC08 withdrawing, cancelling a booking, or cancelling the event frees the venue', async () => {
+    // Withdrawing (SPM-63) a pending request.
+    const base = freshPeriod()
+    const first = await pending(base)
+    const withdrawn = await venueRequest('POST', `/venues/bookings/${first.booking.bookingId}/withdraw`, 'EC-01')
+    expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(200)
+    const second = await pending(base)
+    expect((await approve(second.booking)).status).toBe(200)
+
+    // Cancelling that one confirmed booking (SPM-114) frees the period.
+    const cancelled = await venueRequest('POST', `/venues/bookings/${second.booking.bookingId}/cancel`, 'VS-01')
+    expect(cancelled.status, JSON.stringify(cancelled.body)).toBe(200)
+    const third = await pending(base)
+    expect((await approve(third.booking)).status).toBe(200)
+
+    // Cancelling the event releases all its bookings (SPM-114's release, which
+    // event cancellation in SPM-88 is to call).
+    const released = await venueRequest('POST', '/venues/bookings/release', 'EC-01', { eventId: third.event.eventId })
+    expect(released.status, JSON.stringify(released.body)).toBe(200)
+    expect(released.body.map((row) => row.status)).toEqual(['cancelled'])
+    const fourth = await pending(base)
+    expect((await approve(fourth.booking)).status).toBe(200)
   })
 })

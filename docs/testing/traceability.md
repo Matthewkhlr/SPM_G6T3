@@ -118,13 +118,14 @@
 | SPM-63 | One pending request per event | TC-SPM63-AC07 | `e2e/spm63.spec.js` | Automated |
 | SPM-63 | Coordinator can withdraw | TC-SPM63-AC08 | `e2e/spm63.spec.js` | Automated; the calendar step fails until SPM-108 |
 | SPM-63 | Readiness in progress while pending | TC-SPM63-AC09 | `e2e/spm63.spec.js` | Automated; fails until the SPM-5 readiness view exists |
-| SPM-64 | Shared conflict rule | TC-SPM64-AC01 | `e2e/spm64.spec.js` | Automated |
-| SPM-64 | Confirmed bookings never overlap | TC-SPM64-AC02 | `e2e/spm64.spec.js` | Automated |
-| SPM-64 | Booking conflicts with unavailability | TC-SPM64-AC03 | `e2e/spm64.spec.js` | Automated |
-| SPM-64 | Touching ranges allowed | TC-SPM64-AC04 | `e2e/spm64.spec.js` | Automated |
-| SPM-64 | Simultaneous approve: one winner | TC-SPM64-AC05 | `e2e/spm64.spec.js` | Automated |
-| SPM-64 | Release hold on reject or withdraw | TC-SPM64-AC06 | `e2e/spm64.spec.js` | Automated |
-| SPM-64 | Overlap boundary cases | TC-SPM64-AC07 | `e2e/spm64.spec.js` | Automated |
+| SPM-64 | Shared conflict rule | TC-SPM64-AC01 | `e2e/spm64.spec.js` | Automated (search, suitability, approval); blocking, rescheduling and re-verification use it when SPM-9, SPM-87 and SPM-86 are built |
+| SPM-64 | Occupied window adds setup and turnaround | TC-SPM64-AC02 | `e2e/spm64.spec.js` | Automated |
+| SPM-64 | Confirmed bookings never overlap, also in the database | TC-SPM64-AC03 | `e2e/spm64.spec.js`; `services/venue-service/tests/integration/test_double_booking_mysql.py` | Automated |
+| SPM-64 | Conflicts with unavailability and active holds | TC-SPM64-AC04 | `e2e/spm64.spec.js` | Unavailability unit-tested; e2e waits on SPM-9, holds on SPM-116 |
+| SPM-64 | Expired hold does not conflict | TC-SPM64-AC05 | `e2e/spm64.spec.js` | Skipped until SPM-116 |
+| SPM-64 | Touching windows fine, touching event times can clash | TC-SPM64-AC06 | `e2e/spm64.spec.js` | Automated |
+| SPM-64 | Simultaneous approvals: one winner | TC-SPM64-AC07 | `e2e/spm64.spec.js`; `services/venue-service/tests/integration/test_double_booking_mysql.py` | Automated |
+| SPM-64 | Cancel, reject, complete, or withdraw releases the hold | TC-SPM64-AC08 | `e2e/spm64.spec.js` | Withdraw, single-booking cancel, and event release (SPM-114) automated; rejecting (SPM-70) and completing (SPM-72/73) are to call the same release |
 | SPM-108 | Calendar shows all three kinds | TC-SPM108-AC01 | `e2e/spm108.spec.js` | Automated |
 | SPM-108 | Kinds are visually distinct | TC-SPM108-AC02 | `e2e/spm108.spec.js` | Automated |
 | SPM-108 | Entry shows name, org, time, and opens | TC-SPM108-AC03 | `e2e/spm108.spec.js` | Automated |

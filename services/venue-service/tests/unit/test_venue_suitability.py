@@ -17,8 +17,10 @@ def at(hour, minute=0, day=MONDAY):
 
 
 class SuitabilityCase(VenueCase):
-    """A weekday venue open 08:00 to 18:00 UTC, and an event on a Monday
-    10:00 to 12:00 UTC for 10 people, which on its own suits it."""
+    """A weekday venue open 08:00 to 18:00 UTC with 30 minutes setup and 60
+    minutes turnaround, and an event on a Monday 10:00 to 12:00 UTC for 10
+    people, which on its own suits it. The event occupies the venue from 09:30
+    to 13:00 (SPM-64)."""
 
     def setUp(self):
         super().setUp()
@@ -40,16 +42,9 @@ class SuitabilityCase(VenueCase):
     def messages(self, result, severity):
         return [reason.message for reason in result.reasons if reason.severity == severity]
 
-    def booking(self, event_id, setup_from, teardown_until, status="approved"):
+    def booking(self, event_id, starts_at, ends_at, status="approved"):
         booking = self.service.create_booking(
-            booking_create(
-                self.venue.venueId,
-                eventId=event_id,
-                startsAt=setup_from,
-                endsAt=teardown_until,
-                setupStartsAt=setup_from,
-                teardownEndsAt=teardown_until,
-            ),
+            booking_create(self.venue.venueId, eventId=event_id, startsAt=starts_at, endsAt=ends_at),
             "u-coord",
         )
         if status == "approved":
@@ -215,25 +210,29 @@ class TestClashes(SuitabilityCase):
             self.messages(result, "failure"),
             [
                 "This venue already has a confirmed booking for event e-other at an overlapping time "
-                "(07 Jan 2030, 11:00 AM to 02:00 PM UTC, including setup and teardown)."
+                "(07 Jan 2030, 10:30 AM to 03:00 PM UTC, including setup and turnaround)."
             ],
         )
 
-    def test_setup_and_teardown_count_towards_the_clash(self):
-        self.booking("e-early", at(8), at(9))
-        self.booking("e-late", at(13), at(14))
+    def test_the_venues_setup_and_turnaround_count_towards_the_clash(self):
+        # 07:00 to 09:00 is turned around until 10:00, after this event's setup begins at 09:30.
+        self.booking("e-early", at(7), at(9))
 
-        self.assertEqual(self.check().verdict, "suitable")
-        early_setup = self.messages(self.check(setupStartsAt=at(8, 30)), "failure")
-        late_teardown = self.messages(self.check(teardownEndsAt=at(13, 30)), "failure")
-        self.assertEqual(len(early_setup), 1)
-        self.assertIn("event e-early", early_setup[0])
-        self.assertEqual(len(late_teardown), 1)
-        self.assertIn("event e-late", late_teardown[0])
+        early = self.messages(self.check(), "failure")
 
-    def test_bookings_that_only_touch_do_not_clash(self):
-        self.booking("e-before", at(8), at(10))
-        self.booking("e-after", at(12), at(14))
+        self.assertEqual(len(early), 1)
+        self.assertIn("event e-early", early[0])
+
+    def test_event_times_that_only_touch_can_still_clash(self):
+        # 12:00 to 13:00 starts as this event ends, but its setup from 11:30 overlaps.
+        self.booking("e-after", at(12), at(13))
+
+        self.assertEqual(self.check().verdict, "not suitable")
+
+    def test_occupied_windows_that_only_touch_do_not_clash(self):
+        # Turned around by 09:30, and set up from 13:00: exactly this event's window.
+        self.booking("e-before", at(7), at(8, 30))
+        self.booking("e-after", at(13, 30), at(14))
 
         self.assertEqual(self.check().verdict, "suitable")
 
@@ -246,7 +245,7 @@ class TestClashes(SuitabilityCase):
     def test_a_clash_spanning_two_days_names_both_dates(self):
         self.booking("e-other", at(-2), at(11))
 
-        self.assertIn("06 Jan 2030, 10:00 PM to 07 Jan 2030, 11:00 AM UTC", self.messages(self.check(), "failure")[0])
+        self.assertIn("06 Jan 2030, 09:30 PM to 07 Jan 2030, 12:00 PM UTC", self.messages(self.check(), "failure")[0])
 
     def test_an_overlapping_unavailability_period_fails_naming_it(self):
         self.unavailable(at(11), at(15), "Maintenance")
@@ -259,8 +258,9 @@ class TestClashes(SuitabilityCase):
         )
 
     def test_unavailability_without_a_reason_and_outside_the_event_is_handled(self):
-        self.unavailable(at(8), at(10), "")
-        self.unavailable(at(12), at(14), "")
+        # Touching the occupied window (09:30 to 13:00) on either side is not a clash.
+        self.unavailable(at(8), at(9, 30), "")
+        self.unavailable(at(13), at(14), "")
         self.assertEqual(self.check().verdict, "suitable")
 
         self.unavailable(at(9), at(11), "")
@@ -299,10 +299,10 @@ class TestOpeningHours(SuitabilityCase):
     def test_ending_a_minute_after_closing_fails(self):
         self.assertEqual(self.check(startsAt=at(16), endsAt=at(18, 1)).verdict, "not suitable")
 
-    def test_opening_hours_apply_to_the_requested_event_time_not_setup_or_teardown(self):
-        # AC5 is about the requested time: setup from 07:00 and teardown until
-        # 19:00 around an 08:00 to 18:00 event is not an opening-hours failure.
-        result = self.check(startsAt=at(8), endsAt=at(18), setupStartsAt=at(7), teardownEndsAt=at(19))
+    def test_opening_hours_apply_to_the_requested_event_time_not_setup_or_turnaround(self):
+        # AC5 is about the requested time: the venue's setup from 07:30 and turnaround
+        # until 19:00 around an 08:00 to 18:00 event is not an opening-hours failure.
+        result = self.check(startsAt=at(8), endsAt=at(18))
 
         self.assertEqual(result.verdict, "suitable")
 
@@ -354,11 +354,6 @@ class TestSchedule(SuitabilityCase):
         result = self.check(startsAt=at(12), endsAt=at(10))
 
         self.assertEqual(self.messages(result, "failure"), ["The event's end time must be after its start time."])
-
-    def test_setup_after_the_start_or_teardown_before_the_end_fails(self):
-        for overrides in ({"setupStartsAt": at(11)}, {"teardownEndsAt": at(11)}):
-            with self.subTest(**overrides):
-                self.assertEqual([reason.check for reason in self.check(**overrides).reasons], ["schedule"])
 
 
 class TestEventFacts(SuitabilityCase):
