@@ -9,8 +9,8 @@ export const THEATRE_EVENT = { layoutPreference: 'Theatre', expectedAttendance: 
 
 // SPM-63 AC1: only the assigned coordinator may request a venue, and only for
 // an event approved for planning. Each test makes its own such event, assigned
-// to EC-01 (u2), so the one-pending-request-per-event rule (AC7) never makes
-// tests, or reruns of them, collide on a shared seeded event.
+// to EC-01 (u2). SPM-114 allows several venues on that event; a second live
+// booking of the same venue is still refused.
 export async function approvedEvent(overrides = {}) {
   const created = await eventApi('POST', '', 'EO-01', {
     ...newEventPayload(`VENUE-REQ-${Date.now()}`),
