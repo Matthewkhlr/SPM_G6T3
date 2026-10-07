@@ -13,6 +13,8 @@ from app.dao.venue_unavailability_dao import VenueUnavailabilityDAO
 from app.models.venue_booking import VenueBooking
 from app.models.venue_info import VenueInfo
 from app.schemas.venue import (
+    BookingClashOut,
+    ClashingBooking,
     EventFacts,
     SuitabilityOut,
     SuitabilityRequest,
@@ -108,6 +110,20 @@ def _booking_to_out(row: VenueBooking) -> VenueBookingOut:
         venueName=row.venue.name if row.venue else None,
         needsReverification=bool(row.needsReverification),
         reverificationNote=row.reverificationNote,
+    )
+
+
+def _clashing(row: VenueBooking, window: tuple[datetime, datetime]) -> ClashingBooking:
+    """SPM-122 AC2 and AC3: a clashing booking reported as it stands, never changed."""
+    return ClashingBooking(
+        bookingId=row.bookingId,
+        eventId=row.eventId,
+        eventName=(row.eventSnapshot or {}).get("eventName"),
+        status=row.status,
+        startsAt=row.startsAt,
+        endsAt=row.endsAt,
+        setupStartsAt=window[0],
+        teardownEndsAt=window[1],
     )
 
 
@@ -345,6 +361,38 @@ class VenueService(BaseService):
             # AC4: an unavailability period conflicts when it overlaps the occupied window.
             unavailability=self.unavailability_dao.find_overlapping(venue.venueId, *window),
         )
+
+    def booking_clashes(self, venue_id: str | None = None) -> list[BookingClashOut]:
+        """SPM-122 AC1 and AC2: every pair of confirmed bookings on the same venue
+        whose occupied windows overlap under the venue's current setup and turnaround
+        times (Week 7 change 1), with both events and the overlapping times. Such
+        pairs arise when a venue's times grow after its bookings were approved.
+        AC3 and AC4: this only reads; no booking or event record is changed."""
+        if venue_id:
+            self._require_venue(venue_id)
+        rows = self.booking_dao.list_confirmed_by_venue(venue_id)
+        windows = [_occupied_window(row) for row in rows]
+        clashes = []
+        for i, (first, first_window) in enumerate(zip(rows, windows)):
+            for second, second_window in zip(rows[i + 1 :], windows[i + 1 :]):
+                # One venue's bookings share its setup and turnaround, so they come
+                # in window order; once a window starts after this one ends, so do
+                # the rest. Windows that only touch do not clash (SPM-112 AC3).
+                if second.venueId != first.venueId or second_window[0] >= first_window[1]:
+                    break
+                clashes.append(
+                    BookingClashOut(
+                        venueId=first.venueId,
+                        venueName=first.venue.name,
+                        setupMinutes=first.venue.setupMinutes,
+                        turnaroundMinutes=first.venue.turnaroundMinutes,
+                        first=_clashing(first, first_window),
+                        second=_clashing(second, second_window),
+                        overlapStartsAt=second_window[0],
+                        overlapEndsAt=min(first_window[1], second_window[1]),
+                    )
+                )
+        return clashes
 
     def check_suitability(self, request: SuitabilityRequest, event: EventFacts) -> SuitabilityOut:
         """SPM-62. The one entry point every caller uses, so search, booking

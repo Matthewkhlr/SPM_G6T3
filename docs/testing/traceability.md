@@ -130,6 +130,11 @@
 | SPM-112 | Search, suitability, approval and unavailability use the same window | TC-SPM112-AC02 | `e2e/spm112.spec.js`; `services/venue-service/tests/unit/test_venue_occupied_window.py` | Search, suitability, request and approval automated; unavailability unit-tested until SPM-9 records it; rescheduling (SPM-87) and re-verification (SPM-86) are to call the same rule when built |
 | SPM-112 | The coordinator's venue screen applies the same window | TC-SPM112-AC02b | `e2e/spm112.spec.js` | Automated (browser) |
 | SPM-112 | Windows that only touch do not conflict | TC-SPM112-AC03 | `e2e/spm112.spec.js`; `services/venue-service/tests/integration/test_double_booking_mysql.py` | Automated |
+| SPM-122 | Every pair of confirmed bookings whose windows overlap under the venue's current times is listed | TC-SPM122-AC01 | `e2e/spm122.spec.js`; `services/venue-service/tests/unit/test_venue_booking_clashes.py` | Automated |
+| SPM-122 | Clashes shown in the venue catalogue once new times are saved | TC-SPM122-AC01b | `e2e/spm122.spec.js` | Automated (browser) |
+| SPM-122 | Each clash names the venue, both events and the overlapping times | TC-SPM122-AC02 | `e2e/spm122.spec.js`; `services/venue-service/tests/unit/test_venue_booking_clashes.py` | Automated |
+| SPM-122 | Listed bookings kept with their status and event details | TC-SPM122-AC03 | `e2e/spm122.spec.js`; `services/venue-service/tests/unit/test_venue_booking_clashes.py` | Automated |
+| SPM-122 | Event records unchanged | TC-SPM122-AC04 | `e2e/spm122.spec.js`; `services/venue-service/tests/unit/test_venue_booking_clashes.py` | Automated |
 | SPM-112 | Touching event times conflict when setup or turnaround overlap | TC-SPM112-AC04 | `e2e/spm112.spec.js`; `services/venue-service/tests/integration/test_double_booking_mysql.py` | Automated |
 | SPM-108 | Calendar shows all three kinds | TC-SPM108-AC01 | `e2e/spm108.spec.js` | Automated |
 | SPM-108 | Kinds are visually distinct | TC-SPM108-AC02 | `e2e/spm108.spec.js` | Automated |

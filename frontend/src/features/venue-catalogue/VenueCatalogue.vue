@@ -8,6 +8,20 @@
         <input type="checkbox" v-model="showRetired" @change="onToggleRetired" />
         Show retired venues
       </label>
+      <!-- SPM-122: confirmed bookings that overlap once setup and turnaround are included. -->
+      <div v-if="canWrite && clashVenues.length" class="clash-banner" data-testid="venue-clash-banner">
+        <p>Some confirmed bookings overlap once setup and turnaround are included. They are kept as they are.</p>
+        <button
+          v-for="venue in clashVenues"
+          :key="venue.venueId"
+          type="button"
+          class="clash-link"
+          :data-testid="`venue-clash-link-${venue.venueId}`"
+          @click="selectVenue(venue.venueId)"
+        >
+          {{ venue.venueName }}: {{ venue.count }} {{ venue.count === 1 ? 'clash' : 'clashes' }}
+        </button>
+      </div>
       <div
         v-for="venue in venues"
         :key="venue.venueId"
@@ -67,6 +81,38 @@
           <dt>Turnaround needed</dt><dd>{{ selected.turnaroundMinutes }} minutes between bookings</dd>
         </dl>
 
+        <!-- SPM-122: listed for Venue Staff only; nothing here changes a booking or its event. -->
+        <section v-if="canWrite" class="clashes" data-testid="venue-clashes">
+          <h4>Bookings that clash under setup and turnaround</h4>
+          <p v-if="clashError" class="clash-error" data-testid="venue-clashes-error">{{ clashError }}</p>
+          <p v-else-if="!selectedClashes.length" class="hint" data-testid="venue-clashes-none">
+            No confirmed bookings at this venue overlap once its setup and turnaround times are included.
+          </p>
+          <template v-else>
+            <p class="hint">
+              These confirmed bookings overlap once {{ selectedClashes[0].setupMinutes }} minutes of setup and
+              {{ selectedClashes[0].turnaroundMinutes }} minutes of turnaround are included. Both bookings and
+              their events are kept exactly as they are.
+            </p>
+            <ul>
+              <li
+                v-for="clash in selectedClashes"
+                :key="`${clash.first.bookingId}-${clash.second.bookingId}`"
+                data-testid="venue-clash"
+              >
+                <div v-for="booking in [clash.first, clash.second]" :key="booking.bookingId" class="clash-booking">
+                  <strong>{{ eventLabel(booking) }}</strong>
+                  {{ span(booking.startsAt, booking.endsAt) }}
+                  <span class="occupies">(occupies {{ span(booking.setupStartsAt, booking.teardownEndsAt) }})</span>
+                </div>
+                <div class="overlap" data-testid="venue-clash-overlap">
+                  Overlap: {{ span(clash.overlapStartsAt, clash.overlapEndsAt) }}
+                </div>
+              </li>
+            </ul>
+          </template>
+        </section>
+
         <div v-if="confirmingRetire" class="retire-warning">
           <p>Retire "{{ selected.name || 'this venue' }}"? It will be hidden from the catalogue's default list (Venue Staff can
             still find it with "Show retired venues"), and its booking history is kept.</p>
@@ -99,7 +145,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { getVenue, getVenues, retireVenue } from '../../api/venueService.js'
+import { getBookingClashes, getVenue, getVenues, retireVenue } from '../../api/venueService.js'
 import { session } from '../../store/session.js'
 import VenueForm from './VenueForm.vue'
 import VenueActivityLog from './VenueActivityLog.vue'
@@ -116,6 +162,56 @@ const retireWarning = ref('')
 const loadingDetail = ref(false)
 
 const canWrite = computed(() => session.role === 'venue')
+
+// SPM-122: every clashing pair, loaded for Venue Staff and again after a venue
+// edit, since a new setup or turnaround time is what makes bookings clash.
+const clashes = ref([])
+const clashError = ref('')
+
+const selectedClashes = computed(() =>
+  clashes.value.filter((clash) => clash.venueId === selected.value?.venueId),
+)
+
+const clashVenues = computed(() => {
+  const byVenue = new Map()
+  for (const clash of clashes.value) {
+    const venue = byVenue.get(clash.venueId) || { venueId: clash.venueId, venueName: clash.venueName, count: 0 }
+    venue.count += 1
+    byVenue.set(clash.venueId, venue)
+  }
+  return [...byVenue.values()]
+})
+
+async function loadClashes() {
+  if (!canWrite.value) return
+  try {
+    const { data } = await getBookingClashes()
+    clashes.value = data
+    clashError.value = ''
+  } catch {
+    clashError.value = 'Unable to check for clashing bookings right now. Please try again.'
+  }
+}
+
+// Booking times are UTC and come without a zone marker.
+const dayFormat = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' })
+const timeFormat = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+function utc(value) {
+  return new Date(/(Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`)
+}
+
+function span(start, end) {
+  const [from, to] = [utc(start), utc(end)]
+  const [fromDay, toDay] = [dayFormat.format(from), dayFormat.format(to)]
+  return fromDay === toDay
+    ? `${fromDay}, ${timeFormat.format(from)} to ${timeFormat.format(to)} UTC`
+    : `${fromDay}, ${timeFormat.format(from)} to ${toDay}, ${timeFormat.format(to)} UTC`
+}
+
+function eventLabel(booking) {
+  return booking.eventName ? `"${booking.eventName}"` : `Event ${booking.eventId}`
+}
 
 function addressLine(venue) {
   const parts = []
@@ -201,6 +297,7 @@ async function onEdited(venue) {
   actionToken++
   mode.value = 'view'
   selected.value = venue
+  await loadClashes()
 }
 
 // Retiring is a two-step confirmation: a plain "are you sure" first, and
@@ -238,6 +335,7 @@ async function doRetire(confirm) {
 }
 
 onMounted(async () => {
+  loadClashes()
   try {
     await refreshList()
     // userHasActed may already be true here if the user clicked Add/Edit/a
@@ -335,6 +433,30 @@ dd { margin: 0; font-size: 14px; line-height: 1.6; color: var(--body); }
 .retire-warning p { margin: 0 0 12px; font-size: 13px; color: var(--text); line-height: 1.6; }
 .retire-warning .actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; }
 .retire-warning .actions .btn { white-space: nowrap; }
+
+.clash-banner {
+  padding: 12px 14px; border-radius: 12px;
+  background: rgba(255, 196, 87, .08); border: 1px solid rgba(255, 196, 87, .3);
+}
+.clash-banner p { margin: 0 0 8px; font-size: 12px; line-height: 1.5; color: var(--text); }
+.clash-link {
+  display: block; width: 100%; text-align: left; margin-top: 4px; padding: 4px 0;
+  background: none; border: 0; font: inherit; font-size: 12px; color: #FFC457; cursor: pointer;
+}
+.clash-link:hover { text-decoration: underline; }
+
+.clashes { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--hairline); }
+.clashes h4 { margin: 0 0 8px; font-size: 14px; font-weight: 500; color: var(--text); }
+.clashes .hint { margin: 0 0 12px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.clashes ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.clashes li {
+  padding: 12px 14px; border-radius: 10px; font-size: 13px; line-height: 1.6; color: var(--body);
+  background: rgba(255, 196, 87, .06); border: 1px solid rgba(255, 196, 87, .25);
+}
+.clashes strong { color: var(--text); font-weight: 500; }
+.clashes .occupies { color: var(--muted); }
+.clashes .overlap { margin-top: 4px; color: #FFC457; }
+.clash-error { margin: 0; font-size: 13px; color: #FF8A76; }
 
 @media (max-width: 720px) {
   .catalogue { grid-template-columns: 1fr; }

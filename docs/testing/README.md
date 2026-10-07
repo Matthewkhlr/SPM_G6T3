@@ -5,7 +5,7 @@ Unit tests and the Coverage.py demo are in [unit-tests.md](unit-tests.md).
 Playwright covers SPM-43, the current SPM-45 API, the current SPM-46 API,
 the SPM-47 tenant-isolation contract, the role-home contracts for
 SPM-55 through SPM-59, the venue-catalogue contracts for SPM-8, SPM-9,
-SPM-10, SPM-17, SPM-60 through SPM-64, SPM-108, and SPM-112, and the
+SPM-10, SPM-17, SPM-60 through SPM-64, SPM-108, SPM-112, and SPM-122, and the
 planning-review contracts for SPM-5, SPM-15, and SPM-65 through SPM-73,
 and the equipment contracts for SPM-2, SPM-3, SPM-4, and SPM-75 through
 SPM-78, and the request-and-change contracts for SPM-14, SPM-79 through
@@ -56,6 +56,7 @@ npm run test:spm63
 npm run test:spm64
 npm run test:spm108
 npm run test:spm112
+npm run test:spm122
 npm run test:spm05
 npm run test:spm15
 npm run test:spm65
@@ -135,6 +136,7 @@ Failures: `test-results/`. HTML report: `playwright-report/`.
 | SPM-64 | TC-SPM64-AC01–AC08 | `e2e/spm64.spec.js` |
 | SPM-108 | TC-SPM108-AC01–AC08 | `e2e/spm108.spec.js` |
 | SPM-112 | TC-SPM112-AC01–AC04 (and AC02b) | `e2e/spm112.spec.js` |
+| SPM-122 | TC-SPM122-AC01–AC04 (and AC01b) | `e2e/spm122.spec.js` |
 | SPM-5 | TC-SPM05-AC01–AC09 | `e2e/spm05.spec.js` |
 | SPM-15 | TC-SPM15-AC01–AC09 | `e2e/spm15.spec.js` |
 | SPM-65 | TC-SPM65-AC01–AC07 | `e2e/spm65.spec.js` |
