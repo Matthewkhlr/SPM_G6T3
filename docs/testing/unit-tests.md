@@ -17,7 +17,7 @@ coverage html
 
 Statement coverage only shows that a line ran. Boundary cases pin the comparison itself: the open and close instants of a registration window are inclusive, one place below capacity is accepted and the next is refused, a registration window that opens and closes at the same instant is refused, withdrawal is open one microsecond before the event starts and refused at the start instant, touching equipment reservations do not overlap, and a catalogue cut down to the reserved quantity is allowed. Each assertion states that result directly, so changing `<` to `<=` or `>` to `>=` fails the suite.
 
-From the repository root, `npm run test:unit` runs that suite for all six services. `.github/workflows/tests.yml` runs the same command on pushes to `dev` and `main`, and on pull requests into either branch. The job id is `test`, which is the status check to require on both branch rules. It only runs tests for functions that exist today.
+From the repository root, `npm run test:unit` runs that suite for all six services. `.github/workflows/tests.yml` runs the same command on pushes to `dev` and `main`, and on pull requests into either branch, then runs the integration suite in [integration-tests.md](integration-tests.md). The job id is `test`, which is the status check to require on both branch rules. The unit step only runs tests for functions that exist today.
 
 ## Not in the pipeline yet
 
