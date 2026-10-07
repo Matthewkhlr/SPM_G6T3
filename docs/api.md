@@ -51,7 +51,9 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `POST /venues/bookings` | `coordinator` assigned to the event (SPM-63) |
 | `GET /venues/bookings`, `GET /venues/bookings/{id}` | `coordinator`, `venue` |
 | `POST /venues/bookings/{id}/withdraw` | `coordinator` assigned to the event (SPM-46), so after a reassignment the new coordinator |
-| `POST /venues/bookings/{id}/approve` or `/reject` | `venue` |
+| `POST /venues/bookings/{id}/cancel` | `coordinator` assigned to the event, or `venue` (SPM-114) |
+| `POST /venues/bookings/release` | `coordinator` assigned to the event, or an `organiser` from the event's own client organisation (SPM-114) |
+| `POST /venues/bookings/{id}/approve` or `/reject` | `venue`; approval is refused (409) when a confirmed booking or unavailability overlaps the occupied window (SPM-64) |
 | `POST /venues/bookings/reverification` | `coordinator` (event-service calls it on a confirmed significant edit) |
 | `POST /equipment/requests` | `coordinator` assigned to the event (SPM-46) |
 | `PATCH /equipment/requests/{id}/details` | `coordinator` assigned to the event (SPM-46), and only while the request is still pending |

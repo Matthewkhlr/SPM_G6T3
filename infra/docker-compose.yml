@@ -1,6 +1,9 @@
 services:
   mysql:
     image: mysql:8.4
+    # SPM-64: lets the services' own database user create triggers while binary
+    # logging is on. venue-service uses one to refuse overlapping confirmed bookings.
+    command: --log-bin-trust-function-creators=1
     environment:
       MYSQL_ROOT_PASSWORD: connectsphere
       MYSQL_DATABASE: user

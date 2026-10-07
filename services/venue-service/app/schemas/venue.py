@@ -171,8 +171,6 @@ class VenueBookingCreate(BaseModel):
     eventId: str
     startsAt: datetime
     endsAt: datetime
-    setupStartsAt: datetime
-    teardownEndsAt: datetime
     requirementsSnapshot: str = ""
     coordinatorNotes: str = Field(default="", description="The coordinator's own notes for Venue Staff.")
     acknowledgeWarnings: bool = Field(
@@ -187,8 +185,6 @@ class VenueBookingCreate(BaseModel):
                 "eventId": "e1",
                 "startsAt": "2026-10-06T09:00:00",
                 "endsAt": "2026-10-06T17:00:00",
-                "setupStartsAt": "2026-10-06T08:00:00",
-                "teardownEndsAt": "2026-10-06T18:00:00",
                 "requirementsSnapshot": "Theatre layout, wheelchair access, PA system.",
             }
         }
@@ -237,8 +233,12 @@ class VenueBookingOut(BaseModel):
     )
     startsAt: datetime
     endsAt: datetime
-    setupStartsAt: datetime
-    teardownEndsAt: datetime
+    setupStartsAt: datetime = Field(
+        description="Start of the occupied window: the event start minus the venue's setup time (SPM-64)."
+    )
+    teardownEndsAt: datetime = Field(
+        description="End of the occupied window: the event end plus the venue's turnaround time (SPM-64)."
+    )
     requirementsSnapshot: str
     decisionReason: str | None
     reviewedBy: str | None
@@ -289,8 +289,6 @@ class SuitabilityRequest(BaseModel):
     requiredAccessibility: list[str] = []
     startsAt: datetime | None = Field(default=None, description="Defaults to the event's proposed start.")
     endsAt: datetime | None = Field(default=None, description="Defaults to the event's proposed end.")
-    setupStartsAt: datetime | None = Field(default=None, description="Defaults to `startsAt`.")
-    teardownEndsAt: datetime | None = Field(default=None, description="Defaults to `endsAt`.")
 
     model_config = ConfigDict(
         json_schema_extra={

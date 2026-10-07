@@ -34,17 +34,6 @@ class TestVenueConflicts(VenueCase):
             "u-coord",
         )
 
-    def test_a_second_overlapping_approval_is_refused(self):
-        first = self._booking("e1", START, END)
-        second = self._booking("e2", START + timedelta(hours=2), END + timedelta(hours=2))
-        self.service.approve_booking(first.bookingId, "u-venue", "First claim")
-
-        with self.assertRaises(HTTPException) as ctx:
-            self.service.approve_booking(second.bookingId, "u-venue", "Clash")
-
-        self.assertEqual(ctx.exception.status_code, 409)
-        self.assertEqual(self.service._require_booking(second.bookingId).status, "pending")
-
     def test_unavailability_blocks_a_booking_in_that_period(self):
         self.assertTrue(
             hasattr(self.service, "record_unavailability"),

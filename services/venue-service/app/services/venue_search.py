@@ -1,15 +1,14 @@
 """SPM-61: which venues fit an event's requirements, for a shortlist.
 
 The venue-only rules (location, layout and capacity, facilities,
-accessibility, opening hours) live here. The availability rules need the
-venue's bookings and unavailability, so `VenueService.search_venues` loads
-those and applies `occupied_window` here.
+accessibility, opening hours) live here. Availability is the shared SPM-64
+rule, `VenueService.commitments`, which `VenueService.search_venues` applies.
 
 All times are UTC, and a venue's opening hours are read as UTC hours.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from app.schemas.venue import VenueOut
 from app.services.suitability import _missing, _opening_hours
@@ -28,15 +27,6 @@ class SearchFilters:
     @property
     def has_period(self) -> bool:
         return self.starts_at is not None and self.ends_at is not None
-
-
-def occupied_window(starts_at: datetime, ends_at: datetime, venue: VenueOut) -> tuple[datetime, datetime]:
-    """AC3: the period the venue is tied up, from its setup before the event
-    to its turnaround after it (Week 7 customer change 1)."""
-    return (
-        starts_at - timedelta(minutes=venue.setupMinutes),
-        ends_at + timedelta(minutes=venue.turnaroundMinutes),
-    )
 
 
 def layout_capacity(venue: VenueOut, layout: str | None) -> int | None:

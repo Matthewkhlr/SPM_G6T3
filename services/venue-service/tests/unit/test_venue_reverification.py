@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -11,8 +13,13 @@ class ReverificationCase(VenueCase):
         super().setUp()
         self.venue_id = self.service.create_venue(venue_create(), CALLER).venueId
 
-    def booking(self, event_id="e1", approve=True):
-        created = self.service.create_booking(booking_create(self.venue_id, eventId=event_id), "u-coord")
+    def booking(self, event_id="e1", approve=True, days_later=0):
+        # Different events need different days: two overlapping confirmed bookings
+        # can no longer exist (SPM-64).
+        shift = timedelta(days=days_later)
+        created = self.service.create_booking(
+            booking_create(self.venue_id, eventId=event_id, startsAt=START + shift, endsAt=END + shift), "u-coord"
+        )
         if approve:
             self.service.approve_booking(created.bookingId, "u-venue", "Free")
         return created.bookingId
@@ -22,7 +29,7 @@ class TestBookingReverification(ReverificationCase):
     def test_only_the_events_approved_bookings_are_flagged_and_stay_approved(self):
         approved = self.booking()
         pending = self.booking(approve=False)
-        other_event = self.booking(event_id="e2")
+        other_event = self.booking(event_id="e2", days_later=1)
 
         flagged = self.service.flag_for_reverification("e1", "Expected attendance: 20 -> 200")
 
@@ -39,9 +46,10 @@ class TestBookingReverification(ReverificationCase):
         approved = self.booking()
         self.service.flag_for_reverification("e1", "Start moved")
 
-        clashes = self.service.booking_dao.find_overlapping(self.venue_id, START, END, "another-event")
+        venue = self.service.get_venue(self.venue_id)
+        held = self.service.commitments(venue, START, END, exclude_event_id="another-event")
 
-        self.assertEqual([row.bookingId for row in clashes], [approved])
+        self.assertEqual([row.bookingId for row in held.confirmed], [approved])
 
     def test_an_event_without_a_confirmed_booking_flags_nothing(self):
         self.booking(approve=False)

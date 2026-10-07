@@ -17,30 +17,19 @@ class VenueBookingDAO(BaseDAO):
             .all()
         )
 
-    def find_overlapping(
-        self, venue_id: str, starts_at: datetime, ends_at: datetime, exclude_event_id: str
-    ) -> list[VenueBooking]:
-        """Pending or approved bookings whose setup-to-teardown window overlaps
-        [starts_at, ends_at). Back-to-back windows only touch, so they do not
-        overlap. The event's own bookings are left out, so re-checking an
-        event never reports it as clashing with itself."""
-        return (
-            self.db.query(VenueBooking)
-            .filter(VenueBooking.venueId == venue_id)
-            .filter(VenueBooking.status.in_(("approved", "pending")))
-            .filter(VenueBooking.eventId != exclude_event_id)
-            .filter(VenueBooking.setupStartsAt < ends_at)
-            .filter(VenueBooking.teardownEndsAt > starts_at)
-            .order_by(VenueBooking.setupStartsAt)
-            .all()
-        )
-
     def find_event_times_overlapping(
-        self, venue_id: str, starts_at: datetime, ends_at: datetime, exclude_event_id: str | None
+        self,
+        venue_id: str,
+        starts_at: datetime,
+        ends_at: datetime,
+        exclude_event_id: str | None = None,
+        lock: bool = False,
     ) -> list[VenueBooking]:
         """Pending or approved bookings on the venue whose event times overlap
-        [starts_at, ends_at). Touching times do not overlap. The searching
-        event's own bookings are left out when it is named."""
+        [starts_at, ends_at), earliest first. Touching times do not overlap.
+        The searching event's own bookings can be left out.
+        `lock` reads the latest committed rows and locks them, for approvals
+        (SPM-64 AC7)."""
         query = (
             self.db.query(VenueBooking)
             .filter(VenueBooking.venueId == venue_id)
@@ -50,7 +39,9 @@ class VenueBookingDAO(BaseDAO):
         )
         if exclude_event_id:
             query = query.filter(VenueBooking.eventId != exclude_event_id)
-        return query.all()
+        if lock:
+            query = query.with_for_update()
+        return query.order_by(VenueBooking.startsAt, VenueBooking.bookingId).all()
 
     def find_live_for_event_venue(self, event_id: str, venue_id: str) -> VenueBooking | None:
         """A pending or approved booking of this venue for this event.

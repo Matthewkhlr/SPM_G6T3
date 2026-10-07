@@ -109,6 +109,8 @@ cd infra && docker compose up -d && cd ..
 python scripts/migrate.py --no-seed
 ```
 
+`docker compose up -d` also picks up changes to `infra/docker-compose.yml`, recreating the MySQL container and keeping its data. SPM-64 needs this once: it added a MySQL setting that lets the migration create venue-service's double-booking triggers.
+
 `--no-seed` updates tables without inserting demo rows again. If seed is written to skip when tables already have data, plain `python scripts/migrate.py` is also fine.
 
 If the pull only changed Vue/Python and **no** new `alembic/versions/` files: just `up -d` (if needed) and run the apps. No migrate.

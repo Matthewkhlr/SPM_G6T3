@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from tests.unit.support import CALLER, VenueCase, booking_create, venue_create
+from tests.unit.support import CALLER, END, START, VenueCase, booking_create, venue_create
 
 NOW = datetime(2030, 1, 1, 9, 0, 0)
 
@@ -52,9 +52,15 @@ class TestVenueRetirement(VenueCase):
     def test_retire_names_every_confirmed_upcoming_booking(self):
         created = self.service.create_venue(venue_create(), CALLER)
         first = self.service.create_booking(booking_create(created.venueId, eventId="e1"), "u-coord")
-        second = self.service.create_booking(booking_create(created.venueId, eventId="e2"), "u-coord")
+        # A day apart: two overlapping confirmed bookings can no longer exist (SPM-64).
+        second = self.service.create_booking(
+            booking_create(
+                created.venueId, eventId="e2", startsAt=START + timedelta(days=1), endsAt=END + timedelta(days=1)
+            ),
+            "u-coord",
+        )
         self.service.approve_booking(first.bookingId, "u-venue", None)
-        self.service.approve_booking(second.bookingId, "u-venue", "Overlap")
+        self.service.approve_booking(second.bookingId, "u-venue", "Next day")
 
         with self.assertRaises(HTTPException) as ctx:
             self.service.retire_venue(created.venueId, CALLER, confirm=False)

@@ -289,8 +289,8 @@ The suitability check (SPM-62) reads this table: an overlapping period makes a v
 | status | VARCHAR(32) | `pending` \| `approved` \| `rejected` \| `withdrawn` \| `cancelled` |
 | starts_at | DATETIME | Event window start |
 | ends_at | DATETIME | Event window end |
-| setup_starts_at | DATETIME | Caller-supplied setup boundary |
-| teardown_ends_at | DATETIME | Caller-supplied teardown boundary |
+| setup_starts_at | DATETIME | SPM-64: start of the occupied window, `starts_at` minus the venue's setup time; set by the server on request and approval |
+| teardown_ends_at | DATETIME | SPM-64: end of the occupied window, `ends_at` plus the venue's turnaround time |
 | requirements_snapshot | TEXT | |
 | event_snapshot | JSON nullable | SPM-63: the event's facts when the request was sent (name, client organisation, times, attendance, layout, accessibility needs, required facilities) |
 | coordinator_notes | TEXT nullable | SPM-63: the coordinator's notes for Venue Staff |
@@ -304,13 +304,13 @@ The suitability check (SPM-62) reads this table: an overlapping period makes a v
 
 Index: `(venue_id, starts_at, ends_at)`.
 
-**Intended conflict rule:** two rows for the same `venue_id` with status in (`pending`, `approved`) should not overlap on `[setup_starts_at, teardown_ends_at)`.
+**Conflict rule (SPM-64, `app/services/occupancy.py`):** a booking occupies its venue from `starts_at` minus the venue's `setup_minutes` to `ends_at` plus its `turnaround_minutes`. Two `approved` rows for the same venue may never have overlapping windows; windows that only touch are fine, but event times that only touch can still clash. An unavailability period overlapping the window also conflicts. `pending` rows never block; they only warn. Search, suitability, and approval all use this one rule. The database enforces it too: triggers `venue_bookings_no_overlap_insert` and `venue_bookings_no_overlap_update` (migration `e7b2c4d91f03`) lock the venue's row and refuse (SQLSTATE 45000) any write that would make an overlapping `approved` row, so two simultaneous approvals cannot both pass. Creating the triggers needs `--log-bin-trust-function-creators=1`, set in `infra/docker-compose.yml`.
 
-**Suitability rule (SPM-62, `POST /venues/suitability`, `app/services/suitability.py`):** failures are attendance above the capacity of the required layout (or the venue's capacity if no layout is given), an unsupported layout, a missing required facility or accessibility feature, a time outside operating hours (hours are read as UTC), and an approved booking of another event or an unavailability period overlapping `[setup_starts_at, teardown_ends_at)`. Warnings are attendance above 90% of that capacity and an overlapping pending booking of another event. Any failure gives `not suitable`; only warnings give `suitable with warnings`. Values not in the request come from the event record.
+**Suitability rule (SPM-62, `POST /venues/suitability`, `app/services/suitability.py`):** failures are attendance above the capacity of the required layout (or the venue's capacity if no layout is given), an unsupported layout, a missing required facility or accessibility feature, a time outside operating hours (hours are read as UTC), and an approved booking of another event or an unavailability period overlapping the occupied window (SPM-64 rule above). Warnings are attendance above 90% of that capacity and an overlapping pending booking of another event. Any failure gives `not suitable`; only warnings give `suitable with warnings`. Values not in the request come from the event record.
 
 **Booking request rules (SPM-63, `POST /venues/bookings`):** only the coordinator assigned to the event may request a venue, and only while the event is `approved` or `planning`. The suitability rule runs first: any failure refuses the request (409, with the failures), and warnings refuse it unless `acknowledgeWarnings` is true, in which case they are stored in `warnings`. An event may have only one `pending` request; the coordinator who sent it can withdraw it (`withdrawn`), after which it no longer counts in suitability checks. Venue Staff are notified of each request and withdrawal (best effort through notification-service). Requests are listed oldest first.
 
-Approval does not enforce the conflict rule yet. Booking creation accepts caller-supplied setup and teardown times without deriving turnaround (the customer confirmed turnaround need not be considered). The implemented review flow only transitions a pending booking to `approved` or `rejected`; cancellation is not implemented.
+Approval enforces the conflict rule (SPM-64). Booking requests no longer take setup and teardown times from the caller: the server derives the occupied window from the venue's setup and turnaround times (the Week 7 customer change, which replaced the earlier answer that turnaround need not be considered). The review flow moves a pending booking to `approved` or `rejected`. A `withdrawn`, `rejected`, or `cancelled` row no longer holds the venue, so its period is free again (SPM-64 AC8); SPM-114's `POST /venues/bookings/release` (for event cancellation) and `POST /venues/bookings/{id}/cancel` set `cancelled`.
 
 ---
 

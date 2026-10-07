@@ -300,7 +300,8 @@ function venueNameFor(venueId) {
 }
 
 // SPM-63 AC2: the request uses the event's own dates; the server adds the
-// rest of the event's facts and runs the suitability check again.
+// rest of the event's facts, the venue's setup and turnaround (SPM-64), and
+// runs the suitability check again.
 async function requestVenue() {
   submitting.value = true
   requestError.value = ''
@@ -311,8 +312,6 @@ async function requestVenue() {
       venueId: selectedId.value,
       startsAt: event.value.proposedStartAt,
       endsAt: event.value.proposedEndAt,
-      setupStartsAt: event.value.proposedStartAt,
-      teardownEndsAt: event.value.proposedEndAt,
       coordinatorNotes: notes.value.trim(),
       acknowledgeWarnings: acknowledged.value,
     })
