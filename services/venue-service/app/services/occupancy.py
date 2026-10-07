@@ -11,6 +11,10 @@ Search (SPM-61), suitability (SPM-62) and booking approval all call
 `VenueService.commitments`, which applies this rule. Venue blocking (SPM-9),
 rescheduling (SPM-87) and re-verification (SPM-86) are to call it too when they
 are built, and active tentative holds (SPM-116) are to be added to it.
+
+SPM-112 holds every availability and conflict check to this one window, always
+worked out from the venue's current setup and turnaround times, and booking
+replies report it the same way.
 """
 
 from dataclasses import dataclass, field

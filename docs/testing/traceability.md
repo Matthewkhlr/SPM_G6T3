@@ -108,7 +108,7 @@
 | SPM-62 | Tight fit is a warning | TC-SPM62-AC06 | `e2e/spm62.spec.js` | Automated |
 | SPM-62 | Pending overlap is a warning | TC-SPM62-AC07 | `e2e/spm62.spec.js` | Automated |
 | SPM-62 | Failures block submit; warnings do not | TC-SPM62-AC08 | `e2e/spm62.spec.js` | Automated |
-| SPM-62 | Shared suitability rule | TC-SPM62-AC09 | `e2e/spm62.spec.js` | Automated; fails until search results carry the suitability verdict (SPM-62 follow-up with SPM-112) |
+| SPM-62 | Shared suitability rule | TC-SPM62-AC09 | `e2e/spm62.spec.js` | Automated; fails until search results carry the suitability verdict (an SPM-62 follow-up; SPM-112 makes search and suitability agree on the occupied window, not add a verdict to search) |
 | SPM-63 | Request venue for planning event | TC-SPM63-AC01 | `e2e/spm63.spec.js` | Automated |
 | SPM-63 | Request carries event facts | TC-SPM63-AC02 | `e2e/spm63.spec.js` | Automated |
 | SPM-63 | Failed suitability blocks submit | TC-SPM63-AC03 | `e2e/spm63.spec.js` | Automated |
@@ -126,6 +126,11 @@
 | SPM-64 | Touching windows fine, touching event times can clash | TC-SPM64-AC06 | `e2e/spm64.spec.js` | Automated |
 | SPM-64 | Simultaneous approvals: one winner | TC-SPM64-AC07 | `e2e/spm64.spec.js`; `services/venue-service/tests/integration/test_double_booking_mysql.py` | Automated |
 | SPM-64 | Cancel, reject, complete, or withdraw releases the hold | TC-SPM64-AC08 | `e2e/spm64.spec.js` | Withdraw, single-booking cancel, and event release (SPM-114) automated; rejecting (SPM-70) and completing (SPM-72/73) are to call the same release |
+| SPM-112 | Occupied window is start minus setup through end plus turnaround, from the venue's current times | TC-SPM112-AC01 | `e2e/spm112.spec.js`; `services/venue-service/tests/unit/test_venue_occupied_window.py` | Automated |
+| SPM-112 | Search, suitability, approval and unavailability use the same window | TC-SPM112-AC02 | `e2e/spm112.spec.js`; `services/venue-service/tests/unit/test_venue_occupied_window.py` | Search, suitability, request and approval automated; unavailability unit-tested until SPM-9 records it; rescheduling (SPM-87) and re-verification (SPM-86) are to call the same rule when built |
+| SPM-112 | The coordinator's venue screen applies the same window | TC-SPM112-AC02b | `e2e/spm112.spec.js` | Automated (browser) |
+| SPM-112 | Windows that only touch do not conflict | TC-SPM112-AC03 | `e2e/spm112.spec.js`; `services/venue-service/tests/integration/test_double_booking_mysql.py` | Automated |
+| SPM-112 | Touching event times conflict when setup or turnaround overlap | TC-SPM112-AC04 | `e2e/spm112.spec.js`; `services/venue-service/tests/integration/test_double_booking_mysql.py` | Automated |
 | SPM-108 | Calendar shows all three kinds | TC-SPM108-AC01 | `e2e/spm108.spec.js` | Automated |
 | SPM-108 | Kinds are visually distinct | TC-SPM108-AC02 | `e2e/spm108.spec.js` | Automated |
 | SPM-108 | Entry shows name, org, time, and opens | TC-SPM108-AC03 | `e2e/spm108.spec.js` | Automated |
