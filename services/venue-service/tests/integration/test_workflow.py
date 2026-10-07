@@ -45,6 +45,7 @@ class TestVenueWorkflow(ServiceTestCase):
                 "accessibility": ["Wheelchair accessible"],
                 "layouts": [{"name": "Theatre", "capacity": 100}],
                 "operatingHours": [{"day": "Mon", "opens": "08:00", "closes": "18:00"}],
+                "setupMinutes": 30,
                 "turnaroundMinutes": 60,
             },
         )

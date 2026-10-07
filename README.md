@@ -157,6 +157,14 @@ npm run test:unit
 
 How to run one service: [docs/testing/unit-tests.md](docs/testing/unit-tests.md).
 
+Integration tests (one HTTP-and-SQL workflow per service):
+
+```
+npm run test:integration
+```
+
+How to run one service: [docs/testing/integration-tests.md](docs/testing/integration-tests.md).
+
 Backend (from repo root, with the same venv already activated):
 
 ```
