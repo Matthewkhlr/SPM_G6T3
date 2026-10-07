@@ -16,6 +16,10 @@ export const retireVenue = (venueId, confirm = false) =>
 
 export const getVenueActivityLog = (venueId) => axiosClient.get(`/venues/${venueId}/activity-log`);
 
+// SPM-122: confirmed bookings whose occupied windows overlap under each venue's
+// current setup and turnaround times. Read only.
+export const getBookingClashes = (params = {}) => axiosClient.get("/venues/bookings/clashes", { params });
+
 // SPM-62: anything left out of `body` is taken from the event record.
 export const checkSuitability = (eventId, venueId, body = {}) =>
   axiosClient.post("/venues/suitability", { eventId, venueId, ...body });

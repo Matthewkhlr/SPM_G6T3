@@ -98,6 +98,11 @@ pattern — don't add it to `components/shared/`.
   Coordinators can only view (Technical Support can read venues through the
   API but has no catalogue tab)
 - Every change is shown in the venue's activity log, with times in UTC
+- Venue Staff see confirmed bookings that clash once setup and turnaround are
+  included (SPM-122): a banner over the venue list names each venue with clashes,
+  and the venue's details list each pair with both events, their times, and the
+  overlap in UTC. The list refreshes after a venue is saved. It only reads; the
+  bookings and their events are kept as they are
 
 **Venue suitability (SPM-62)**
 - `features/venue-request/` opens from "Choose a venue" on an event

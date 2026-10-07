@@ -11,6 +11,7 @@ from app.dao.venue_unavailability_dao import VenueUnavailabilityDAO
 from app.db.session import get_db
 from app.orchestration.clients import fetch_event_facts, notify_venue_staff
 from app.schemas.venue import (
+    BookingClashOut,
     BookingReleaseRequest,
     BookingReverificationRequest,
     SuitabilityOut,
@@ -129,6 +130,28 @@ def public_booking_summary(
 ):
     resolve_caller(authorization, settings.user_service_url)
     return service.public_summary(eventId)
+
+
+@router.get(
+    "/bookings/clashes",
+    response_model=list[BookingClashOut],
+    summary="Confirmed bookings that clash once setup and turnaround are included",
+    description=(
+        "SPM-122. Venue Staff only. Every pair of approved bookings on the same venue whose occupied windows "
+        "(event start minus the venue's setup time to event end plus its turnaround time, using the venue's "
+        "current times) overlap, with both events and the overlapping times. Windows that only touch are not "
+        "listed. Read only: the bookings and their events are left exactly as they are. Pass `venueId` for one "
+        "venue."
+    ),
+    responses=error_responses(403, 404, 503),
+)
+def booking_clashes(
+    venueId: str | None = Query(None, description="Only this venue's clashes, e.g. `v1`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"venue"})
+    return service.booking_clashes(venueId)
 
 
 @router.get(

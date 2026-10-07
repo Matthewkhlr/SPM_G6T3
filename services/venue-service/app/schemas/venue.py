@@ -322,6 +322,38 @@ class VenueSearchResult(BaseModel):
     )
 
 
+class ClashingBooking(BaseModel):
+    """SPM-122: one of the two confirmed bookings in a clash, exactly as it stands."""
+
+    bookingId: str
+    eventId: str
+    eventName: str | None = Field(
+        default=None, description="The event's name as sent with the request; null for bookings older than SPM-63."
+    )
+    status: str
+    startsAt: datetime
+    endsAt: datetime
+    setupStartsAt: datetime = Field(description="Start of the occupied window, from the venue's current setup time.")
+    teardownEndsAt: datetime = Field(
+        description="End of the occupied window, from the venue's current turnaround time."
+    )
+
+
+class BookingClashOut(BaseModel):
+    """SPM-122: two confirmed bookings on one venue whose occupied windows overlap
+    once the venue's current setup and turnaround times are applied. Listing a
+    clash changes nothing about either booking or its event."""
+
+    venueId: str
+    venueName: str
+    setupMinutes: int
+    turnaroundMinutes: int
+    first: ClashingBooking = Field(description="The booking whose occupied window starts first.")
+    second: ClashingBooking
+    overlapStartsAt: datetime = Field(description="When the two occupied windows start to overlap (UTC).")
+    overlapEndsAt: datetime = Field(description="When they stop overlapping (UTC).")
+
+
 class SuitabilityReason(BaseModel):
     severity: Literal["failure", "warning"]
     check: str = Field(description="Which rule produced this point, e.g. `capacity` or `clash`.")

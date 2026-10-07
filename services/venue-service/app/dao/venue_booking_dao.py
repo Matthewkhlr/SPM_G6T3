@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from app.models.venue_booking import VenueBooking
+from app.models.venue_info import VenueInfo
 from shared.dao.base import BaseDAO
 
 
@@ -16,6 +17,20 @@ class VenueBookingDAO(BaseDAO):
             .filter(VenueBooking.startsAt > after)
             .all()
         )
+
+    def list_confirmed_by_venue(self, venue_id: str | None = None) -> list[VenueBooking]:
+        """SPM-122: approved bookings that still have their venue record, by venue
+        name and then by start, so each venue's bookings sit together in time order."""
+        query = (
+            self.db.query(VenueBooking)
+            .join(VenueBooking.venue)
+            .filter(VenueBooking.status == "approved")
+        )
+        if venue_id:
+            query = query.filter(VenueBooking.venueId == venue_id)
+        return query.order_by(
+            VenueInfo.name, VenueBooking.venueId, VenueBooking.startsAt, VenueBooking.bookingId
+        ).all()
 
     def find_event_times_overlapping(
         self,
