@@ -234,10 +234,10 @@ class VenueBookingOut(BaseModel):
     startsAt: datetime
     endsAt: datetime
     setupStartsAt: datetime = Field(
-        description="Start of the occupied window: the event start minus the venue's setup time (SPM-64)."
+        description="Start of the occupied window: the event start minus the venue's current setup time (SPM-112)."
     )
     teardownEndsAt: datetime = Field(
-        description="End of the occupied window: the event end plus the venue's turnaround time (SPM-64)."
+        description="End of the occupied window: the event end plus the venue's current turnaround time (SPM-112)."
     )
     requirementsSnapshot: str
     decisionReason: str | None

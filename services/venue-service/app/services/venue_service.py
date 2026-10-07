@@ -76,7 +76,17 @@ def _to_out(row: VenueInfo) -> VenueOut:
     )
 
 
+def _occupied_window(row: VenueBooking) -> tuple[datetime, datetime]:
+    """SPM-112 AC1: a booking's occupied window is always worked out from its
+    venue's current setup and turnaround times, so it never reports a window
+    stored before those times changed. The stored columns are only a fallback."""
+    if row.venue is None:
+        return row.setupStartsAt, row.teardownEndsAt
+    return occupancy.occupied_window(row.startsAt, row.endsAt, row.venue.setupMinutes, row.venue.turnaroundMinutes)
+
+
 def _booking_to_out(row: VenueBooking) -> VenueBookingOut:
+    setup_from, turnaround_until = _occupied_window(row)
     return VenueBookingOut(
         bookingId=row.bookingId,
         venueId=row.venueId,
@@ -85,8 +95,8 @@ def _booking_to_out(row: VenueBooking) -> VenueBookingOut:
         status=row.status,
         startsAt=row.startsAt,
         endsAt=row.endsAt,
-        setupStartsAt=row.setupStartsAt,
-        teardownEndsAt=row.teardownEndsAt,
+        setupStartsAt=setup_from,
+        teardownEndsAt=turnaround_until,
         requirementsSnapshot=row.requirementsSnapshot,
         decisionReason=row.decisionReason,
         reviewedBy=row.reviewedBy,
