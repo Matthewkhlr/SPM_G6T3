@@ -135,6 +135,8 @@ test.describe('SPM-78 Adjust or release an equipment reservation', () => {
     await login(page, account('EC-01'))
     await page.goto('/app/events/e1')
     await expect(page.getByTestId('equipment-request-outcome')).toContainText(/released|reason|inspection/i)
+    // Log out lives on the dashboard, not the event page.
+    await page.goto('/app')
     await page.getByRole('button', { name: 'Log out' }).click()
     await login(page, account('EO-01'))
     await page.goto('/app/events/e1')
