@@ -100,6 +100,7 @@ export const expectedTabs = {
     'Maintenance Status',
     'Profile',
   ],
+  'SO-01': ['Dashboard', 'Safety Reviews', 'Profile'],
   'ATT-01': ['Dashboard', 'Browse Events', 'My Registrations', 'Waiting List', 'Profile'],
   'ATT-02': ['Dashboard', 'Browse Events', 'My Registrations', 'Waiting List', 'Profile'],
 }

@@ -547,6 +547,129 @@ class ChangeRequestOut(BaseModel):
     )
 
 
+class SafetySubmission(BaseModel):
+    """SPM-120: what the coordinator adds when submitting for a safety review."""
+
+    crowdMovement: str = Field(
+        min_length=1, max_length=4000, description="How people arrive, move through, and leave the venue."
+    )
+    equipmentPlacement: str = Field(
+        default="",
+        max_length=4000,
+        description="Where each piece of equipment goes. Required when equipment is reserved for the event.",
+    )
+
+    @field_validator("crowdMovement")
+    @classmethod
+    def crowd_movement_not_blank(cls, value: str) -> str:
+        return _required_text(value)
+
+    @field_validator("equipmentPlacement")
+    @classmethod
+    def trim_placement(cls, value: str) -> str:
+        return value.strip()
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "crowdMovement": "Guests enter by the lift lobby and leave by the promenade doors; aisles stay 2 m wide.",
+                "equipmentPlacement": "Projector at the back of the hall; PA speakers either side of the stage, clear of exits.",
+            }
+        }
+    )
+
+
+class SafetyApproval(BaseModel):
+    note: str = Field(default="", max_length=2000, description="Optional; shown to the coordinator and organiser.")
+
+
+class SafetyRejection(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000, description="Why the plan is unsafe. Required.")
+
+    @field_validator("reason")
+    @classmethod
+    def reason_not_blank(cls, value: str) -> str:
+        return _required_text(value)
+
+
+class SafetyChangeRequest(BaseModel):
+    requiredChanges: str = Field(min_length=1, max_length=4000, description="What must change. Required.")
+    affected: list[Literal["venue", "technical"]] = Field(
+        default=[], description="Arrangements to flag so venue staff or technical support review them again."
+    )
+
+    @field_validator("requiredChanges")
+    @classmethod
+    def changes_not_blank(cls, value: str) -> str:
+        return _required_text(value)
+
+    @field_validator("affected")
+    @classmethod
+    def no_repeats(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(value))
+
+
+class SafetyVenueFacts(BaseModel):
+    venueId: str
+    venueName: str
+    location: str = ""
+    startsAt: datetime
+    endsAt: datetime
+    layout: str | None = Field(default=None, description="The event's layout, when the venue offers it.")
+    capacityInLayout: int = Field(description="What the venue holds in that layout; its largest layout otherwise.")
+    venueCapacity: int
+    layouts: list[dict] = []
+    accessibilityFeatures: list[str] = []
+    emergencyAccess: str = ""
+    restrictions: str = ""
+    operatingHours: list[dict] = []
+    needsReverification: bool = False
+    reverificationNote: str | None = None
+
+
+class SafetyEquipmentLine(BaseModel):
+    equipmentId: str
+    name: str
+    quantity: int
+    status: str
+    technicalRequirements: str = ""
+    needsReverification: bool = False
+
+
+class SafetyPackage(BaseModel):
+    """SPM-120 AC2: everything the Safety Officer judges, as it stood when submitted."""
+
+    eventName: str
+    proposedStartAt: datetime | None = None
+    proposedEndAt: datetime | None = None
+    expectedAttendance: int
+    layout: str | None = None
+    accessibilityRequirements: list[str] = []
+    accessibilityNote: str = ""
+    venues: list[SafetyVenueFacts]
+    equipment: list[SafetyEquipmentLine] = []
+    crowdMovement: str
+    equipmentPlacement: str = ""
+
+
+class SafetyReviewOut(BaseModel):
+    reviewId: str
+    eventId: str
+    status: Literal["pending", "approved", "rejected", "changes_requested", "superseded"]
+    submittedBy: str
+    submittedAt: datetime
+    package: SafetyPackage
+    decidedBy: str | None = Field(default=None, description="The officer who decided, or who changed the event (superseded).")
+    decidedAt: datetime | None = None
+    decisionNote: str | None = Field(
+        default=None, description="Approval note, rejection reason, required changes, or what changed (superseded)."
+    )
+    affected: list[str] = Field(default=[], description="Arrangements flagged for re-checking (changes requested).")
+    flaggedArrangements: list[AffectedArrangement] = Field(
+        default=[], description="On request changes: the bookings and reservations now marked for re-checking."
+    )
+
+
 class ChangeableFieldsOut(BaseModel):
     fields: list[str] = Field(description="Fields an organiser can ask to change (SPM-106 AC3).")
 

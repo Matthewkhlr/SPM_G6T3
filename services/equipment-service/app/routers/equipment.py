@@ -185,9 +185,10 @@ def release_holds_for_event(
     "/reservations/reverification",
     response_model=list[EquipmentReservationOut],
     summary="Mark an event's reservations for re-verification",
-    description="Coordinators only (SPM-71 AC4). Called by event-service when a significant event change "
-    "is saved. Each `active` or `reserved` reservation for the event gets `needsReverification` and the "
-    "reason; its status is unchanged, so the stock stays held. Returns the reservations marked.",
+    description="Coordinators and safety officers (SPM-71 AC4, SPM-120). Called by event-service when a "
+    "significant event change is saved, or when a safety officer asks for the technical arrangements to be "
+    "reviewed again. Each `active` or `reserved` reservation for the event gets `needsReverification` and "
+    "the reason; its status is unchanged, so the stock stays held. Returns the reservations marked.",
     responses=error_responses(403, 503),
 )
 def flag_reservations_for_reverification(
@@ -195,7 +196,7 @@ def flag_reservations_for_reverification(
     authorization: str | None = Depends(forwarded_bearer),
     service: EquipmentService = Depends(get_equipment_service),
 ):
-    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator", "safety"})
     return service.flag_for_reverification(body.eventId, body.reason)
 
 

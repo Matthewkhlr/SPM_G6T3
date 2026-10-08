@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
@@ -9,6 +11,7 @@ from app.dao.event_change_request_dao import EventChangeRequestDAO
 from app.dao.event_dao import EventDAO
 from app.dao.event_field_change_dao import EventFieldChangeDAO
 from app.dao.event_review_dao import EventReviewDAO
+from app.dao.event_safety_review_dao import EventSafetyReviewDAO
 from app.dao.event_status_history_dao import EventStatusHistoryDAO
 from app.db.session import get_db
 from app.orchestration.clients import current_organiser, current_technical_support
@@ -42,6 +45,11 @@ from app.schemas.event import (
     RegistrationAccessOut,
     RegistrationSettingsOut,
     RegistrationSettingsUpdate,
+    SafetyApproval,
+    SafetyChangeRequest,
+    SafetyRejection,
+    SafetyReviewOut,
+    SafetySubmission,
     SignificantFieldsOut,
 )
 from app.schemas.followup import OpenEventOut, ReadinessCreate, ReadinessItemOut, ReadinessPatch
@@ -71,6 +79,7 @@ def get_event_service(db: Session = Depends(get_db)) -> EventService:
         EventFieldChangeDAO(db),
         EventReviewDAO(db),
         EventChangeRequestDAO(db),
+        EventSafetyReviewDAO(db),
     )
 
 
@@ -255,6 +264,25 @@ def get_requirement_options(service: EventService = Depends(get_event_service)):
 )
 def get_changeable_fields():
     return EventService.changeable_fields()
+
+
+@router.get(
+    "/safety-reviews",
+    response_model=list[SafetyReviewOut],
+    summary="Safety review queue",
+    description="Safety Officers only (SPM-120). Reviews with the given status, longest-waiting first; "
+    "`pending` by default.",
+    responses=error_responses(403),
+)
+def list_safety_reviews(
+    status: Literal["pending", "approved", "rejected", "changes_requested", "superseded"] = Query(
+        default="pending", description="Review status to list."
+    ),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"safety"})
+    return service.list_safety_reviews(status)
 
 
 @router.get(
@@ -578,6 +606,104 @@ def resolve_clarification(
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
     return service.resolve_clarification(event_id, clarification_id, caller["userId"], authorization)
+
+
+@router.post(
+    "/{event_id}/safety-reviews",
+    response_model=SafetyReviewOut,
+    status_code=201,
+    summary="Submit for a safety review",
+    description="Assigned coordinator only (SPM-120), while the event is in planning. Refused with 409, "
+    "naming what is `missing`, until a venue booking is confirmed and every requested equipment line is "
+    "reserved (an event needing no equipment has nothing to wait for). Copies the venue, equipment, and "
+    "event facts into the review with the crowd-movement and placement notes, moves the event to "
+    "`safety review`, and notifies every Safety Officer. 503 when the arrangements cannot be checked.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def submit_safety_review(
+    body: SafetySubmission,
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.submit_safety_review(event_id, body, caller["userId"], authorization)
+
+
+@router.get(
+    "/{event_id}/safety-reviews",
+    response_model=list[SafetyReviewOut],
+    summary="Safety reviews of an event",
+    description="SPM-120. Every review, newest first, with the facts submitted and the outcome. Organisers see "
+    "them for their own organisation's events, staff for any event; attendees get 403.",
+    responses=error_responses(403, 404),
+)
+def get_safety_reviews(
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url)
+    return service.get_safety_reviews(event_id, caller)
+
+
+@router.post(
+    "/{event_id}/safety-reviews/{review_id}/approve",
+    response_model=SafetyReviewOut,
+    summary="Approve a safety review",
+    description="Safety Officers only; every other role gets 403 (SPM-120 AC8). Records the decision, the "
+    "officer, and the time, and moves the event to `preparing`. 409 unless the review is pending.",
+    responses=error_responses(403, 404, 409),
+)
+def approve_safety_review(
+    body: SafetyApproval,
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    review_id: str = Path(..., description="Safety review id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"safety"})
+    return service.approve_safety_review(event_id, review_id, body, caller["userId"], authorization)
+
+
+@router.post(
+    "/{event_id}/safety-reviews/{review_id}/reject",
+    response_model=SafetyReviewOut,
+    summary="Reject a safety review",
+    description="Safety Officers only; every other role gets 403 (SPM-120 AC8). A reason is required. The "
+    "event returns to `planning`, so it does not proceed to preparation, but it is not cancelled; the "
+    "coordinator and organiser are notified and the coordinator can submit again.",
+    responses=error_responses(403, 404, 409),
+)
+def reject_safety_review(
+    body: SafetyRejection,
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    review_id: str = Path(..., description="Safety review id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"safety"})
+    return service.reject_safety_review(event_id, review_id, body, caller["userId"], authorization)
+
+
+@router.post(
+    "/{event_id}/safety-reviews/{review_id}/request-changes",
+    response_model=SafetyReviewOut,
+    summary="Request changes on a safety review",
+    description="Safety Officers only; every other role gets 403 (SPM-120 AC8). Records what must change and "
+    "returns the event to `planning`. Arrangements named in `affected` (`venue`, `technical`) are flagged "
+    "for re-checking by venue staff or technical support. 503 if they cannot be flagged; nothing is saved then.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def request_safety_changes(
+    body: SafetyChangeRequest,
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    review_id: str = Path(..., description="Safety review id."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"safety"})
+    return service.request_safety_changes(event_id, review_id, body, caller["userId"], authorization)
 
 
 @router.get(

@@ -35,6 +35,10 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `GET /events/{id}/clarifications` | `organiser` of that event's organisation, `coordinator`, `venue`, `techsupport` (SPM-68) |
 | `POST /events/{id}/clarifications`, `POST /events/{id}/clarifications/{cid}/resolve` | `coordinator` assigned to the event (SPM-68) |
 | `POST /events/{id}/clarifications/{cid}/reply` | `organiser` of that event's organisation, or the assigned `coordinator` |
+| `POST /events/{id}/safety-reviews` | `coordinator` assigned to the event (SPM-120); only from `planning` |
+| `GET /events/safety-reviews` | `safety` |
+| `GET /events/{id}/safety-reviews` | `organiser` of that event's organisation, `coordinator`, `venue`, `techsupport`, `safety` |
+| `POST /events/{id}/safety-reviews/{rid}/approve`, `/reject`, or `/request-changes` | `safety` only; every other role gets 403 |
 | `PATCH /events/{id}/registration-settings` | `coordinator` assigned to the event (SPM-90); from `planning` until `confirmed` |
 | `GET /events/{id}/change-requests` | `organiser` of that event's organisation, `coordinator`, `venue`, `techsupport` (SPM-106) |
 | `POST /events/{id}/change-requests` | `organiser` of that event's organisation (SPM-106) |
@@ -55,7 +59,7 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `POST /venues/bookings/{id}/cancel` | `coordinator` assigned to the event, or `venue` (SPM-114) |
 | `POST /venues/bookings/release` | `coordinator` assigned to the event, or an `organiser` from the event's own client organisation (SPM-114) |
 | `POST /venues/bookings/{id}/approve` or `/reject` | `venue`; approval is refused (409) when a confirmed booking or unavailability overlaps the occupied window (SPM-64) |
-| `POST /venues/bookings/reverification` | `coordinator` (event-service calls it on a confirmed significant edit) |
+| `POST /venues/bookings/reverification` | `coordinator`, `safety` (event-service calls it on a confirmed significant edit, or when a Safety Officer requests changes) |
 | `POST /equipment/requests` | `coordinator` assigned to the event (SPM-46) |
 | `PATCH /equipment/requests/{id}/details` | `coordinator` assigned to the event (SPM-46), and only while the request is still pending |
 | `POST /equipment/requests/{id}/review`, `/reserve`, or `/unavailable` | `techsupport` |
@@ -63,7 +67,7 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `POST /equipment/availability` with `eventId` | signed-in caller |
 | `POST /equipment/reservations/{id}/release` | `techsupport` |
 | `GET /equipment/reservations?eventId=` | `coordinator`, `techsupport` |
-| `POST /equipment/reservations/reverification` | `coordinator` (event-service calls it on a confirmed significant edit) |
+| `POST /equipment/reservations/reverification` | `coordinator`, `safety` (event-service calls it on a confirmed significant edit, or when a Safety Officer requests changes) |
 
 ## Assigning a coordinator (SPM-66)
 
@@ -151,6 +155,38 @@ Approval does not call venue-service or equipment-service, so no venue is booked
 Resend with `"confirmOverVenueCapacity": true` and/or `"confirmRegistrationOff": true` to save. A capacity sent unchanged is still checked against the booking and the registrations, because those can change on their own.
 
 Each changed setting is written to `GET /events/{id}/activity-log` as a `kind: "edit"` entry. The organiser is emailed and gets an in-app notification (`event.registration_settings`) naming what changed. When registration is turned off, each registered attendee is emailed and, if they have an account, notified in-app (`registration.closed`). Their registrations stay in place, and `notifiedAttendees` in the response counts them. If registration-service or venue-service cannot be reached, the endpoint returns 503 and saves nothing. The settings are on every event read, and organisers see them on their event page.
+
+## Safety review (SPM-120)
+
+A Safety Officer (role `safety`; demo account `safety@connectsphere.com` / `safety123`) reviews an event once its venue and technical arrangements are confirmed. While a review is pending, the event's status is `safety review`.
+
+`POST /events/{id}/safety-reviews` with `{"crowdMovement": "…", "equipmentPlacement": "…"}`: the assigned coordinator submits a `planning` event (201).
+
+- **When it's allowed:** once an `approved` venue booking exists and every requested equipment line is reserved or complete. An event needing no equipment has nothing technical to wait for.
+- **When it's refused:** until then it returns 409 with `{"message": …, "missing": ["venue", "technical"]}`. If venue-service or equipment-service can't be reached, it returns 503 and nothing is submitted.
+- **What's saved:** a copy of what the officer reviews, as `package`:
+  - expected attendance;
+  - each booked venue with its capacity in the event's layout (its largest layout when it doesn't offer that one), layouts, accessibility features, emergency access, known restrictions and opening hours;
+  - the event's accessibility requirements;
+  - the equipment lines;
+  - the equipment placement (required when equipment is reserved);
+  - crowd movement.
+- **Flags:** a booking or reservation already flagged for re-checking still counts as confirmed, because nothing can clear the flag until SPM-86. The flag is shown in the package instead.
+- **Who's told:** every Safety Officer is notified.
+
+`GET /events/safety-reviews?status=pending` is the officers' queue, longest-waiting first. `GET /events/{id}/safety-reviews` lists an event's reviews, newest first, for the organiser's organisation and staff.
+
+Decisions apply to the pending review, by Safety Officers only; every other role gets 403:
+
+- `POST …/{rid}/approve` with an optional `note`: records `decidedBy` and `decidedAt`, and the event moves to `preparing`.
+- `POST …/{rid}/reject` with a required `reason`: the event returns to `planning`. It doesn't proceed to preparation and isn't cancelled; the coordinator can revise the arrangements and submit again.
+- `POST …/{rid}/request-changes` with a required `requiredChanges` and optional `affected` (`venue`, `technical`): the event returns to `planning`. The named arrangements are flagged for re-checking by venue staff or technical support. If a flag can't be set, it returns 503 and nothing is saved.
+
+After every decision, the assigned coordinator and the organiser get an email and an in-app notice (`event.safety_review`).
+
+A significant edit or accepted change request while the review is pending returns the usual 409 (`statusChange` from `safety review` to `planning`) until confirmed. Then the review becomes `superseded` and the event goes back to `planning`.
+
+Venues carry `emergencyAccess` and `restrictions` text, kept by venue staff in the catalogue.
 
 ## Change requests (SPM-106)
 

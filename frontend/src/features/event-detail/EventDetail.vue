@@ -248,6 +248,12 @@
           <EventEquipment v-if="showEquipment" :event="event" />
         </div>
 
+        <EventSafetyReview
+          v-if="CONTACT_ROLES.includes(session.role)"
+          :event="event"
+          @changed="reloadEvent"
+        />
+
         <EventChangeRequests
           v-if="CONTACT_ROLES.includes(session.role)"
           :event="event"
@@ -328,6 +334,7 @@ import { formatUtc } from '../../utils/datetime.js'
 import ApproveEventDialog from './ApproveEventDialog.vue'
 import AssignCoordinatorDialog from './AssignCoordinatorDialog.vue'
 import EventChangeRequests from './EventChangeRequests.vue'
+import EventSafetyReview from './EventSafetyReview.vue'
 import EventClarifications from './EventClarifications.vue'
 import EventEditForm from './EventEditForm.vue'
 import EventEquipment from './EventEquipment.vue'
@@ -395,7 +402,7 @@ const canAssign = computed(
   () => session.role === 'coordinator' && !LOCKED_EVENT_STATUSES.includes(event.value?.status),
 )
 // Who may see the coordinator's contact; the server enforces the organisation check.
-const CONTACT_ROLES = ['organiser', 'coordinator', 'venue', 'techsupport']
+const CONTACT_ROLES = ['organiser', 'coordinator', 'venue', 'techsupport', 'safety']
 const outcomes = ref([])
 const reservations = ref([])
 const venue = ref({ venueName: '', location: '' })
@@ -452,6 +459,7 @@ const backTarget = computed(() => {
   if (session.role === 'coordinator') return { label: 'Assigned Events', tab: 'Assigned Events' }
   if (session.role === 'organiser') return { label: 'My Events', tab: 'My Events' }
   if (session.role === 'techsupport') return { label: 'Upcoming Events', tab: 'Upcoming Events' }
+  if (session.role === 'safety') return { label: 'Safety Reviews', tab: 'Safety Reviews' }
   return { label: 'Dashboard', tab: 'Dashboard' }
 })
 

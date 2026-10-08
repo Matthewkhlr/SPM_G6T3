@@ -61,13 +61,13 @@ class NotifyOut(BaseModel):
 
 # Internal staff may notify someone else, e.g. a coordinator's change telling
 # the organiser and attendees (SPM-90). Everyone else notifies only themselves.
-STAFF_ROLES = {"coordinator", "venue", "techsupport"}
+STAFF_ROLES = {"coordinator", "venue", "techsupport", "safety"}
 
 
 class RecordRequest(BaseModel):
     userId: str | None = Field(
         default=None,
-        description="Recipient; defaults to the caller. Only staff (coordinator, venue, techsupport) may name someone else.",
+        description="Recipient; defaults to the caller. Only staff (coordinator, venue, techsupport, safety) may name someone else.",
     )
     eventId: str | None = None
     type: str = "registration.withdrawn"
@@ -222,7 +222,7 @@ def read_all(
     status_code=201,
     summary="Store an in-app notification",
     description="Persists a notification for the caller, or for `userId` when the caller is staff "
-    "(coordinator, venue, techsupport). Anyone else naming another user gets 403.",
+    "(coordinator, venue, techsupport, safety). Anyone else naming another user gets 403.",
     responses=error_responses(403),
 )
 def record(body: RecordRequest, authorization: str | None = Depends(forwarded_bearer), db: Session = Depends(get_db)):
@@ -244,7 +244,7 @@ def record(body: RecordRequest, authorization: str | None = Depends(forwarded_be
     description="For a trigger that fans out to many recipients at once (e.g. every registered attendee "
     "told an event changed). One bulk insert instead of one request per recipient. Every item's `userId` "
     "is checked the same way as the single-record endpoint: naming anyone other than the caller requires "
-    "a staff role (coordinator, venue, techsupport), and the whole batch is rejected together if any item "
+    "a staff role (coordinator, venue, techsupport, safety), and the whole batch is rejected together if any item "
     "fails that check, so nothing is saved half-done.",
     responses=error_responses(403),
 )

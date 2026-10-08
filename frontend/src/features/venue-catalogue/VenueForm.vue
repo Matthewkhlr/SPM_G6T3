@@ -38,6 +38,29 @@
       <textarea id="vf-description" v-model="form.description" rows="2"></textarea>
     </div>
 
+    <!-- SPM-120: what a Safety Officer reviews about the venue itself. -->
+    <div class="field">
+      <label for="vf-emergency-access">Emergency access</label>
+      <textarea
+        id="vf-emergency-access"
+        v-model="form.emergencyAccess"
+        rows="2"
+        placeholder="Exits, assembly point, emergency vehicle access"
+        data-testid="venue-emergency-access"
+      ></textarea>
+    </div>
+
+    <div class="field">
+      <label for="vf-restrictions">Known restrictions</label>
+      <textarea
+        id="vf-restrictions"
+        v-model="form.restrictions"
+        rows="2"
+        placeholder="For example: no open flames, sound limits, floor load"
+        data-testid="venue-restrictions"
+      ></textarea>
+    </div>
+
     <div class="field-grid">
       <div class="field">
         <label for="vf-facilities">Facilities (comma-separated)</label>
@@ -151,6 +174,8 @@ const form = reactive({
   address: props.venue?.address ?? '',
   floor: props.venue?.floor ?? '',
   description: props.venue?.description ?? '',
+  emergencyAccess: props.venue?.emergencyAccess ?? '',
+  restrictions: props.venue?.restrictions ?? '',
   setupMinutes: props.venue?.setupMinutes ?? '',
   turnaroundMinutes: props.venue?.turnaroundMinutes ?? '',
   layouts: props.venue ? props.venue.layouts.map(toLayoutFormRow) : [],
@@ -242,6 +267,7 @@ const TOP_LEVEL_FIELD_NAMES = {
   code: 'Code', name: 'Name', location: 'Location', address: 'Address', floor: 'Floor',
   description: 'Description', facilities: 'Facilities', accessibility: 'Accessibility',
   setupMinutes: 'Setup (minutes)', turnaroundMinutes: 'Turnaround (minutes)',
+  emergencyAccess: 'Emergency access', restrictions: 'Known restrictions',
 }
 
 // Translates one raw FastAPI/Pydantic validation error (e.g. loc
@@ -310,6 +336,8 @@ async function submit() {
       address: form.address,
       floor: form.floor,
       description: form.description,
+      emergencyAccess: form.emergencyAccess,
+      restrictions: form.restrictions,
       setupMinutes: form.setupMinutes,
       turnaroundMinutes: form.turnaroundMinutes,
       facilities: toList(facilitiesText.value),

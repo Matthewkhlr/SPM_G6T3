@@ -74,6 +74,8 @@ def _to_out(row: VenueInfo) -> VenueOut:
         operatingHours=_as_list(row.operatingHours),
         setupMinutes=row.setupMinutes,
         turnaroundMinutes=row.turnaroundMinutes,
+        emergencyAccess=row.emergencyAccess or "",
+        restrictions=row.restrictions or "",
         isActive=row.isActive,
     )
 
@@ -254,6 +256,8 @@ class VenueService(BaseService):
             operatingHours=[hours.model_dump() for hours in data.operatingHours],
             setupMinutes=data.setupMinutes,
             turnaroundMinutes=data.turnaroundMinutes,
+            emergencyAccess=data.emergencyAccess,
+            restrictions=data.restrictions,
             isActive=True,
             createdAt=datetime.utcnow(),
         )

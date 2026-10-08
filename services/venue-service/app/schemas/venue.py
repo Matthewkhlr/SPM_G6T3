@@ -36,6 +36,8 @@ class VenueOut(BaseModel):
     operatingHours: list[OperatingHours]
     setupMinutes: int
     turnaroundMinutes: int
+    emergencyAccess: str = Field(default="", description="SPM-120: exits, assembly point, and emergency vehicle access.")
+    restrictions: str = Field(default="", description="SPM-120: known limits, e.g. noise, load, or no open flames.")
     isActive: bool
 
     model_config = ConfigDict(
@@ -59,6 +61,8 @@ class VenueOut(BaseModel):
                 "operatingHours": [{"day": "Mon", "opens": "08:00", "closes": "22:00"}],
                 "setupMinutes": 30,
                 "turnaroundMinutes": 60,
+                "emergencyAccess": "Four exits to the waterfront; assembly point at the promenade.",
+                "restrictions": "No open flames; amplified sound ends at 22:00.",
                 "isActive": True,
             }
         }
@@ -96,6 +100,8 @@ class VenueCreate(BaseModel):
     operatingHours: list[OperatingHours] = []
     setupMinutes: int
     turnaroundMinutes: int
+    emergencyAccess: str = ""
+    restrictions: str = ""
 
     @field_validator("name", "location", mode="before")
     @classmethod
@@ -121,6 +127,13 @@ class VenueUpdate(BaseModel):
     operatingHours: list[OperatingHours] | None = None
     setupMinutes: int | None = None
     turnaroundMinutes: int | None = None
+    emergencyAccess: str | None = None
+    restrictions: str | None = None
+
+    @field_validator("emergencyAccess", "restrictions", mode="before")
+    @classmethod
+    def blank_when_cleared(cls, value):
+        return "" if value is None else value
 
     @field_validator("name", "location", mode="before")
     @classmethod

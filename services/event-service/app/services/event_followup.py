@@ -13,12 +13,12 @@ from app.models.event import Event
 from app.models.event_readiness import EventReadinessItem
 from app.orchestration.clients import list_users, registration_count
 from app.schemas.followup import OpenEventOut, ReadinessCreate, ReadinessItemOut, ReadinessPatch
+from app.services.arrangements import equipment_status as _equipment_status
 from shared.exceptions.http import not_found
 from shared.services.base import BaseService
 
 DUE_SOON = timedelta(days=3)
 DATE_FIELDS = {"proposedStartAt", "proposedEndAt", "layoutPreference"}
-CATALOGUE_NOTE = "Reserved from the catalogue quantity check"
 
 
 def _naive(value: datetime | None) -> datetime | None:
@@ -84,27 +84,6 @@ def _item_out(row: EventReadinessItem, now: datetime) -> ReadinessItemOut:
         overdue=overdue,
         attachments=list(row.attachments or []),
     )
-
-
-def _equipment_status(requests: list, reservations: list) -> str:
-    real = [
-        row
-        for row in requests
-        if row.get("status") != "rejected" and row.get("reviewNote") != CATALOGUE_NOTE
-    ]
-    if real and all(row.get("status") == "complete" for row in real):
-        return "ready"
-    needed = sum(int(row.get("quantity") or 0) for row in real)
-    active = sum(
-        int(row.get("quantity") or 0) for row in reservations if row.get("status") in ("active", "reserved")
-    )
-    attention = any(row.get("status") in ("partial", "unavailable", "attention") for row in real)
-    attention = attention or any(row.get("status") in ("partial", "released") for row in reservations)
-    if (needed and active >= needed and not attention) or (needed == 0 and active > 0 and not attention):
-        return "ready"
-    if attention:
-        return "needs attention"
-    return "outstanding"
 
 
 class EventFollowUp(BaseService):

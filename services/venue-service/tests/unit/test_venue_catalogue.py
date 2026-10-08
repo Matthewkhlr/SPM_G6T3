@@ -24,6 +24,25 @@ class TestVenueCatalogue(VenueCase):
         self.assertEqual(created_log[0].changes["setupMinutes"], 30)
         self.assertEqual(created_log[0].changes["turnaroundMinutes"], 60)
 
+    def test_emergency_access_and_restrictions_are_kept_logged_and_clearable(self):
+        blank = self.service.create_venue(venue_create(), CALLER)
+        self.assertEqual((blank.emergencyAccess, blank.restrictions), ("", ""))
+
+        created = self.service.create_venue(
+            venue_create(emergencyAccess="Two exits to the lobby.", restrictions="No open flames."), CALLER
+        )
+        self.assertEqual((created.emergencyAccess, created.restrictions), ("Two exits to the lobby.", "No open flames."))
+
+        updated = self.service.update_venue(
+            created.venueId, VenueUpdate(emergencyAccess="Three exits.", restrictions=None), CALLER
+        )
+
+        self.assertEqual((updated.emergencyAccess, updated.restrictions), ("Three exits.", ""))
+        [updated_log] = [row for row in self.service.get_activity_log(created.venueId) if row.action == "updated"]
+        changes = updated_log.changes
+        self.assertEqual(changes["emergencyAccess"], {"old": "Two exits to the lobby.", "new": "Three exits."})
+        self.assertEqual(changes["restrictions"], {"old": "No open flames.", "new": ""})
+
     def test_missing_venue_and_booking_are_404(self):
         with self.assertRaises(HTTPException) as ctx:
             self.service.get_venue("missing")

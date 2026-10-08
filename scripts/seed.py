@@ -75,6 +75,7 @@ def seed_user() -> None:
             ("u4", "tech@connectsphere.com", "Tia Ho", "techsupport", None, "Technical Support", "tech123"),
             ("u12", "tech2@connectsphere.com", "Tom Teo", "techsupport", None, "Technical Support", "tech456"),
             ("u5", "attendee@connectsphere.com", "Amy Wong", "attendee", None, None, "attend123"),
+            ("u13", "safety@connectsphere.com", "Hana Yusof", "safety", None, "Safety", "safety123"),
         ]
         for user_id, email, name, role, org_id, department, password in users:
             firebase_uid = _ensure_firebase_user(email, password, name)
@@ -633,7 +634,42 @@ def seed_venue() -> None:
                         "created_at": now,
                     },
                 )
+        _ensure_venue_safety_details(conn)
         _ensure_venue_bookings(conn, now, day)
+
+
+def _ensure_venue_safety_details(conn) -> None:
+    """SPM-120: emergency access and known restrictions for the demo venues.
+    Fills them only while blank, so a venue staff edit is never overwritten."""
+    details = {
+        "v1": (
+            "Four exits: two to the waterfront promenade, two to the lift lobby. Assembly point at the "
+            "promenade. Fire engine access from HarbourFront Walk.",
+            "No open flames or haze machines. Amplified sound must end by 22:00. Floor load 5 kN/m2.",
+        ),
+        "v2": (
+            "Two exits to the level 2 corridor; nearest stairwell 15 m to the left. Assembly point at the "
+            "taxi stand.",
+            "Room only. No catering inside; no rigging from the ceiling.",
+        ),
+        "v3": (
+            "Eight exits around the hall, two wide enough for vehicles. Assembly point at the north plaza. "
+            "Emergency vehicles via Temasek Boulevard loading bay.",
+            "Exhibition stands must keep 3 m aisles to every exit. Generators need the venue's approval.",
+        ),
+        "v4": (
+            "One exit to the lift lobby; fire stairs beside the lifts. Assembly point at Raffles Place park.",
+            "Maximum 20 people. No food or drinks other than water.",
+        ),
+    }
+    for venue_id, (emergency_access, restrictions) in details.items():
+        conn.execute(
+            text(
+                "UPDATE venues SET emergency_access = :emergency_access, restrictions = :restrictions "
+                "WHERE venue_id = :venue_id AND COALESCE(emergency_access, '') = '' AND COALESCE(restrictions, '') = ''"
+            ),
+            {"venue_id": venue_id, "emergency_access": emergency_access, "restrictions": restrictions},
+        )
 
 
 def _ensure_equipment_requests(conn, now: datetime, day: timedelta) -> None:

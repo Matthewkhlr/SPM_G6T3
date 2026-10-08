@@ -87,6 +87,20 @@ class TestBookingReverificationRoute(ReverificationCase):
         self.assertEqual([row["bookingId"] for row in flagged.json()], [approved])
         self.assertTrue(flagged.json()[0]["needsReverification"])
 
+    def test_a_safety_officer_can_flag_an_events_bookings_for_review_again(self):
+        approved = self.booking()
+
+        with signed_in_as("safety"):
+            flagged = self.client.post(
+                "/venues/bookings/reverification",
+                headers=HEADERS,
+                json={"eventId": "e1", "reason": "Safety review: widen the aisles"},
+            )
+
+        self.assertEqual(flagged.status_code, 200)
+        self.assertEqual([row["bookingId"] for row in flagged.json()], [approved])
+        self.assertEqual(flagged.json()[0]["reverificationNote"], "Safety review: widen the aisles")
+
     def test_other_roles_cannot_flag_bookings(self):
         self.booking()
         for role in ("venue", "organiser", "techsupport", "attendee"):
