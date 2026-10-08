@@ -355,6 +355,14 @@
 | SPM-106 | Drafts have no change-request action | TC-SPM106-AC08 | `e2e/spm106.spec.js` | Automated |
 | SPM-106 | Terminal events cannot raise a CR | TC-SPM106-AC09 | `e2e/spm106.spec.js` | Automated |
 | SPM-106 | Confirmed details stay confirmed while pending | TC-SPM106-AC10 | `e2e/spm106.spec.js` | Automated |
+| SPM-120 | Review only after venue and technical are confirmed | TC-SPM120-AC01 | `e2e/spm120.spec.js` | Automated |
+| SPM-120 | Officer sees attendance, venue, emergency access, accessibility, placement, crowd movement, restrictions | TC-SPM120-AC02 | `e2e/spm120.spec.js` | Automated |
+| SPM-120 | Approve records decision, officer, and time | TC-SPM120-AC03 AC04 | `e2e/spm120.spec.js` | Automated |
+| SPM-120 | Approve, reject, or request changes from the Safety Officer dashboard | TC-SPM120-AC03 | `e2e/spm120.spec.js` | Automated |
+| SPM-120 | Reject records reason, no preparation, not cancelled, both notified, resubmit | TC-SPM120-AC05 AC09 | `e2e/spm120.spec.js` | Automated |
+| SPM-120 | Request changes returns to planning and flags arrangements | TC-SPM120-AC06 | `e2e/spm120.spec.js` | Automated |
+| SPM-120 | Safety Officer signs in with a pre-created account | TC-SPM120-AC07; TC-SPM43-AC01 (SO-01) | `e2e/spm120.spec.js`; `e2e/spm43.spec.js` | Automated |
+| SPM-120 | Other roles get 403 on decisions | TC-SPM120-AC08 | `e2e/spm120.spec.js` | Automated |
 | SPM-11 | Registration succeeds only for confirmed, enabled, in-period events with a place | TC-SPM11-AC01 | `e2e/spm11.spec.js` | Automated |
 | SPM-11 | Mandatory fields block submit with inline validation | TC-SPM11-AC02 | `e2e/spm11.spec.js` | Automated |
 | SPM-11 | Success confirms event, date, time, venue, and notifies | TC-SPM11-AC03 | `e2e/spm11.spec.js` | Automated |

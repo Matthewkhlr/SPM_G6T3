@@ -22,6 +22,9 @@ class VenueInfo(Base):
     operatingHours: Mapped[list] = mapped_column("operating_hours", JSON, default=list)
     setupMinutes: Mapped[int] = mapped_column("setup_minutes", Integer, nullable=False)
     turnaroundMinutes: Mapped[int] = mapped_column("turnaround_minutes", Integer, nullable=False)
+    # SPM-120: what a safety officer needs to know about the venue itself.
+    emergencyAccess: Mapped[str | None] = mapped_column("emergency_access", Text, nullable=True, default="")
+    restrictions: Mapped[str | None] = mapped_column(Text, nullable=True, default="")
     isActive: Mapped[bool] = mapped_column("is_active", Boolean, default=True)
     createdAt: Mapped[datetime] = mapped_column("created_at", DateTime, default=datetime.utcnow)
 

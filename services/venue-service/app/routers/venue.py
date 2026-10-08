@@ -346,9 +346,10 @@ def create_booking(
     "/bookings/reverification",
     response_model=list[VenueBookingOut],
     summary="Mark an event's confirmed bookings for re-verification",
-    description="Coordinators only (SPM-71 AC4). Called by event-service when a significant event change "
-    "is saved. Each `approved` booking for the event gets `needsReverification` and the reason; its "
-    "status is unchanged, so the venue stays held. Returns the bookings marked.",
+    description="Coordinators and safety officers (SPM-71 AC4, SPM-120). Called by event-service when a "
+    "significant event change is saved, or when a safety officer asks for the venue to be reviewed again. "
+    "Each `approved` booking for the event gets `needsReverification` and the reason; its status is "
+    "unchanged, so the venue stays held. Returns the bookings marked.",
     responses=error_responses(403, 503),
 )
 def flag_bookings_for_reverification(
@@ -356,7 +357,7 @@ def flag_bookings_for_reverification(
     authorization: str | None = Depends(forwarded_bearer),
     service: VenueService = Depends(get_venue_service),
 ):
-    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator", "safety"})
     return service.flag_for_reverification(body.eventId, body.reason)
 
 

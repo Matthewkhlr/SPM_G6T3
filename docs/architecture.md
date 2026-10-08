@@ -225,6 +225,7 @@ Shown on the login screen. Seeded in MySQL and listed in `Test Data/credentials-
 | venue2@connectsphere.com | venue456 | Venue Staff |
 | tech@connectsphere.com | tech123 | Technical Support |
 | tech2@connectsphere.com | tech456 | Technical Support |
+| safety@connectsphere.com | safety123 | Safety Officer |
 | attendee@connectsphere.com | attend123 | Attendee |
 | attendee2@connectsphere.com | attend456 | Attendee |
 

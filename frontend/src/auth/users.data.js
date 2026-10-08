@@ -11,6 +11,7 @@ export const users = [
   { username: 'venue2@connectsphere.com', password: 'venue456', role: 'venue', name: 'Vera Lim' },
   { username: 'tech@connectsphere.com', password: 'tech123', role: 'techsupport', name: 'Tia Ho' },
   { username: 'tech2@connectsphere.com', password: 'tech456', role: 'techsupport', name: 'Tom Teo' },
+  { username: 'safety@connectsphere.com', password: 'safety123', role: 'safety', name: 'Hana Yusof' },
   { username: 'attendee@connectsphere.com', password: 'attend123', role: 'attendee', name: 'Amy Wong' },
   { username: 'attendee2@connectsphere.com', password: 'attend456', role: 'attendee', name: 'Gwen Ong' }
 ]

@@ -40,6 +40,12 @@ export const roles = {
       { title: 'Low availability alert', sub: 'Wireless mics fully booked Thu' }
     ]
   },
+  safety: {
+    label: 'Safety Officer',
+    tabs: ['Dashboard', 'Safety Reviews', 'Profile'],
+    // The Dashboard tab is SafetyDashboard (live counts and decisions), not cards.
+    cards: []
+  },
   attendee: {
     label: 'Attendee',
     tabs: ['Dashboard', 'Browse Events', 'My Registrations', 'Waiting List', 'Profile'],

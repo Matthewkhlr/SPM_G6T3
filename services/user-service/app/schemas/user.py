@@ -6,7 +6,7 @@ class UserPublic(BaseModel):
     userName: str = Field(description="Display name.")
     email: str
     role: str = Field(
-        description="One of `organiser`, `coordinator`, `venue`, `techsupport`, `attendee`."
+        description="One of `organiser`, `coordinator`, `venue`, `techsupport`, `safety`, `attendee`."
     )
     organisationId: str | None = Field(
         default=None, description="Set for event organisers; otherwise null."

@@ -116,7 +116,7 @@ Lifecycle state is stored in `status`, not a separate table.
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
 
-**Event status:** the create API currently writes `created`; seed data also uses `planning` and `confirmed`. Other lifecycle values are not validated or transitioned by the current service. Approving a request (SPM-69) moves it from `under review` or `changes requested` to `planning`, written to `event_status_history`. Raising a clarification (SPM-68) moves `under review` to `changes requested`, and resolving the last open one moves it back.
+**Event status:** the create API currently writes `created`; seed data also uses `planning` and `confirmed`. Other lifecycle values are not validated or transitioned by the current service. Approving a request (SPM-69) moves it from `under review` or `changes requested` to `planning`, written to `event_status_history`. Raising a clarification (SPM-68) moves `under review` to `changes requested`, and resolving the last open one moves it back. Submitting for a safety review (SPM-120) moves `planning` to `safety review`. Approval moves it on to `preparing`, and rejection or a change request moves it back to `planning`. Each move is written to `event_status_history`.
 
 **Registration settings (SPM-90, `PATCH /events/{id}/registration-settings`):** the assigned coordinator sets `registration_enabled`, `registration_opens_at`, `registration_closes_at`, and `capacity` while the event is `approved`, `planning`, `preparing`, `prepared`, `confirmed`, or `reconsidering`. The close must be after the open and no later than `proposed_start_at`. `capacity` cannot go below the attendees currently registered in registration-service. If it exceeds what a venue booking with status `approved` holds in the event's `layout_preference`, the coordinator must confirm the change; the venue's largest layout applies when there is no layout match. The coordinator must also confirm turning registration off while attendees are registered. Existing registrations are left as they are, and the attendees are notified. Each changed setting is written to `event_field_changes`.
 
@@ -171,6 +171,27 @@ Coordinator assign / reassign history.
 | assigned_at | DATETIME | |
 
 **Assignment rules (SPM-66, `POST /events/{id}/assign-coordinator`):** any Event Coordinator may assign or reassign an event to an Event Coordinator (the assignee's role is checked against user-service). No workload limit applies. Events that are `completed`, `cancelled`, `rejected`, `draft`, or `discarded` cannot be assigned. Each assignment adds a row here and sets `events.coordinator_id`. A `submitted` event moves to `under review` (written to `event_status_history`). These rows appear in the activity log as `assignment` entries, whose previous coordinator comes from the row before.
+
+### event_safety_reviews
+
+SPM-120: one row per submission for a safety review. A resubmission adds a row, so the history stays.
+
+| Column | Type | Notes |
+|---|---|---|
+| review_id | VARCHAR(64) PK | |
+| event_id | VARCHAR(64) | FK → events |
+| status | VARCHAR(32) | `pending` \| `approved` \| `rejected` \| `changes_requested` \| `superseded` |
+| submitted_by | VARCHAR(64) | The assigned coordinator |
+| submitted_at | DATETIME | |
+| crowd_movement | TEXT | The coordinator's note |
+| equipment_placement | TEXT | The coordinator's note; empty when no equipment is reserved |
+| package | JSON | Copy of the attendance, venues, accessibility, and equipment facts taken at submission |
+| decided_by | VARCHAR(64) nullable | The Safety Officer; on `superseded`, whoever changed the event |
+| decided_at | DATETIME nullable | |
+| decision_note | TEXT nullable | Approval note, rejection reason, required changes, or what changed |
+| affected | JSON nullable | Arrangements flagged on a change request: `venue`, `technical` |
+
+Only the assigned coordinator submits, and only a `planning` event whose venue booking is `approved` and whose requested equipment is all reserved. Only role `safety` decides. A significant event change while a review is pending supersedes it.
 
 ### event_change_requests
 
@@ -244,6 +265,8 @@ Venue Staff create, edit, and retire venues (SPM-60); coordinators, venue staff,
 | operating_hours | JSON | Array of `{day, opens, closes}`: day `Mon` to `Sun`, times `HH:MM` read as UTC |
 | setup_minutes | INT | Whole minutes of preparation before a booking. Required, zero or greater (SPM-110) |
 | turnaround_minutes | INT | Whole minutes of reset after a booking. Required, zero or greater (SPM-110) |
+| emergency_access | TEXT nullable | SPM-120: exits, assembly point, emergency vehicle access (null reads as empty) |
+| restrictions | TEXT nullable | SPM-120: known venue restrictions (null reads as empty) |
 | is_active | BOOLEAN | False once retired |
 | created_at | DATETIME | |
 
@@ -435,7 +458,7 @@ The current application rejects a duplicate email among rows whose status is `re
 
 ## 6. notification-service (`notification`)
 
-The schema contains persisted notification records, and seed data inserts one example. `POST /notifications` is an email stub accepting `to`, `subject`, and `body`; it prints the message and returns `queued`. `POST /notifications/records` stores a row for the signed-in user, or for `userId` when the caller is staff (coordinator, venue, techsupport); anyone else naming another user gets 403. `GET /notifications` returns only the caller's rows. Registration withdrawal writes one of these records, and so does a change to an event's registration settings (SPM-90): the organiser gets `event.registration_settings`, and registered attendees get `registration.closed` when registration is turned off. Mark-read is not implemented.
+The schema contains persisted notification records, and seed data inserts one example. `POST /notifications` is an email stub accepting `to`, `subject`, and `body`; it prints the message and returns `queued`. `POST /notifications/records` stores a row for the signed-in user, or for `userId` when the caller is staff (coordinator, venue, techsupport, safety); anyone else naming another user gets 403. `GET /notifications` returns only the caller's rows. Registration withdrawal writes one of these records, and so does a change to an event's registration settings (SPM-90): the organiser gets `event.registration_settings`, and registered attendees get `registration.closed` when registration is turned off. Mark-read is not implemented.
 
 ### notifications
 

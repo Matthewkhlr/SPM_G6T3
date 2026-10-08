@@ -81,7 +81,7 @@ class TestReservationReverificationRoutes(ReverificationCase):
                 headers=self.headers,
                 json={"eventId": "e1", "reason": "Start moved"},
             )
-            self.assertEqual(caller.call_args.kwargs["allowed_roles"], {"coordinator"})
+            self.assertEqual(caller.call_args.kwargs["allowed_roles"], {"coordinator", "safety"})
 
         self.assertEqual(listed.status_code, 200)
         self.assertEqual([row["reservationId"] for row in listed.json()], [held])

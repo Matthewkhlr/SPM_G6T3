@@ -136,3 +136,25 @@ export const resolveClarification = (eventId, clarificationId) =>
 
 // Coordinator only — internal notes are never on the shared event read.
 export const getInternalNotes = (eventId) => axiosClient.get(`/events/${eventId}/internal-notes`);
+// SPM-120: safety review. The assigned coordinator submits a planning event once
+// its venue and equipment are confirmed; a 409 names what is still `missing`.
+export const submitSafetyReview = (eventId, crowdMovement, equipmentPlacement = "") =>
+  axiosClient.post(`/events/${eventId}/safety-reviews`, { crowdMovement, equipmentPlacement });
+
+// Safety Officers only: reviews with this status, longest-waiting first.
+export const getSafetyReviewQueue = (status = "pending") =>
+  axiosClient.get("/events/safety-reviews", { params: { status } });
+
+// Every review of the event, newest first, each with the facts submitted and the outcome.
+export const getSafetyReviews = (eventId) => axiosClient.get(`/events/${eventId}/safety-reviews`);
+
+// Safety Officers only; every other role gets 403.
+export const approveSafetyReview = (eventId, reviewId, note = "") =>
+  axiosClient.post(`/events/${eventId}/safety-reviews/${reviewId}/approve`, { note });
+
+export const rejectSafetyReview = (eventId, reviewId, reason) =>
+  axiosClient.post(`/events/${eventId}/safety-reviews/${reviewId}/reject`, { reason });
+
+// affected: any of "venue", "technical" — flagged for venue staff or technical support to review again.
+export const requestSafetyChanges = (eventId, reviewId, requiredChanges, affected = []) =>
+  axiosClient.post(`/events/${eventId}/safety-reviews/${reviewId}/request-changes`, { requiredChanges, affected });

@@ -174,17 +174,34 @@ def affected_arrangements(event_id: str, authorization: str | None) -> list[dict
     ]
 
 
+def flag_venue_arrangements(event_id: str, reason: str, authorization: str | None) -> list[dict]:
+    """Mark the event's confirmed venue bookings as needing re-verification. Returns what was marked."""
+    bookings = _arrangement_rows(
+        "POST",
+        f"{settings.venue_service_url}/venues/bookings/reverification",
+        authorization,
+        json={"eventId": event_id, "reason": reason},
+    )
+    return [_venue_arrangement(row) for row in bookings]
+
+
+def flag_technical_arrangements(event_id: str, reason: str, authorization: str | None) -> list[dict]:
+    """Mark the event's held equipment reservations as needing re-verification. Returns what was marked."""
+    reservations = _arrangement_rows(
+        "POST",
+        f"{settings.equipment_service_url}/equipment/reservations/reverification",
+        authorization,
+        json={"eventId": event_id, "reason": reason},
+    )
+    return [_equipment_arrangement(row) for row in reservations]
+
+
 def flag_arrangements(event_id: str, reason: str, authorization: str | None) -> list[dict]:
     """SPM-71 AC4: mark the event's confirmed venue bookings and held equipment
     reservations as needing re-verification. Returns what was marked."""
-    body = {"eventId": event_id, "reason": reason}
-    bookings = _arrangement_rows(
-        "POST", f"{settings.venue_service_url}/venues/bookings/reverification", authorization, json=body
+    return flag_venue_arrangements(event_id, reason, authorization) + flag_technical_arrangements(
+        event_id, reason, authorization
     )
-    reservations = _arrangement_rows(
-        "POST", f"{settings.equipment_service_url}/equipment/reservations/reverification", authorization, json=body
-    )
-    return [_venue_arrangement(row) for row in bookings] + [_equipment_arrangement(row) for row in reservations]
 
 
 # SPM-90: registration settings are only saved once the registrations and the
@@ -250,6 +267,57 @@ def booked_venue_capacities(event_id: str, layout: str | None, authorization: st
             }
         )
     return capacities
+
+
+# SPM-120: a safety review is only submitted once the venue and equipment it
+# describes have been read; a guess could send an unconfirmed plan for review.
+ARRANGEMENTS_UNCHECKED = (
+    "The venue and equipment arrangements could not be checked right now, so nothing was submitted. "
+    "Please try again shortly."
+)
+
+
+def approved_bookings(event_id: str, authorization: str | None) -> list[dict]:
+    """The event's confirmed (`approved`) venue bookings."""
+    return _arrangement_rows(
+        "GET",
+        f"{settings.venue_service_url}/venues/bookings",
+        authorization,
+        ARRANGEMENTS_UNCHECKED,
+        params={"eventId": event_id, "status": "approved"},
+    )
+
+
+def venue_details(venue_id: str, authorization: str | None) -> dict:
+    """A venue's catalogue record: layouts, accessibility, emergency access, restrictions."""
+    return _arrangement_rows(
+        "GET", f"{settings.venue_service_url}/venues/{venue_id}", authorization, ARRANGEMENTS_UNCHECKED
+    )
+
+
+def equipment_requests_for(event_id: str, authorization: str | None) -> list[dict]:
+    rows = _arrangement_rows(
+        "GET", f"{settings.equipment_service_url}/equipment/requests", authorization, ARRANGEMENTS_UNCHECKED
+    )
+    return [row for row in rows if row.get("eventId") == event_id]
+
+
+def equipment_reservations_for(event_id: str, authorization: str | None) -> list[dict]:
+    return _arrangement_rows(
+        "GET",
+        f"{settings.equipment_service_url}/equipment/reservations",
+        authorization,
+        ARRANGEMENTS_UNCHECKED,
+        params={"eventId": event_id},
+    )
+
+
+def equipment_names(authorization: str | None) -> dict[str, str]:
+    """equipmentId -> catalogue name."""
+    rows = _arrangement_rows(
+        "GET", f"{settings.equipment_service_url}/equipment", authorization, ARRANGEMENTS_UNCHECKED
+    )
+    return {row["equipmentId"]: row["name"] for row in rows}
 
 
 def record_notification(
