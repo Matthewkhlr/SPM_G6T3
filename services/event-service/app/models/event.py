@@ -43,6 +43,9 @@ class Event(Base):
     capacity: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(32))
     submittedAt: Mapped[datetime | None] = mapped_column("submitted_at", DateTime, nullable=True)
+    # SPM-72 AC3: who confirmed the event, and when.
+    confirmedBy: Mapped[str | None] = mapped_column("confirmed_by", String(64), nullable=True)
+    confirmedAt: Mapped[datetime | None] = mapped_column("confirmed_at", DateTime, nullable=True)
     createdAt: Mapped[datetime] = mapped_column("created_at", DateTime, default=datetime.utcnow)
     updatedAt: Mapped[datetime] = mapped_column(
         "updated_at", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

@@ -77,6 +77,7 @@ const STATUS_ORDER = [
   'rejected',
   'planning',
   'safety review',
+  'safety approved',
   'preparing',
   'prepared',
   'reconsidering',

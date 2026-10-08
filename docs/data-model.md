@@ -111,14 +111,17 @@ Lifecycle state is stored in `status`, not a separate table.
 | registration_opens_at | DATETIME nullable | |
 | registration_closes_at | DATETIME nullable | |
 | capacity | INT | Intended registration cap |
+| equipment_lines | JSON | SPM-80: `[{equipmentId, quantity, technicalNotes}]`. SPM-72: a line no longer needed also carries `notRequired`, `notRequiredReason`, `notRequiredBy`, and `notRequiredAt` |
 | status | VARCHAR(32) | See statuses below |
 | submitted_at | DATETIME nullable | |
+| confirmed_by | VARCHAR(64) nullable | SPM-72: the coordinator who confirmed it (`0009` migration) |
+| confirmed_at | DATETIME nullable | SPM-72 |
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
 
-**Event status:** the create API currently writes `created`; seed data also uses `planning` and `confirmed`. Other lifecycle values are not validated or transitioned by the current service. Approving a request (SPM-69) moves it from `under review` or `changes requested` to `planning`, written to `event_status_history`. Raising a clarification (SPM-68) moves `under review` to `changes requested`, and resolving the last open one moves it back. Submitting for a safety review (SPM-120) moves `planning` to `safety review`. Approval moves it on to `preparing`, and rejection or a change request moves it back to `planning`. Each move is written to `event_status_history`.
+**Event status:** the create API currently writes `created`; seed data also uses `planning` and `confirmed`. Other lifecycle values are not validated or transitioned by the current service. Approving a request (SPM-69) moves it from `under review` or `changes requested` to `planning`, written to `event_status_history`. Raising a clarification (SPM-68) moves `under review` to `changes requested`, and resolving the last open one moves it back. Submitting for a safety review (SPM-120) moves `planning` to `safety review`. Approval moves it on to `safety approved`, and rejection or a change request moves it back to `planning`. Confirming (SPM-72) moves `safety approved` to `confirmed`. A significant change in `safety review` or `safety approved` sends the event back to `planning`. Each move is written to `event_status_history`. The `0009` migration renamed any `preparing` event to `safety approved`.
 
-**Registration settings (SPM-90, `PATCH /events/{id}/registration-settings`):** the assigned coordinator sets `registration_enabled`, `registration_opens_at`, `registration_closes_at`, and `capacity` while the event is `approved`, `planning`, `preparing`, `prepared`, `confirmed`, or `reconsidering`. The close must be after the open and no later than `proposed_start_at`. `capacity` cannot go below the attendees currently registered in registration-service. If it exceeds what a venue booking with status `approved` holds in the event's `layout_preference`, the coordinator must confirm the change; the venue's largest layout applies when there is no layout match. The coordinator must also confirm turning registration off while attendees are registered. Existing registrations are left as they are, and the attendees are notified. Each changed setting is written to `event_field_changes`.
+**Registration settings (SPM-90, `PATCH /events/{id}/registration-settings`):** the assigned coordinator sets `registration_enabled`, `registration_opens_at`, `registration_closes_at`, and `capacity` while the event is `approved`, `planning`, `safety review`, `safety approved`, `preparing`, `prepared`, `confirmed`, or `reconsidering`. The close must be after the open and no later than `proposed_start_at`. `capacity` cannot go below the attendees currently registered in registration-service. If it exceeds what a venue booking with status `approved` holds in the event's `layout_preference`, the coordinator must confirm the change; the venue's largest layout applies when there is no layout match. The coordinator must also confirm turning registration off while attendees are registered. Existing registrations are left as they are, and the attendees are notified. Each changed setting is written to `event_field_changes`.
 
 New API-created events have `submitted_at = NULL`. Event editing, submission, and status-history writes are not currently implemented.
 
@@ -191,7 +194,7 @@ SPM-120: one row per submission for a safety review. A resubmission adds a row, 
 | decision_note | TEXT nullable | Approval note, rejection reason, required changes, or what changed |
 | affected | JSON nullable | Arrangements flagged on a change request: `venue`, `technical` |
 
-Only the assigned coordinator submits, and only a `planning` event whose venue booking is `approved` and whose requested equipment is all reserved. Only role `safety` decides. A significant event change while a review is pending supersedes it.
+Only the assigned coordinator submits, and only a `planning` event that passes the SPM-72 arrangement check. Every live venue booking must be `approved` for the event's own date and time. Every equipment request must be settled, and every equipment line held or recorded as not required. Only role `safety` decides. A significant event change while a review is pending supersedes it. After approval, the same change sends the event back to `planning`, and the approved row stays.
 
 ### event_change_requests
 
@@ -212,7 +215,7 @@ Only the assigned coordinator submits, and only a `planning` event whose venue b
 | decision_reason | TEXT nullable | SPM-106: the coordinator's reason, shown to the organiser |
 | created_at | DATETIME | |
 
-**Change requests (SPM-106, `POST /events/{id}/change-requests`):** the organiser who filed the event, or a colleague in their organisation, can request a change while the event is `under review`, `changes requested`, `approved`, `planning`, `preparing`, `prepared`, `confirmed`, or `reconsidering`. Drafts are edited directly, a `submitted` request has no coordinator yet, and finished events take none. Changeable fields are the name, description, purpose, category, start and end, expected attendance, layout, accessibility needs, and equipment requirements. Only fields whose proposed value differs are stored, and a reason is required. An event can have only one `pending` request. The event is untouched while one is pending. Only the organiser who raised a request can withdraw it. The assigned coordinator accepts or declines it; declining needs a reason. Accepting applies the proposed values with the SPM-71 edit rules, which write `event_field_changes`, flag arrangements, and move a confirmed event to `reconsidering`. The `0005` migration added `current_values` and `decision_reason`.
+**Change requests (SPM-106, `POST /events/{id}/change-requests`):** the organiser who filed the event, or a colleague in their organisation, can request a change while the event is `under review`, `changes requested`, `approved`, `planning`, `safety review`, `safety approved`, `preparing`, `prepared`, `confirmed`, or `reconsidering`. Drafts are edited directly, a `submitted` request has no coordinator yet, and finished events take none. Changeable fields are the name, description, purpose, category, start and end, expected attendance, layout, accessibility needs, and equipment requirements. Only fields whose proposed value differs are stored, and a reason is required. An event can have only one `pending` request. The event is untouched while one is pending. Only the organiser who raised a request can withdraw it. The assigned coordinator accepts or declines it; declining needs a reason. Accepting applies the proposed values with the SPM-71 edit rules, which write `event_field_changes`, flag arrangements, and move a confirmed event to `reconsidering`. The `0005` migration added `current_values` and `decision_reason`.
 
 ### event_status_history
 
@@ -467,7 +470,7 @@ The schema contains persisted notification records, and seed data inserts one ex
 | notification_id | VARCHAR(64) PK | |
 | user_id | VARCHAR(64) | Logical FK → users |
 | event_id | VARCHAR(64) nullable | Logical FK → events |
-| type | VARCHAR(64) | Unrestricted string; seed data uses `event_confirmed` |
+| type | VARCHAR(64) | Unrestricted string; seed data uses `event_confirmed`, and confirming an event (SPM-72) writes `event.confirmed` |
 | title | VARCHAR(255) | |
 | body | TEXT | |
 | is_read | BOOLEAN | |

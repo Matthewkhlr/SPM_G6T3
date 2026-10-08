@@ -158,3 +158,17 @@ export const rejectSafetyReview = (eventId, reviewId, reason) =>
 // affected: any of "venue", "technical" — flagged for venue staff or technical support to review again.
 export const requestSafetyChanges = (eventId, reviewId, requiredChanges, affected = []) =>
   axiosClient.post(`/events/${eventId}/safety-reviews/${reviewId}/request-changes`, { requiredChanges, affected });
+
+// SPM-72: { ready, missing: [{ kind: "venue"|"equipment"|"safety"|"status", message, equipmentId? }] }.
+// Assigned coordinator only.
+export const getConfirmation = (eventId) => axiosClient.get(`/events/${eventId}/confirmation`);
+
+// Moves the event to Confirmed; a 409 names what is still missing (detail.gaps).
+export const confirmEvent = (eventId) => axiosClient.post(`/events/${eventId}/confirm`);
+
+// Record an equipment line as not required (with a reason), or needed again. Planning only.
+export const markEquipmentNotRequired = (eventId, equipmentId, reason) =>
+  axiosClient.post(`/events/${eventId}/equipment-lines/${equipmentId}/not-required`, { reason });
+
+export const markEquipmentRequired = (eventId, equipmentId) =>
+  axiosClient.delete(`/events/${eventId}/equipment-lines/${equipmentId}/not-required`);

@@ -244,7 +244,7 @@ async function decide(review, kind) {
   try {
     if (kind === 'approve') {
       await approveSafetyReview(review.eventId, review.reviewId, decisionText.value)
-      notice.value = `Approved ${name}. It moves on to preparation.`
+      notice.value = `Approved ${name}. The coordinator can now confirm it.`
     } else if (kind === 'reject') {
       await rejectSafetyReview(review.eventId, review.reviewId, decisionText.value)
       notice.value = `Rejected ${name}. It is back in planning, and the coordinator and organiser have been told.`

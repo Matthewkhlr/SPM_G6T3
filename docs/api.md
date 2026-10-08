@@ -39,6 +39,8 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `GET /events/safety-reviews` | `safety` |
 | `GET /events/{id}/safety-reviews` | `organiser` of that event's organisation, `coordinator`, `venue`, `techsupport`, `safety` |
 | `POST /events/{id}/safety-reviews/{rid}/approve`, `/reject`, or `/request-changes` | `safety` only; every other role gets 403 |
+| `GET /events/{id}/confirmation`, `POST /events/{id}/confirm` | `coordinator` assigned to the event (SPM-72); confirming only from `safety approved` |
+| `POST` or `DELETE /events/{id}/equipment-lines/{equipmentId}/not-required` | `coordinator` assigned to the event (SPM-72); only in `planning` |
 | `PATCH /events/{id}/registration-settings` | `coordinator` assigned to the event (SPM-90); from `planning` until `confirmed` |
 | `GET /events/{id}/change-requests` | `organiser` of that event's organisation, `coordinator`, `venue`, `techsupport` (SPM-106) |
 | `POST /events/{id}/change-requests` | `organiser` of that event's organisation (SPM-106) |
@@ -133,7 +135,7 @@ Approval does not call venue-service or equipment-service, so no venue is booked
 
 ## Registration settings (SPM-90)
 
-`PATCH /events/{id}/registration-settings` takes only the fields that change: `registrationEnabled`, `registrationOpensAt`, `registrationClosesAt`, and `capacity`. Only the assigned coordinator can use it (403 for any other coordinator, 409 with no coordinator). It works while the event is in planning, preparing, prepared, confirmed, or reconsidering; any other status is 409. Times with a UTC offset are stored as UTC, to the second. The period can be cleared with `null`; `registrationEnabled` and `capacity` cannot.
+`PATCH /events/{id}/registration-settings` takes only the fields that change: `registrationEnabled`, `registrationOpensAt`, `registrationClosesAt`, and `capacity`. Only the assigned coordinator can use it (403 for any other coordinator, 409 with no coordinator). It works while the event is in planning, safety review, safety approved, preparing, prepared, confirmed, or reconsidering; any other status is 409. Times with a UTC offset are stored as UTC, to the second. The period can be cleared with `null`; `registrationEnabled` and `capacity` cannot.
 
 - Registration must close after it opens and no later than the event's start (422). This is checked whenever the request includes either period field.
 - A `capacity` below the number currently registered is 409 and cannot be confirmed: `{"detail": {"message": "2 people are already registered, so the capacity cannot go below 2.", "registeredCount": 2}}`.
@@ -162,8 +164,8 @@ A Safety Officer (role `safety`; demo account `safety@connectsphere.com` / `safe
 
 `POST /events/{id}/safety-reviews` with `{"crowdMovement": "…", "equipmentPlacement": "…"}`: the assigned coordinator submits a `planning` event (201).
 
-- **When it's allowed:** once an `approved` venue booking exists and every requested equipment line is reserved or complete. An event needing no equipment has nothing technical to wait for.
-- **When it's refused:** until then it returns 409 with `{"message": …, "missing": ["venue", "technical"]}`. If venue-service or equipment-service can't be reached, it returns 503 and nothing is submitted.
+- **When it's allowed:** once the venue and equipment pass the same check as confirming (see SPM-72 below). Every requested venue is `approved` for the event's own date and time. Every equipment request is reserved, complete, or accepted short. Every equipment line on the event is held or recorded as not required. An event needing no equipment has nothing technical to wait for.
+- **When it's refused:** until then it returns 409 with `{"message": …, "missing": ["venue", "equipment"], "gaps": [{"kind": "venue", "message": …}]}`. If venue-service or equipment-service can't be reached, it returns 503 and nothing is submitted.
 - **What's saved:** a copy of what the officer reviews, as `package`:
   - expected attendance;
   - each booked venue with its capacity in the event's layout (its largest layout when it doesn't offer that one), layouts, accessibility features, emergency access, known restrictions and opening hours;
@@ -178,15 +180,70 @@ A Safety Officer (role `safety`; demo account `safety@connectsphere.com` / `safe
 
 Decisions apply to the pending review, by Safety Officers only; every other role gets 403:
 
-- `POST …/{rid}/approve` with an optional `note`: records `decidedBy` and `decidedAt`, and the event moves to `preparing`.
+- `POST …/{rid}/approve` with an optional `note`: records `decidedBy` and `decidedAt`, and the event moves to `safety approved`. The coordinator then confirms it (SPM-72).
 - `POST …/{rid}/reject` with a required `reason`: the event returns to `planning`. It doesn't proceed to preparation and isn't cancelled; the coordinator can revise the arrangements and submit again.
 - `POST …/{rid}/request-changes` with a required `requiredChanges` and optional `affected` (`venue`, `technical`): the event returns to `planning`. The named arrangements are flagged for re-checking by venue staff or technical support. If a flag can't be set, it returns 503 and nothing is saved.
 
 After every decision, the assigned coordinator and the organiser get an email and an in-app notice (`event.safety_review`).
 
-A significant edit or accepted change request while the review is pending returns the usual 409 (`statusChange` from `safety review` to `planning`) until confirmed. Then the review becomes `superseded` and the event goes back to `planning`.
+A significant edit or accepted change request while the review is pending returns the usual 409 (`statusChange` from `safety review` to `planning`) until confirmed. Then the review becomes `superseded` and the event goes back to `planning`. The same applies after approval and before confirmation (`statusChange` from `safety approved` to `planning`). The approval stays in the history, and the event needs a new safety review.
 
 Venues carry `emergencyAccess` and `restrictions` text, kept by venue staff in the catalogue.
+
+## Confirm an event (SPM-72)
+
+The assigned coordinator confirms an event after the Safety Officer approves it. Venue-service and equipment-service are checked again at that moment, so a booking cancelled or a reservation released since the safety review blocks confirmation.
+
+`GET /events/{id}/confirmation` says whether the event can be confirmed and, if not, names each missing arrangement:
+
+```json
+{
+  "eventId": "e3",
+  "ready": false,
+  "missing": [
+    {"kind": "venue", "message": "The booking at Marina Hall A (01 Dec 2026 09:00 to 01 Dec 2026 12:00) is not for the event's date and time. Cancel it and request the venue for the event's time."},
+    {"kind": "equipment", "equipmentId": "eq1", "message": "1 × Projector is neither reserved nor recorded as not required."},
+    {"kind": "safety", "message": "It has not been submitted for a safety review yet. Submit it once the venue and equipment are confirmed."}
+  ]
+}
+```
+
+Confirming needs all of these:
+
+- **Venue:** at least one booking, every live booking `approved` by venue staff, and each one covering the event's current start and end. A booking left at an earlier time after the event moved doesn't count. Cancel it (`POST /venues/bookings/{id}/cancel`) and request the venue for the new time.
+- **Equipment:** every request is reserved, complete, or a shortfall the coordinator accepted. Every equipment line on the event is held by reservations or recorded as not required. A gap that can be recorded as not required carries its `equipmentId`.
+- **Safety:** the event is `safety approved`. A pending, rejected, or changes-requested review, or none at all, is named with its note.
+
+`POST /events/{id}/confirm` (no body) moves `safety approved` to `confirmed`. It stores `confirmedBy` and `confirmedAt` on the event, and the response also carries them as `decidedBy` and `decidedAt`.
+
+- Anything missing returns 409 with `{"message": …, "missing": ["venue", "equipment", "safety"], "gaps": […]}` and saves nothing.
+- An event that is already confirmed is 409.
+- If venue-service or equipment-service can't be reached, it returns 503.
+
+Once confirmed, each of these people gets an email and an in-app notice (`event.confirmed`). Each person is told once:
+
+- the organiser, with the venue, date and time, layout, equipment, and when registration opens;
+- the venue staff who approved the bookings;
+- the technical support who reserved the equipment.
+
+A confirmed event with registration enabled appears in `GET /events/open-for-registration` once its registration period opens.
+
+`POST /events/{id}/equipment-lines/{equipmentId}/not-required` with `{"reason": "The venue has a built-in projector."}` records that an equipment line is no longer needed.
+
+- The reason is required (422 when blank). `DELETE` on the same path marks the line as needed again.
+- Only the assigned coordinator can do this, and only while the event is in `planning` (409 otherwise). An unknown line is 404.
+- The line gains `notRequired`, `notRequiredReason`, `notRequiredBy`, and `notRequiredAt`, and the change is written to the activity log.
+
+## Preparation waits for safety approval (SPM-121)
+
+Confirmed arrangements are not clearance to proceed:
+
+- An approved venue booking and reserved equipment leave the event in `planning`. It is not `confirmed`, so attendees don't see it.
+- The safety review starts only after the arrangement check above passes.
+- The event becomes `confirmed`, and preparation can begin, only through `POST /events/{id}/confirm` after the Safety Officer approves.
+- While the review is pending, rejected, or returned for changes, Confirm returns 409 with a `safety` gap.
+
+`GET /events/mine` gives each of the organiser's events a `safetyReviewStatus`: the latest review's status (`pending`, `approved`, `rejected`, `changes_requested`, `superseded`), or `null` if the event was never submitted. The organiser's list uses it to show an event that is waiting on the review or was sent back with safety changes requested.
 
 ## Change requests (SPM-106)
 
@@ -194,7 +251,7 @@ Venues carry `emergencyAccess` and `restrictions` text, kept by venue staff in t
 
 `POST /events/{id}/change-requests` with `{"reason": "Client wants a dinner", "proposedChanges": {"layoutPreference": "Banquet"}}` raises a request (201). Who can raise one:
 
-- The organiser who filed the event, or a colleague in their organisation, while it is under review (including `changes requested`), approved, in planning (including preparing and prepared), or confirmed (including `reconsidering`).
+- The organiser who filed the event, or a colleague in their organisation, while it is under review (including `changes requested`), approved, in planning (including safety review, safety approved, preparing, and prepared), or confirmed (including `reconsidering`).
 - Not for a draft (edited directly), a `submitted` request (no coordinator yet), or a completed, cancelled, or rejected event. These return 409.
 - Not while another request is pending (409: withdraw it first).
 

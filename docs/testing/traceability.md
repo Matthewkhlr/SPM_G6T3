@@ -205,12 +205,13 @@
 | SPM-71 | Edits written to the activity log | TC-SPM71-AC05 | `e2e/spm71.spec.js` | Automated |
 | SPM-71 | Confirmed event no longer reads fully confirmed | TC-SPM71-AC06 | `e2e/spm71.spec.js` | Automated |
 | SPM-71 | Terminal events cannot be edited | TC-SPM71-AC07 | `e2e/spm71.spec.js` | Automated |
-| SPM-72 | Confirm gated on venue and equipment | TC-SPM72-AC01 | `e2e/spm72.spec.js` | Automated |
-| SPM-72 | Outstanding arrangements named | TC-SPM72-AC02 | `e2e/spm72.spec.js` | Automated |
-| SPM-72 | Confirm records decider and time | TC-SPM72-AC03 | `e2e/spm72.spec.js` | Automated |
-| SPM-72 | Organiser sees confirmed arrangements | TC-SPM72-AC04 | `e2e/spm72.spec.js` | Automated |
-| SPM-72 | Assigned staff are notified | TC-SPM72-AC05 | `e2e/spm72.spec.js` | Automated |
-| SPM-72 | Confirmed open events visible to attendees | TC-SPM72-AC06 | `e2e/spm72.spec.js` | Automated |
+| SPM-72 | Confirm needs an approved venue booking for the event's date and time, and every equipment line reserved or recorded as not required | TC-SPM72-AC01 | `e2e/spm72.spec.js`; `services/event-service/tests/unit/test_event_confirmation.py` | Automated: a booking at another time, an equipment line, a blank and a real not-required reason, cancel and rebook, then ready |
+| SPM-72 | Confirm unavailable while anything is outstanding, and the view names it | TC-SPM72-AC02 | `e2e/spm72.spec.js`; `services/event-service/tests/unit/test_event_confirmation.py` | Automated (API and UI): venue, equipment, and safety gaps named; marking a line not required from the view |
+| SPM-72 | Confirming records Confirmed, the decider, and the time | TC-SPM72-AC03 | `e2e/spm72.spec.js`; `services/event-service/tests/unit/test_event_confirmation.py` | Automated (UI): an organiser gets 403, a second confirm is 409 |
+| SPM-72 | Organiser notified and sees confirmed venue, date, time, layout, and equipment | TC-SPM72-AC04 | `e2e/spm72.spec.js`; `services/event-service/tests/unit/test_event_confirmation.py` | Automated |
+| SPM-72 | Venue staff and technical support on the arrangements notified | TC-SPM72-AC05 | `e2e/spm72.spec.js`; `services/event-service/tests/unit/test_event_confirmation.py` | Automated |
+| SPM-72 | A registration-enabled event is visible to attendees once confirmed and its period opens | TC-SPM72-AC06 | `e2e/spm72.spec.js`; `services/event-service/tests/unit/test_event_confirmation.py` | Automated: an open period is listed, a future one is not |
+| SPM-72 / SPM-121 | A significant change after safety approval withdraws it before confirmation | — | `services/event-service/tests/unit/test_event_confirmation.py`; `services/event-service/tests/unit/test_event_safety_reviews.py` | Unit-tested |
 | SPM-73 | Complete only after end time | TC-SPM73-AC01 | `e2e/spm73.spec.js` | Automated |
 | SPM-73 | Completion records who and when | TC-SPM73-AC02 | `e2e/spm73.spec.js` | Automated |
 | SPM-73 | Completed holds leave future availability | TC-SPM73-AC03 | `e2e/spm73.spec.js` | Automated |
@@ -363,6 +364,11 @@
 | SPM-120 | Request changes returns to planning and flags arrangements | TC-SPM120-AC06 | `e2e/spm120.spec.js` | Automated |
 | SPM-120 | Safety Officer signs in with a pre-created account | TC-SPM120-AC07; TC-SPM43-AC01 (SO-01) | `e2e/spm120.spec.js`; `e2e/spm43.spec.js` | Automated |
 | SPM-120 | Other roles get 403 on decisions | TC-SPM120-AC08 | `e2e/spm120.spec.js` | Automated |
+| SPM-121 | An approved venue booking and reserved equipment confirm the arrangements without moving the event to Confirmed or showing it to attendees | TC-SPM121-AC01 | `e2e/spm121.spec.js` | Automated: still `planning`, then `safety approved`, and absent from the attendee and confirmed lists |
+| SPM-121 | The safety review starts only once every requested venue is approved and every equipment line is reserved or recorded as not required | TC-SPM121-AC02 | `e2e/spm121.spec.js`; `services/event-service/tests/unit/test_event_safety_reviews.py` | Automated: a second venue still pending, then an equipment line, then marked not required |
+| SPM-121 | Confirmed, and preparation begins, only after the Safety Officer approves | TC-SPM121-AC03 | `e2e/spm121.spec.js`; `services/event-service/tests/unit/test_event_confirmation.py` | Automated |
+| SPM-121 | Confirm unavailable while the safety check is outstanding, rejected, or returned for changes | TC-SPM121-AC04 | `e2e/spm121.spec.js`; `services/event-service/tests/unit/test_event_confirmation.py` | Automated (API and UI) |
+| SPM-121 | The organiser sees the event waiting on the safety review or with safety changes requested | TC-SPM121-AC05 | `e2e/spm121.spec.js`; `services/event-service/tests/unit/test_event_safety_reviews.py` | Automated: the My Events list, then the event page |
 | SPM-11 | Registration succeeds only for confirmed, enabled, in-period events with a place | TC-SPM11-AC01 | `e2e/spm11.spec.js` | Automated |
 | SPM-11 | Mandatory fields block submit with inline validation | TC-SPM11-AC02 | `e2e/spm11.spec.js` | Automated |
 | SPM-11 | Success confirms event, date, time, venue, and notifies | TC-SPM11-AC03 | `e2e/spm11.spec.js` | Automated |

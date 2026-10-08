@@ -72,6 +72,7 @@
       <p v-if="latest.affected.length">
         Marked for re-checking: {{ latest.affected.map((kind) => AFFECTED_LABELS[kind]).join(' and ') }}.
       </p>
+      <p v-if="latest.status === 'approved'">The coordinator can now confirm the event.</p>
       <p v-if="latest.status === 'rejected'">
         The event is not cancelled. The coordinator can revise the arrangements and submit it again.
       </p>
@@ -224,7 +225,7 @@ const STATE_LABELS = {
   superseded: 'Withdrawn',
 }
 const OUTCOME_TITLES = {
-  approved: 'Approved for preparation',
+  approved: 'Approved',
   rejected: 'Rejected',
   changes_requested: 'Changes requested',
   superseded: 'Withdrawn because the event changed',
