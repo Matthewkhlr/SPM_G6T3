@@ -10,7 +10,7 @@ from app.models.event_safety_review import EventSafetyReview
 from app.models.event_status_history import EventStatusHistory
 from app.orchestration import clients
 from app.schemas.event import EventUpdate, SafetyApproval, SafetyChangeRequest, SafetyRejection, SafetySubmission
-from app.services.arrangements import requested_lines, technical_confirmed
+from app.services.arrangements import requested_lines
 from shared.auth.deps import require_authenticated_user
 from shared.exceptions.http import forbidden, service_unavailable
 from shared.testing.cases import ServiceTestCase
@@ -28,6 +28,7 @@ DIRECTORY = [
 BOOKING = {
     "bookingId": "vb-1",
     "venueId": "v1",
+    "venueName": "Marina Hall A",
     "startsAt": "2026-12-01T09:00:00",
     "endsAt": "2026-12-01T17:00:00",
     "status": "approved",
@@ -54,7 +55,9 @@ REQUEST = {
     "technicalRequirements": "HDMI at the lectern",
     "reviewNote": "",
 }
-RESERVATION = {"reservationId": "rs-1", "requestId": "rq-1", "eventId": "e1", "quantity": 2, "status": "active"}
+RESERVATION = {
+    "reservationId": "rs-1", "requestId": "rq-1", "eventId": "e1", "equipmentId": "eq1", "quantity": 2, "status": "active"
+}
 COORDINATOR = {"userId": "coord-1", "role": "coordinator"}
 ORGANISER = {"userId": "org-1", "role": "organiser", "organisationId": "o1"}
 OFFICER = {"userId": "safety-1", "role": "safety"}
@@ -70,7 +73,7 @@ class SafetyCase(EventCase):
             "users": patch("app.services.event_service.list_users", return_value=DIRECTORY),
             "email": patch("app.services.event_service.send_notification", return_value=True),
             "inbox": patch("app.services.event_service.record_notification", return_value=True),
-            "bookings": patch("app.services.event_service.approved_bookings", return_value=[BOOKING]),
+            "bookings": patch("app.services.event_service.event_bookings", return_value=[BOOKING]),
             "venue": patch("app.services.event_service.venue_details", return_value=VENUE),
             "requests": patch("app.services.event_service.equipment_requests_for", return_value=[]),
             "reservations": patch("app.services.event_service.equipment_reservations_for", return_value=[]),
@@ -145,7 +148,7 @@ class TestAvailableOnlyWhenArranged(SafetyCase):
 
         self.assertEqual(error.status_code, 409)
         self.assertEqual(error.detail["missing"], ["venue"])
-        self.assertIn("Venue staff have not confirmed", error.detail["message"])
+        self.assertIn("No venue has been booked", error.detail["message"])
         self.assertEqual(self.status(), "planning")
         self.assertEqual(self.db.query(EventSafetyReview).count(), 0)
 
@@ -156,8 +159,8 @@ class TestAvailableOnlyWhenArranged(SafetyCase):
 
         error = self.refused(self.submit)
 
-        self.assertEqual(error.detail["missing"], ["venue", "technical"])
-        self.assertIn("Technical support have not reserved", error.detail["message"])
+        self.assertEqual(error.detail["missing"], ["venue", "equipment"])
+        self.assertIn("is approved but technical support have not reserved it yet", error.detail["message"])
 
     def test_once_both_are_confirmed_it_goes_to_safety_review_and_every_officer_is_told(self):
         self.event()
@@ -282,7 +285,7 @@ class TestWhatTheOfficerSees(SafetyCase):
 class TestApproving(SafetyCase):
     """AC3 and AC4."""
 
-    def test_approve_records_the_decision_the_officer_and_the_time_and_moves_on_to_preparation(self):
+    def test_approve_records_the_decision_the_officer_and_the_time_and_waits_for_confirmation(self):
         self.event()
         review = self.submit()
         self.mocks["email"].reset_mock()
@@ -292,9 +295,10 @@ class TestApproving(SafetyCase):
 
         self.assertEqual((approved.status, approved.decidedBy, approved.decisionNote), ("approved", "safety-1", "Good plan"))
         self.assertIsNotNone(approved.decidedAt)
-        self.assertEqual(self.status(), "preparing")
+        self.assertEqual(self.status(), "safety approved")
         self.assertEqual({args[0] for args in self.emails()}, {"ben@connectsphere.com", "amy@apex.com"})
-        self.assertIn("so it moves on to preparation. Note: Good plan", self.emails()[0][2])
+        self.assertIn("The coordinator can now confirm it", self.emails()[0][2])
+        self.assertIn("Note: Good plan", self.emails()[0][2])
         self.assertEqual({args[0] for args in self.inboxes()}, {"coord-1", "org-1"})
 
     def test_the_note_is_optional(self):
@@ -423,6 +427,24 @@ class TestChangesDuringReview(SafetyCase):
         self.assertEqual((withdrawn.reviewId, withdrawn.status, withdrawn.decidedBy), (review.reviewId, "superseded", "coord-1"))
         self.assertIn("Expected attendance: 250 -> 400", withdrawn.decisionNote)
 
+    def test_a_significant_edit_after_approval_withdraws_it_before_confirmation(self):
+        self.event()
+        review = self.approve(self.submit().reviewId)
+
+        with self.assertRaises(HTTPException) as ctx:
+            self.service.update_event("e1", EventUpdate(expectedAttendance=400), "coord-1")
+        self.assertEqual(ctx.exception.detail["statusChange"], {"from": "safety approved", "to": "planning"})
+        self.assertIn("withdraws the safety approval", ctx.exception.detail["message"])
+
+        self.service.update_event("e1", EventUpdate(expectedAttendance=400, confirmSignificantChange=True), "coord-1")
+
+        self.assertEqual(self.status(), "planning")
+        [kept] = self.service.get_safety_reviews("e1", COORDINATOR)
+        self.assertEqual((kept.reviewId, kept.status), (review.reviewId, "approved"))
+        history = self.db.query(EventStatusHistory).filter_by(fromStatus="safety approved").one()
+        self.assertEqual(history.toStatus, "planning")
+        self.assertTrue(history.note.startswith("Safety approval withdrawn. "))
+
     def test_a_quiet_edit_leaves_the_review_alone(self):
         self.event()
         self.submit()
@@ -439,6 +461,22 @@ class TestChangesDuringReview(SafetyCase):
         self.assertEqual(self.status(), "planning")
 
 
+class TestOrganiserSeesTheSafetyState(SafetyCase):
+    """SPM-121 AC5: the organiser's list shows each event's latest safety review."""
+
+    def test_each_event_carries_its_latest_safety_review_status(self):
+        for event_id in ("e1", "e2", "e3"):
+            self.event(event_id)
+        self.reject(self.submit().reviewId)
+        self.request_changes(self.submit().reviewId, "Move the stage.")
+        self.submit(event_id="e2")
+
+        statuses = {row.eventId: row.safetyReviewStatus for row in self.service.list_my_events("org-1")}
+
+        self.assertEqual(statuses, {"e1": "changes_requested", "e2": "pending", "e3": None})
+        self.assertEqual(self.service.list_my_events("nobody"), [])
+
+
 class TestArrangementRules(ServiceTestCase):
     def test_requested_lines_leave_out_closed_and_bookkeeping_requests(self):
         rows = [
@@ -448,13 +486,6 @@ class TestArrangementRules(ServiceTestCase):
             {"status": "approved", "reviewNote": "Reserved from the catalogue quantity check"},
         ]
         self.assertEqual(requested_lines(rows), [{"status": "reserved"}])
-
-    def test_technical_confirmed(self):
-        self.assertTrue(technical_confirmed([], []))
-        self.assertTrue(technical_confirmed([], [{**RESERVATION, "status": "released"}]))
-        self.assertTrue(technical_confirmed([REQUEST], [RESERVATION]))
-        self.assertFalse(technical_confirmed([{**REQUEST, "status": "approved"}], []))
-        self.assertFalse(technical_confirmed([], [{**RESERVATION, "status": "partial"}]))
 
 
 class TestSafetyClients(ServiceTestCase):
@@ -467,20 +498,20 @@ class TestSafetyClients(ServiceTestCase):
             reply(200, [{"equipmentId": "eq1", "name": "Projector"}]),
         )
         with stub:
-            self.assertEqual(clients.approved_bookings("e1", "Bearer token"), [BOOKING])
+            self.assertEqual(clients.event_bookings("e1", "Bearer token"), [BOOKING])
             self.assertEqual(clients.venue_details("v1", "Bearer token"), VENUE)
             self.assertEqual(clients.equipment_requests_for("e1", "Bearer token"), [REQUEST])
             self.assertEqual(clients.equipment_reservations_for("e1", "Bearer token"), [RESERVATION])
             self.assertEqual(clients.equipment_names("Bearer token"), {"eq1": "Projector"})
         calls = client.__enter__.return_value.request.call_args_list
-        self.assertEqual(calls[0].kwargs["params"], {"eventId": "e1", "status": "approved"})
+        self.assertEqual(calls[0].kwargs["params"], {"eventId": "e1"})
         self.assertTrue(calls[1].args[1].endswith("/venues/v1"))
         self.assertEqual(calls[3].kwargs["params"], {"eventId": "e1"})
 
     def test_an_unanswered_check_is_a_503_that_submits_nothing(self):
         stub, _client = fake_client(reply(500))
         with stub, self.assertRaises(HTTPException) as ctx:
-            clients.approved_bookings("e1", None)
+            clients.event_bookings("e1", None)
         self.assertEqual(ctx.exception.status_code, 503)
         self.assertIn("nothing was submitted", ctx.exception.detail)
 
@@ -519,7 +550,7 @@ class TestSafetyRoutes(ServiceTestCase):
             patch("app.services.event_service.list_users", return_value=DIRECTORY),
             patch("app.services.event_service.send_notification", return_value=True),
             patch("app.services.event_service.record_notification", return_value=True),
-            patch("app.services.event_service.approved_bookings", return_value=[BOOKING]),
+            patch("app.services.event_service.event_bookings", return_value=[BOOKING]),
             patch("app.services.event_service.venue_details", return_value=VENUE),
             patch("app.services.event_service.equipment_requests_for", return_value=[]),
             patch("app.services.event_service.equipment_reservations_for", return_value=[]),
@@ -561,7 +592,7 @@ class TestSafetyRoutes(ServiceTestCase):
 
         approved = self.decide(review_id, "approve", {})
         self.assertEqual((approved.status_code, approved.json()["status"]), (200, "approved"))
-        self.assertEqual(self.client.get("/events/e1", headers=HEADERS).json()["status"], "preparing")
+        self.assertEqual(self.client.get("/events/e1", headers=HEADERS).json()["status"], "safety approved")
         history = self.client.get("/events/e1/safety-reviews", headers=HEADERS)
         self.assertEqual(history.json()[0]["decidedBy"], "safety-1")
 

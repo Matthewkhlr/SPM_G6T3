@@ -4,19 +4,29 @@ import { account } from './support/test-data.js'
 import { eventApi } from './support/event.js'
 import { notificationApi } from './support/registration.js'
 import { THEATRE_EVENT, approvedEvent, requestVenue } from './support/venue-request.js'
+import { distantPeriod } from './support/confirmation.js'
 import { venueRequest } from './support/venue.js'
 
 const CROWD = 'Guests enter by the lift lobby and leave by the promenade doors; aisles stay 2 m wide.'
 
 // A planning event of its own (Theatre, 50 people) so no seeded event changes.
+// It is held on a distant day, so its venue booking can be for the event's own time.
 async function planningEvent(label) {
-  return approvedEvent({ ...THEATRE_EVENT, eventName: `AUTO-SPM120-${label}-${Date.now()}` })
+  const period = distantPeriod()
+  const event = await approvedEvent({
+    ...THEATRE_EVENT,
+    eventName: `AUTO-SPM120-${label}-${Date.now()}`,
+    proposedStartAt: period.startsAt,
+    proposedEndAt: period.endsAt,
+  })
+  return { ...event, period }
 }
 
-// Venue staff confirm a Marina Hall A booking. The event needs no equipment,
-// so its technical arrangements have nothing left to confirm.
+// Venue staff confirm a Marina Hall A booking for the event's date and time
+// (SPM-72 AC1). The event needs no equipment, so its technical arrangements
+// have nothing left to confirm.
 async function confirmVenue(event) {
-  const requested = await requestVenue(event, 'v1')
+  const requested = await requestVenue(event, 'v1', event.period)
   expect(requested.status, JSON.stringify(requested.body)).toBe(201)
   const approved = await venueRequest('POST', `/venues/bookings/${requested.body.bookingId}/approve`, 'VS-01', {
     reason: 'AUTO-SPM120',
@@ -93,14 +103,14 @@ test.describe('SPM-120 Safety review after venue and technical arrangements are 
     )
     await page.getByTestId('safety-approve').click()
     expect((await decision).status()).toBe(200)
-    await expect(page.getByTestId('safety-outcome')).toContainText(/approved for preparation/i)
+    await expect(page.getByTestId('safety-outcome')).toContainText(/coordinator can now confirm/i)
 
     const [review] = (await eventApi('GET', `/${event.eventId}/safety-reviews`, 'EC-01')).body
     expect(review.status).toBe('approved')
     expect(review.decidedBy).toBe('u13')
     expect(review.decidedAt).toBeTruthy()
     const stored = await eventApi('GET', `/${event.eventId}`, 'EC-01')
-    expect(stored.body.status).toBe('preparing')
+    expect(stored.body.status).toBe('safety approved')
   })
 
   test('TC-SPM120-AC05 AC09 rejecting records the reason, keeps the event out of preparation without cancelling it, notifies both sides, and allows a new check', async () => {

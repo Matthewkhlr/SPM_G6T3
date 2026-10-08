@@ -24,6 +24,7 @@ from app.schemas.event import (
     ClarificationCreate,
     ClarificationOut,
     ClarificationReplyCreate,
+    ConfirmationOut,
     CoordinatorCandidateOut,
     EventActivityOut,
     EventApproval,
@@ -34,7 +35,9 @@ from app.schemas.event import (
     EventCreate,
     EventDecision,
     EventIntake,
+    EventConfirmOut,
     EventDecisionOut,
+    EquipmentNotRequired,
     EventDraftUpsert,
     EventInternalNotesOut,
     EventOut,
@@ -652,7 +655,8 @@ def get_safety_reviews(
     response_model=SafetyReviewOut,
     summary="Approve a safety review",
     description="Safety Officers only; every other role gets 403 (SPM-120 AC8). Records the decision, the "
-    "officer, and the time, and moves the event to `preparing`. 409 unless the review is pending.",
+    "officer, and the time, and moves the event to `safety approved`, ready for the coordinator to confirm "
+    "(SPM-72). 409 unless the review is pending.",
     responses=error_responses(403, 404, 409),
 )
 def approve_safety_review(
@@ -884,6 +888,83 @@ def reject_event(
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
     return service.reject_event(event_id, caller["userId"], body.reason or "", authorization)
+
+
+@router.get(
+    "/{event_id}/confirmation",
+    response_model=ConfirmationOut,
+    summary="Can the event be confirmed?",
+    description="Assigned coordinator only (SPM-72 AC2). `ready` is true when nothing is missing; otherwise "
+    "`missing` names each gap: a venue not approved for the event's date and time, equipment neither reserved "
+    "nor recorded as not required, the safety review (SPM-120), or the event's stage. 503 when the "
+    "arrangements cannot be checked.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def get_confirmation(
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.confirmation(event_id, caller["userId"], authorization)
+
+
+@router.post(
+    "/{event_id}/confirm",
+    response_model=EventConfirmOut,
+    summary="Confirm an event",
+    description="Assigned coordinator only (SPM-72). Only after the Safety Officer has approved it (SPM-120), and "
+    "only while every requested venue booking is approved for the event's date and time and every equipment line "
+    "is reserved or recorded as not required, checked again now. Moves the event to `confirmed`, records "
+    "`decidedBy` and `decidedAt`, and notifies the organiser and the venue staff and technical support who "
+    "handled the arrangements. A registration-enabled event is then listed for attendees once its period opens. "
+    "409 with `missing` when anything is outstanding; 503 when the arrangements cannot be checked.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def confirm_event(
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.confirm_event(event_id, caller["userId"], authorization)
+
+
+@router.post(
+    "/{event_id}/equipment-lines/{equipment_id}/not-required",
+    response_model=EventOut,
+    summary="Record an equipment line as not required",
+    description="Assigned coordinator only (SPM-72 AC1), while the event is in planning. A reason is required; "
+    "the change is written to the activity log. A line recorded as not required no longer blocks the safety "
+    "review or confirmation.",
+    responses=error_responses(403, 404, 409),
+)
+def mark_equipment_not_required(
+    body: EquipmentNotRequired,
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    equipment_id: str = Path(..., description="Equipment type id on the event's equipment lines, e.g. `eq1`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.mark_equipment_not_required(event_id, equipment_id, body, caller["userId"], authorization)
+
+
+@router.delete(
+    "/{event_id}/equipment-lines/{equipment_id}/not-required",
+    response_model=EventOut,
+    summary="Record an equipment line as required again",
+    description="Assigned coordinator only, while the event is in planning. Undoes `not-required`.",
+    responses=error_responses(403, 404, 409),
+)
+def mark_equipment_required(
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    equipment_id: str = Path(..., description="Equipment type id on the event's equipment lines, e.g. `eq1`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    return service.mark_equipment_required(event_id, equipment_id, caller["userId"], authorization)
 
 
 @router.post(

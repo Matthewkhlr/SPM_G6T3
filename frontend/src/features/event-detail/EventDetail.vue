@@ -103,8 +103,23 @@
           data-testid="organiser-arrangements"
         >
           <h2>Arrangements</h2>
-          <p>The venue booking is in place where it has been confirmed. Safety checks are still needed.</p>
-          <p v-if="releasedOutcome">Equipment was released and needs attention. {{ releasedOutcome.reason }}</p>
+          <!-- SPM-120, SPM-72: what is in place, then what is still needed. -->
+          <p v-if="event.status === 'confirmed'">The venue booking, equipment, and safety review are in place.</p>
+          <p v-else-if="event.status === 'reconsidering'">
+            The event was confirmed. Still needed: its changed arrangements are being reconsidered.
+          </p>
+          <p v-else-if="event.status === 'safety approved'">
+            The venue booking and equipment are in place, and the Safety Officer approved the plan.
+            Still needed: your coordinator's confirmation.
+          </p>
+          <p v-else-if="event.status === 'safety review'">
+            The venue booking and equipment are in place. Still needed: the Safety Officer's review.
+          </p>
+          <p v-else>The venue booking is in place where it has been confirmed. Safety checks are still needed.</p>
+          <p v-if="releasedOutcome">
+            Still needed: equipment was released and needs attention. {{ releasedOutcome.reason }}
+          </p>
+          <p v-else-if="event.status === 'confirmed'">Nothing is outstanding.</p>
         </section>
         <section
           v-if="session.role === 'organiser' && event.status === 'confirmed'"
@@ -248,6 +263,8 @@
           <EventEquipment v-if="showEquipment" :event="event" />
         </div>
 
+        <EventConfirmation :event="event" @changed="onConfirmationChanged" />
+
         <EventSafetyReview
           v-if="CONTACT_ROLES.includes(session.role)"
           :event="event"
@@ -335,6 +352,7 @@ import ApproveEventDialog from './ApproveEventDialog.vue'
 import AssignCoordinatorDialog from './AssignCoordinatorDialog.vue'
 import EventChangeRequests from './EventChangeRequests.vue'
 import EventSafetyReview from './EventSafetyReview.vue'
+import EventConfirmation from './EventConfirmation.vue'
 import EventClarifications from './EventClarifications.vue'
 import EventEditForm from './EventEditForm.vue'
 import EventEquipment from './EventEquipment.vue'
@@ -420,8 +438,11 @@ const confirmedTime = computed(() => {
 })
 
 const equipmentSummary = computed(() => {
-  const lines = event.value?.equipmentLines || []
-  if (lines.length) return lines.map((line) => line.equipmentId).join(', ')
+  const all = event.value?.equipmentLines || []
+  // SPM-72: a line the coordinator recorded as not required is not part of the event.
+  const lines = all.filter((line) => !line.notRequired)
+  if (lines.length) return lines.map((line) => `${line.quantity} × ${line.equipmentId}`).join(', ')
+  if (all.length) return 'none'
   if (event.value?.equipmentRequirements) return event.value.equipmentRequirements
   if (outcomes.value.length) return outcomes.value.map((row) => row.equipmentName || row.equipmentId).join(', ')
   return 'listed with the request'
@@ -511,6 +532,14 @@ async function loadArrangements() {
     reservations.value = data
   } catch {
     reservations.value = outcomes.value.filter((row) => row.reservationId)
+  }
+}
+
+// SPM-72: confirming changes the status; marking equipment not required changes its lines.
+async function onConfirmationChanged(outcome) {
+  await reloadEvent()
+  if (outcome === 'confirmed') {
+    savedNote.value = 'Event confirmed. The organiser, venue staff, and technical support have been notified.'
   }
 }
 

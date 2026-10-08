@@ -27,6 +27,12 @@
           <span class="status-pill" :data-testid="`organiser-event-${event.eventId}-status`">
             {{ eventStatusLabel(event.status) }}
           </span>
+          <template v-if="safetyNote(event)">
+            ·
+            <span class="safety-note" :data-testid="`organiser-event-${event.eventId}-safety`">
+              {{ safetyNote(event) }}
+            </span>
+          </template>
         </div>
       </div>
     </div>
@@ -37,7 +43,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getMyEvents } from '../../api/eventService.js'
-import { eventStatusLabel } from '../../config/eventStatus.js'
+import { SAFETY_SUBMITTABLE_STATUSES, eventStatusLabel } from '../../config/eventStatus.js'
 
 const router = useRouter()
 const emit = defineEmits(['create'])
@@ -50,6 +56,18 @@ function lifecycle(status) {
   if (status === 'draft') return 'draft'
   if (status === 'submitted') return 'submitted'
   return status
+}
+
+// SPM-121 AC5: an event back in planning after its safety review says why.
+// One waiting on the review already reads so from its status.
+const SAFETY_NOTES = {
+  changes_requested: 'Safety changes requested',
+  rejected: 'Safety review rejected',
+}
+
+function safetyNote(event) {
+  if (!SAFETY_SUBMITTABLE_STATUSES.includes(event.status)) return ''
+  return SAFETY_NOTES[event.safetyReviewStatus] || ''
 }
 
 function formatRange(start, end) {
@@ -102,4 +120,5 @@ onMounted(load)
 }
 .event-name { font-size: 15px; color: var(--text); }
 .event-meta { margin-top: 6px; font-size: 13px; color: var(--muted); }
+.safety-note { color: #FFD9A8; }
 </style>

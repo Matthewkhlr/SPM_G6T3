@@ -277,14 +277,15 @@ ARRANGEMENTS_UNCHECKED = (
 )
 
 
-def approved_bookings(event_id: str, authorization: str | None) -> list[dict]:
-    """The event's confirmed (`approved`) venue bookings."""
+def event_bookings(event_id: str, authorization: str | None) -> list[dict]:
+    """Every venue booking of the event, whatever its status, so a request still
+    waiting for venue staff is seen as well as the approved ones."""
     return _arrangement_rows(
         "GET",
         f"{settings.venue_service_url}/venues/bookings",
         authorization,
         ARRANGEMENTS_UNCHECKED,
-        params={"eventId": event_id, "status": "approved"},
+        params={"eventId": event_id},
     )
 
 

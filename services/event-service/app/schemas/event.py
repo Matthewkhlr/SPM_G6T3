@@ -101,6 +101,13 @@ class EventOut(BaseModel):
     registeredCount: int = Field(
         default=0, description="Live count from registration-service; 0 if that service is down."
     )
+    confirmedBy: str | None = Field(default=None, description="SPM-72: the coordinator who confirmed the event.")
+    confirmedAt: datetime | None = Field(default=None, description="SPM-72: when the event was confirmed.")
+    safetyReviewStatus: str | None = Field(
+        default=None,
+        description="SPM-121: the latest safety review's status (`pending`, `approved`, `rejected`, "
+        "`changes_requested`, `superseded`). Only on `GET /events/mine`; null when never reviewed.",
+    )
     hasOpenClarifications: bool = Field(
         default=False,
         description="True while any clarification on the event is still open (SPM-68). "
@@ -650,6 +657,38 @@ class SafetyPackage(BaseModel):
     equipment: list[SafetyEquipmentLine] = []
     crowdMovement: str
     equipmentPlacement: str = ""
+
+
+class ConfirmationGap(BaseModel):
+    """One thing standing between the event and Confirmed (SPM-72 AC2)."""
+
+    kind: Literal["venue", "equipment", "safety", "status"]
+    message: str
+    equipmentId: str | None = Field(
+        default=None, description="On an equipment line that can be recorded as not required."
+    )
+
+
+class ConfirmationOut(BaseModel):
+    eventId: str
+    ready: bool = Field(description="True when nothing is missing and the coordinator can confirm.")
+    missing: list[ConfirmationGap] = []
+
+
+class EventConfirmOut(EventOut):
+    """SPM-72 AC3: the confirmed event, with who confirmed it and when."""
+
+    decidedBy: str
+    decidedAt: datetime
+
+
+class EquipmentNotRequired(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000, description="Why this equipment is no longer needed.")
+
+    @field_validator("reason")
+    @classmethod
+    def reason_not_blank(cls, value: str) -> str:
+        return _required_text(value)
 
 
 class SafetyReviewOut(BaseModel):
