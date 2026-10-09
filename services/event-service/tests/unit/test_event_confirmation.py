@@ -196,7 +196,7 @@ class TestWhatIsMissing(ConfirmationCase):
 
     def test_the_safety_review_must_have_passed(self):
         cases = [
-            ("planning", None, None, "has not been submitted for a safety review yet"),
+            ("planning", None, None, "has not been sent for a safety review yet"),
             ("safety review", None, None, "has not reviewed it yet"),
             ("planning", "rejected", "Exits blocked.", "was rejected: Exits blocked. Revise"),
             ("planning", "changes_requested", "Widen aisles.", "asked for changes: Widen aisles. Submit"),

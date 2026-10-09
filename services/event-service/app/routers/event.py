@@ -11,6 +11,7 @@ from app.dao.event_change_request_dao import EventChangeRequestDAO
 from app.dao.event_dao import EventDAO
 from app.dao.event_field_change_dao import EventFieldChangeDAO
 from app.dao.event_review_dao import EventReviewDAO
+from app.dao.event_safety_handoff_dao import EventSafetyHandoffDAO
 from app.dao.event_safety_review_dao import EventSafetyReviewDAO
 from app.dao.event_status_history_dao import EventStatusHistoryDAO
 from app.db.session import get_db
@@ -51,8 +52,11 @@ from app.schemas.event import (
     SafetyApproval,
     SafetyChangeRequest,
     SafetyRejection,
+    SafetyHandoffOut,
     SafetyReviewOut,
     SafetySubmission,
+    SafetyTechnicalHandoff,
+    SafetyVenueHandoff,
     SignificantFieldsOut,
 )
 from app.schemas.followup import OpenEventOut, ReadinessCreate, ReadinessItemOut, ReadinessPatch
@@ -83,6 +87,7 @@ def get_event_service(db: Session = Depends(get_db)) -> EventService:
         EventReviewDAO(db),
         EventChangeRequestDAO(db),
         EventSafetyReviewDAO(db),
+        EventSafetyHandoffDAO(db),
     )
 
 
@@ -616,7 +621,8 @@ def resolve_clarification(
     response_model=SafetyReviewOut,
     status_code=201,
     summary="Submit for a safety review",
-    description="Assigned coordinator only (SPM-120), while the event is in planning. Refused with 409, "
+    description="Assigned coordinator only (SPM-120), while the event is in planning, with both notes at once; "
+    "Venue Staff and technical support usually send their parts through `/safety-handoff`. Refused with 409, "
     "naming what is `missing`, until a venue booking is confirmed and every requested equipment line is "
     "reserved (an event needing no equipment has nothing to wait for). Copies the venue, equipment, and "
     "event facts into the review with the crowd-movement and placement notes, moves the event to "
@@ -631,6 +637,63 @@ def submit_safety_review(
 ):
     caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
     return service.submit_safety_review(event_id, body, caller["userId"], authorization)
+
+
+@router.get(
+    "/{event_id}/safety-handoff",
+    response_model=SafetyHandoffOut,
+    summary="Arrangements sent to the Safety Officer",
+    description="SPM-120, change 6. Which arrangements Venue Staff and technical support have sent this round, and "
+    "whether the event needs technical ones. Organisers see it for their own organisation's events, staff for any "
+    "event; attendees get 403. 503 when the arrangements cannot be checked.",
+    responses=error_responses(403, 404, 503),
+)
+def get_safety_handoff(
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url)
+    return service.safety_handoff(event_id, caller, authorization)
+
+
+@router.post(
+    "/{event_id}/safety-handoff/venue",
+    response_model=SafetyHandoffOut,
+    summary="Send the venue arrangements to the Safety Officer",
+    description="Venue Staff only (SPM-120, change 6), while the event is in planning. 409, naming what is "
+    "`missing`, until every requested venue is approved for the event's date and time. The review opens for the "
+    "Safety Officers once the technical arrangements are in too, or at once when the event has no equipment; "
+    "`review` is then set and the coordinator is told.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def send_venue_arrangements(
+    body: SafetyVenueHandoff,
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"venue"})
+    return service.send_venue_arrangements(event_id, body, caller["userId"], authorization)
+
+
+@router.post(
+    "/{event_id}/safety-handoff/technical",
+    response_model=SafetyHandoffOut,
+    summary="Send the technical arrangements to the Safety Officer",
+    description="Technical support only (SPM-120, change 6), while the event is in planning. 409 when the event "
+    "has no equipment, or, naming what is `missing`, until every equipment line is reserved or recorded as not "
+    "required. The review opens once the venue arrangements are in too; `review` is then set.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def send_technical_arrangements(
+    body: SafetyTechnicalHandoff,
+    event_id: str = Path(..., description="Event id, e.g. `e3`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: EventService = Depends(get_event_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"techsupport"})
+    return service.send_technical_arrangements(event_id, body, caller["userId"], authorization)
 
 
 @router.get(

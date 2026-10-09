@@ -3,5 +3,6 @@ from .event_change_request_dao import EventChangeRequestDAO
 from .event_dao import EventDAO
 from .event_field_change_dao import EventFieldChangeDAO
 from .event_review_dao import EventReviewDAO
+from .event_safety_handoff_dao import EventSafetyHandoffDAO
 from .event_safety_review_dao import EventSafetyReviewDAO
 from .event_status_history_dao import EventStatusHistoryDAO

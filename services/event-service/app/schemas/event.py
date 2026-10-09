@@ -586,6 +586,30 @@ class SafetySubmission(BaseModel):
     )
 
 
+class SafetyVenueHandoff(BaseModel):
+    """SPM-120, change 6: what Venue Staff send with the confirmed venue arrangements."""
+
+    crowdMovement: str = Field(
+        min_length=1, max_length=4000, description="How people arrive, move through, and leave the venue."
+    )
+
+    @field_validator("crowdMovement")
+    @classmethod
+    def crowd_movement_not_blank(cls, value: str) -> str:
+        return _required_text(value)
+
+
+class SafetyTechnicalHandoff(BaseModel):
+    """SPM-120, change 6: what technical support send with the reserved equipment."""
+
+    equipmentPlacement: str = Field(min_length=1, max_length=4000, description="Where each piece of equipment goes.")
+
+    @field_validator("equipmentPlacement")
+    @classmethod
+    def placement_not_blank(cls, value: str) -> str:
+        return _required_text(value)
+
+
 class SafetyApproval(BaseModel):
     note: str = Field(default="", max_length=2000, description="Optional; shown to the coordinator and organiser.")
 
@@ -706,6 +730,26 @@ class SafetyReviewOut(BaseModel):
     affected: list[str] = Field(default=[], description="Arrangements flagged for re-checking (changes requested).")
     flaggedArrangements: list[AffectedArrangement] = Field(
         default=[], description="On request changes: the bookings and reservations now marked for re-checking."
+    )
+
+
+class SafetyHandoffPart(BaseModel):
+    sentBy: str
+    sentAt: datetime
+    note: str = Field(description="The crowd movement (venue) or the equipment placement (technical).")
+
+
+class SafetyHandoffOut(BaseModel):
+    """SPM-120, change 6: the arrangements sent to the Safety Officer this round."""
+
+    eventId: str
+    venue: SafetyHandoffPart | None = Field(default=None, description="Sent by Venue Staff; null until then.")
+    technical: SafetyHandoffPart | None = Field(default=None, description="Sent by technical support; null until then.")
+    technicalNeeded: bool = Field(
+        description="False when the event has no equipment, so the venue arrangements alone open the review."
+    )
+    review: SafetyReviewOut | None = Field(
+        default=None, description="The safety review, when this hand-off was the last part and opened it."
     )
 
 

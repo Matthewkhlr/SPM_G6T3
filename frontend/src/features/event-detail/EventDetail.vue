@@ -265,6 +265,8 @@
 
         <EventConfirmation :event="event" @changed="onConfirmationChanged" />
 
+        <EventSafetyHandoff :event="event" @changed="reloadEvent" />
+
         <EventSafetyReview
           v-if="CONTACT_ROLES.includes(session.role)"
           :event="event"
@@ -351,6 +353,7 @@ import { formatUtc } from '../../utils/datetime.js'
 import ApproveEventDialog from './ApproveEventDialog.vue'
 import AssignCoordinatorDialog from './AssignCoordinatorDialog.vue'
 import EventChangeRequests from './EventChangeRequests.vue'
+import EventSafetyHandoff from './EventSafetyHandoff.vue'
 import EventSafetyReview from './EventSafetyReview.vue'
 import EventConfirmation from './EventConfirmation.vue'
 import EventClarifications from './EventClarifications.vue'

@@ -13,6 +13,7 @@ from app.dao.event_change_request_dao import EventChangeRequestDAO
 from app.dao.event_dao import EventDAO
 from app.dao.event_field_change_dao import EventFieldChangeDAO
 from app.dao.event_review_dao import EventReviewDAO
+from app.dao.event_safety_handoff_dao import EventSafetyHandoffDAO
 from app.dao.event_safety_review_dao import EventSafetyReviewDAO
 from app.dao.event_status_history_dao import EventStatusHistoryDAO
 from app.models.event import Event
@@ -21,6 +22,7 @@ from app.models.event_change_request import EventChangeRequest
 from app.models.event_clarification_reply import EventClarificationReply
 from app.models.event_field_change import EventFieldChange
 from app.models.event_review import EventReview
+from app.models.event_safety_handoff import EventSafetyHandoff
 from app.models.event_safety_review import EventSafetyReview
 from app.models.event_status_history import EventStatusHistory
 from app.core.config import settings
@@ -81,14 +83,24 @@ from app.schemas.event import (
     SafetyApproval,
     SafetyChangeRequest,
     SafetyEquipmentLine,
+    SafetyHandoffOut,
+    SafetyHandoffPart,
     SafetyPackage,
     SafetyRejection,
     SafetyReviewOut,
     SafetySubmission,
+    SafetyTechnicalHandoff,
     SafetyVenueFacts,
+    SafetyVenueHandoff,
     SignificantFieldsOut,
 )
-from app.services.arrangements import SETTLED_REQUESTS, equipment_gaps, requested_lines, venue_gaps
+from app.services.arrangements import (
+    SETTLED_REQUESTS,
+    equipment_gaps,
+    requested_lines,
+    technical_needed,
+    venue_gaps,
+)
 from shared.exceptions.http import conflict, forbidden, not_found
 from shared.services.base import BaseService
 
@@ -272,6 +284,25 @@ class Arrangements(NamedTuple):
     requests: list[dict]
     reservations: list[dict]
     names: dict[str, str]
+
+
+def _set_part(handoff: EventSafetyHandoff, kind: str, note: str | None, sender: str | None, at: datetime | None) -> None:
+    """Record, or clear with Nones, the venue or technical part of a hand-off."""
+    if kind == "venue":
+        handoff.crowdMovement, handoff.venueSentBy, handoff.venueSentAt = note, sender, at
+    else:
+        handoff.equipmentPlacement, handoff.technicalSentBy, handoff.technicalSentAt = note, sender, at
+
+
+def _handoff_out(event_id: str, handoff: EventSafetyHandoff | None, needed: bool) -> SafetyHandoffOut:
+    venue = technical = None
+    if handoff is not None and handoff.venueSentAt:
+        venue = SafetyHandoffPart(sentBy=handoff.venueSentBy, sentAt=handoff.venueSentAt, note=handoff.crowdMovement)
+    if handoff is not None and handoff.technicalSentAt:
+        technical = SafetyHandoffPart(
+            sentBy=handoff.technicalSentBy, sentAt=handoff.technicalSentAt, note=handoff.equipmentPlacement
+        )
+    return SafetyHandoffOut(eventId=event_id, venue=venue, technical=technical, technicalNeeded=needed)
 
 
 def _missing(gaps: list[dict]) -> HTTPException:
@@ -505,6 +536,7 @@ class EventService(BaseService):
         review_dao: EventReviewDAO | None = None,
         change_request_dao: EventChangeRequestDAO | None = None,
         safety_dao: EventSafetyReviewDAO | None = None,
+        handoff_dao: EventSafetyHandoffDAO | None = None,
     ):
         super().__init__(db)
         self.event_dao = event_dao
@@ -514,6 +546,7 @@ class EventService(BaseService):
         self.review_dao = review_dao or EventReviewDAO(db)
         self.change_request_dao = change_request_dao or EventChangeRequestDAO(db)
         self.safety_dao = safety_dao or EventSafetyReviewDAO(db)
+        self.handoff_dao = handoff_dao or EventSafetyHandoffDAO(db)
 
     def _require_event(self, event_id: str) -> Event:
         return self._require(self.event_dao.get_by_id(event_id), "Event not found")
@@ -999,6 +1032,10 @@ class EventService(BaseService):
             event.status = RECONSIDERING
         elif significant and event.status in SAFETY_STAGES:
             self._supersede_safety_review(event, changed_by, summary, now)
+        handoff = self.handoff_dao.get(event.eventId)
+        if significant and handoff is not None:
+            # SPM-120: arrangements sent before the change must be sent again.
+            self.handoff_dao.delete(handoff)
         self._log_and_set(event, changes, changed_by, now)
         return flagged
 
@@ -1885,38 +1922,121 @@ class EventService(BaseService):
         self, event_id: str, data: SafetySubmission, coordinator_id: str, authorization: str | None = None
     ) -> SafetyReviewOut:
         """SPM-120: the assigned coordinator sends a planning event to the
-        Safety Officers.
+        Safety Officers with both notes at once, for example after revising
+        rejected arrangements (AC9). Venue Staff and technical support usually
+        send their parts instead (`send_venue_arrangements`); this replaces any
+        part already sent.
 
         Only once its venue booking and its technical arrangements are
         confirmed (AC1). The venue, equipment, and event facts are copied into
-        the review with the coordinator's crowd-movement and placement notes,
-        so the officer judges exactly what was sent (AC2). The event moves to
-        `safety review`, and every Safety Officer is told, best effort.
+        the review with the crowd-movement and placement notes, so the officer
+        judges exactly what was sent (AC2). The event moves to `safety review`,
+        and every Safety Officer is told, best effort.
         """
         event = self._require_event(event_id)
         _require_assigned_coordinator(event, coordinator_id, "submit it for a safety review")
         if event.status not in SAFETY_SUBMITTABLE_STATUSES:
             raise conflict(f"An event is submitted for a safety review from planning (this one is {event.status})")
-        package = self._safety_package(event, data, authorization)
+        review = self._open_safety_review(event, data, coordinator_id, "Submitted for safety review", authorization)
+        return _safety_review_out(review)
+
+    def safety_handoff(self, event_id: str, caller: dict, authorization: str | None = None) -> SafetyHandoffOut:
+        """SPM-120, change 6: which arrangements have been sent to the Safety
+        Officer this round, and whether the event needs technical ones at all."""
+        event = self._require_event(event_id)
+        _require_organiser_or_staff(event, caller, "safety reviews")
+        arrangements = self._check_arrangements(event, authorization)
+        needed = technical_needed(event.equipmentLines or [], arrangements.requests, arrangements.reservations)
+        return _handoff_out(event.eventId, self.handoff_dao.get(event.eventId), needed)
+
+    def send_venue_arrangements(
+        self, event_id: str, data: SafetyVenueHandoff, sender_id: str, authorization: str | None = None
+    ) -> SafetyHandoffOut:
+        """SPM-120, change 6: Venue Staff send the confirmed venue arrangements
+        to the Safety Officer, with how the crowd moves. Every requested venue
+        must be approved for the event's date and time."""
+        return self._send_arrangements(event_id, "venue", data.crowdMovement, sender_id, authorization)
+
+    def send_technical_arrangements(
+        self, event_id: str, data: SafetyTechnicalHandoff, sender_id: str, authorization: str | None = None
+    ) -> SafetyHandoffOut:
+        """SPM-120, change 6: technical support send the confirmed technical
+        arrangements, with where the equipment goes. Every equipment line must
+        be reserved or recorded as not required."""
+        return self._send_arrangements(event_id, "equipment", data.equipmentPlacement, sender_id, authorization)
+
+    def _send_arrangements(
+        self, event_id: str, kind: str, note: str, sender_id: str, authorization: str | None
+    ) -> SafetyHandoffOut:
+        """Record one part, then open the review once every part the event
+        needs is in. The other part, if its arrangements changed since it was
+        sent, is cleared and must be sent again."""
+        event = self._require_event(event_id)
+        if event.status not in SAFETY_SUBMITTABLE_STATUSES:
+            raise conflict(f"Arrangements are sent to the Safety Officer from planning (this one is {event.status})")
+        arrangements = self._check_arrangements(event, authorization)
+        needed = technical_needed(event.equipmentLines or [], arrangements.requests, arrangements.reservations)
+        if kind == "equipment" and not needed:
+            raise conflict("This event has no equipment, so there are no technical arrangements to send.")
+        own = [gap for gap in arrangements.gaps if gap["kind"] == kind]
+        if own:
+            raise _missing(own)
+        handoff = self.handoff_dao.get(event.eventId)
+        if handoff is None:
+            handoff = EventSafetyHandoff(eventId=event.eventId)
+            self.handoff_dao.add(handoff)
+            # Written now, so opening the review below finds it and removes it.
+            self.db.flush()
+        _set_part(handoff, kind, note, sender_id, datetime.utcnow())
+        other = "equipment" if kind == "venue" else "venue"
+        if any(gap["kind"] == other for gap in arrangements.gaps):
+            _set_part(handoff, other, None, None, None)
+        out = _handoff_out(event.eventId, handoff, needed)
+        if handoff.venueSentAt and (handoff.technicalSentAt or not needed):
+            data = SafetySubmission(crowdMovement=handoff.crowdMovement, equipmentPlacement=handoff.equipmentPlacement or "")
+            review = self._open_safety_review(
+                event, data, sender_id, "Arrangements sent for safety review", authorization, arrangements
+            )
+            self._notify_review_opened(event, authorization)
+            out.review = _safety_review_out(review)
+        else:
+            self.db.commit()
+        return out
+
+    def _open_safety_review(
+        self,
+        event: Event,
+        data: SafetySubmission,
+        submitted_by: str,
+        note: str,
+        authorization: str | None,
+        arrangements: "Arrangements | None" = None,
+    ) -> EventSafetyReview:
+        """Take the package, start the review, and tell every Safety Officer.
+        Arrangements sent separately this round are now part of it."""
+        package = self._safety_package(event, data, authorization, arrangements)
         now = datetime.utcnow()
         review = EventSafetyReview(
             reviewId=str(uuid4()),
             eventId=event.eventId,
             status=PENDING,
-            submittedBy=coordinator_id,
+            submittedBy=submitted_by,
             submittedAt=now,
             crowdMovement=data.crowdMovement,
             equipmentPlacement=data.equipmentPlacement,
             package=package,
         )
         self.safety_dao.add(review)
-        self._record_status_change(event, SAFETY_REVIEW, coordinator_id, "Submitted for safety review", now)
+        handoff = self.handoff_dao.get(event.eventId)
+        if handoff is not None:
+            self.handoff_dao.delete(handoff)
+        self._record_status_change(event, SAFETY_REVIEW, submitted_by, note, now)
         event.status = SAFETY_REVIEW
         event.updatedAt = now
         self.db.commit()
         self.db.refresh(review)
         self._notify_safety_officers(event, authorization)
-        return _safety_review_out(review)
+        return review
 
     @staticmethod
     def _check_arrangements(event: Event, authorization: str | None) -> "Arrangements":
@@ -1933,19 +2053,26 @@ class EventService(BaseService):
         )
         return Arrangements(gaps, bookings, requests, reservations, names)
 
-    def _safety_package(self, event: Event, data: SafetySubmission, authorization: str | None) -> dict:
+    def _safety_package(
+        self,
+        event: Event,
+        data: SafetySubmission,
+        authorization: str | None,
+        arrangements: "Arrangements | None" = None,
+    ) -> dict:
         """AC1's gate, then AC2's facts. Every requested venue must be approved
         for the event's date and time, and every equipment line reserved or
         recorded as not required. A booking flagged for re-checking still counts
         while it covers the event's time, because nothing can clear the flag
         yet (SPM-86); the flag is shown to the officer instead."""
-        arrangements = self._check_arrangements(event, authorization)
+        if arrangements is None:
+            arrangements = self._check_arrangements(event, authorization)
         if arrangements.gaps:
             raise _missing(arrangements.gaps)
         bookings = [row for row in arrangements.bookings if row.get("status") == "approved"]
         reservations, names = arrangements.reservations, arrangements.names
         lines = requested_lines(arrangements.requests)
-        if lines and not data.equipmentPlacement:
+        if technical_needed(event.equipmentLines or [], arrangements.requests, reservations) and not data.equipmentPlacement:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Say where the reserved equipment will be placed.",
@@ -2112,15 +2239,23 @@ class EventService(BaseService):
     def _notify_safety_officers(self, event: Event, authorization: str | None) -> None:
         """Best effort: the submission is already saved."""
         title = f"{event.eventName} is ready for a safety review"
-        body = (
-            f"The venue and equipment for {event.eventName} are confirmed, and the coordinator has submitted it "
-            "for a safety review."
-        )
+        body = f"The venue and equipment for {event.eventName} are confirmed and have been sent for a safety review."
+
         for officer in self._directory(authorization).values():
             if officer.get("role") != "safety":
                 continue
             send_notification(officer["email"], title, body, authorization)
             record_notification(officer["userId"], event.eventId, "event.safety_review", title, body, authorization)
+
+    def _notify_review_opened(self, event: Event, authorization: str | None) -> None:
+        """SPM-120, change 6, best effort: the coordinator did not send it
+        themselves, so they are told the safety review has started."""
+        title = f"{event.eventName} is with the Safety Officer"
+        body = f"The arrangements for {event.eventName} were sent to the Safety Officer, and its safety review has started."
+        recipient = self._recipient(self._directory(authorization), event.coordinatorId, event)
+        if recipient is not None:
+            send_notification(recipient["email"], title, body, authorization)
+        record_notification(event.coordinatorId, event.eventId, "event.safety_review", title, body, authorization)
 
     def _notify_safety_decision(self, event: Event, review: EventSafetyReview, authorization: str | None) -> None:
         """AC9: the assigned coordinator and the organiser, by email and in-app. Best effort."""
@@ -2214,8 +2349,22 @@ class EventService(BaseService):
         if event.status == SAFETY_REVIEW:
             return {"kind": "safety", "message": "The Safety Officer has not reviewed it yet."}
         latest = next(iter(self.safety_dao.list_by_event(event.eventId)), None)
-        if latest is None:
-            message = "It has not been submitted for a safety review yet. Submit it once the venue and equipment are confirmed."
+        handoff = self.handoff_dao.get(event.eventId)
+        if handoff is not None and handoff.venueSentAt:
+            message = (
+                "Venue Staff have sent the venue arrangements for the safety review. Waiting on technical support "
+                "to send the technical arrangements."
+            )
+        elif handoff is not None and handoff.technicalSentAt:
+            message = (
+                "Technical support have sent the technical arrangements for the safety review. Waiting on Venue "
+                "Staff to send the venue arrangements."
+            )
+        elif latest is None:
+            message = (
+                "It has not been sent for a safety review yet. Venue Staff and technical support send their "
+                "arrangements once they are confirmed."
+            )
         elif latest.status == "rejected":
             message = f"The safety review was rejected: {latest.decisionNote} Revise the arrangements and submit it again."
         elif latest.status == "changes_requested":

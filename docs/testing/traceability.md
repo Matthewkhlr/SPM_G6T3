@@ -363,6 +363,7 @@
 | SPM-106 | Terminal events cannot raise a CR | TC-SPM106-AC09 | `e2e/spm106.spec.js` | Automated |
 | SPM-106 | Confirmed details stay confirmed while pending | TC-SPM106-AC10 | `e2e/spm106.spec.js` | Automated |
 | SPM-120 | Review only after venue and technical are confirmed | TC-SPM120-AC01 | `e2e/spm120.spec.js` | Automated |
+| SPM-120 | Venue Staff and technical support send their confirmed arrangements; the review opens once both are in (Week 7 change 6) | TC-SPM120-AC01 | `e2e/spm120.spec.js`; `services/event-service/tests/unit/test_event_safety_handoff.py` | Automated (API and UI): each part only for its own staff, refused until its arrangements are confirmed, the venue part alone when there is no equipment |
 | SPM-120 | Officer sees attendance, venue, emergency access, accessibility, placement, crowd movement, restrictions | TC-SPM120-AC02 | `e2e/spm120.spec.js` | Automated |
 | SPM-120 | Approve records decision, officer, and time | TC-SPM120-AC03 AC04 | `e2e/spm120.spec.js` | Automated |
 | SPM-120 | Approve, reject, or request changes from the Safety Officer dashboard | TC-SPM120-AC03 | `e2e/spm120.spec.js` | Automated |
