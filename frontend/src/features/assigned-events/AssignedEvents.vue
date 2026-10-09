@@ -47,19 +47,29 @@
 
       <p v-if="!visible.length" class="empty-note">No assigned events match this search.</p>
 
-      <button
-        v-for="event in visible"
-        :key="event.eventId"
-        type="button"
-        class="event-card"
-        @click="open(event.eventId)"
-      >
-        <div class="event-name">{{ event.eventName || 'Untitled event' }}</div>
-        <div class="event-meta">
-          {{ formatRange(event.proposedStartAt, event.proposedEndAt) }}
-          <span class="status-pill">{{ statusLabel(event.status) }}</span>
-        </div>
-      </button>
+      <div v-else class="event-list">
+        <button
+          v-for="event in visible"
+          :key="event.eventId"
+          type="button"
+          class="event-card"
+          @click="open(event.eventId)"
+        >
+          <div class="event-top">
+            <div class="event-name">{{ event.eventName || 'Untitled event' }}</div>
+            <span class="status-pill">{{ statusLabel(event.status) }}</span>
+          </div>
+          <div v-if="event.organisationName" class="event-org">{{ event.organisationName }}</div>
+          <div class="event-when">{{ formatRange(event.proposedStartAt, event.proposedEndAt) }}</div>
+          <div class="event-facts">
+            <span v-if="event.expectedAttendance">{{ event.expectedAttendance }} people</span>
+            <span v-if="event.layoutPreference">{{ event.layoutPreference }}</span>
+            <span v-if="event.preferredLocation">{{ event.preferredLocation }}</span>
+            <span v-if="event.category">{{ event.category }}</span>
+            <span v-if="event.dateNear" class="near-flag">Date is near</span>
+          </div>
+        </button>
+      </div>
     </template>
   </div>
 </template>
@@ -191,7 +201,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.assigned-events { display: flex; flex-direction: column; gap: 12px; max-width: 860px; }
+.assigned-events { display: flex; flex-direction: column; gap: 16px; width: 100%; }
 .empty-note { font-size: 14px; color: var(--muted); margin: 0; }
 .hint { margin: 0; font-size: 13px; color: #ffc66d; }
 .form-error {
@@ -204,21 +214,22 @@ onMounted(load)
 }
 
 .toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1.6fr) minmax(150px, 200px) minmax(150px, 200px) auto;
+  align-items: end;
+  gap: 12px 16px;
 }
 .toolbar label {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
   font-size: 11px;
   letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.search { flex: 1; min-width: 220px; }
+.search { min-width: 0; }
 .toolbar input {
   background: rgba(255, 255, 255, .04);
   border: 1px solid var(--hairline);
@@ -229,6 +240,8 @@ onMounted(load)
   letter-spacing: 0;
   text-transform: none;
   padding: 9px 12px;
+  width: 100%;
+  min-width: 0;
   color-scheme: dark;
 }
 .toolbar input:focus {
@@ -267,7 +280,17 @@ onMounted(load)
 }
 .flag.empty { opacity: .55; }
 
+.event-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
 .event-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 148px;
   text-align: left;
   background: var(--glass);
   border: 1px solid var(--hairline);
@@ -278,9 +301,22 @@ onMounted(load)
   font: inherit;
 }
 .event-card:hover { border-color: rgba(167, 139, 250, .35); background: var(--glass-strong); }
-.event-name { font-size: 16px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
-.event-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.event-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.event-name { font-size: 16px; font-weight: 500; color: var(--text); line-height: 1.35; }
+.event-org { font-size: 13px; color: var(--body); }
+.event-when { font-size: 13px; color: var(--muted); line-height: 1.45; }
+.event-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.event-facts span {
+  font-size: 12px;
+  color: var(--body);
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.near-flag { color: #ffd9a8 !important; border-color: rgba(255, 198, 109, .35) !important; }
 .status-pill {
+  flex-shrink: 0;
   font-size: 11px;
   letter-spacing: .05em;
   text-transform: uppercase;
@@ -288,6 +324,11 @@ onMounted(load)
   background: rgba(124, 77, 255, .18);
   border: 1px solid rgba(167, 139, 250, .3);
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 3px 8px;
+}
+
+@media (max-width: 900px) {
+  .toolbar,
+  .event-list { grid-template-columns: 1fr; }
 }
 </style>

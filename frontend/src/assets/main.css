@@ -52,6 +52,24 @@ a { text-decoration: none; color: inherit; }
 
 ::selection { background: rgba(124, 77, 255, .4); color: var(--text); }
 
+/* Native menus (select lists, date pickers) follow the page colour scheme.
+   Without this, Windows paints a white popup while the option text stays
+   light, so the list looks blank. */
+select,
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"] {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background-color: #1A1030;
+  color: #F3EEFF;
+}
+
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-track { background: var(--void); }
 ::-webkit-scrollbar-thumb { background: rgba(167, 139, 250, .2); border-radius: 999px; }

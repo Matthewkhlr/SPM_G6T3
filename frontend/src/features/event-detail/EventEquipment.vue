@@ -259,7 +259,7 @@ input, textarea, select {
   font-size: 14px;
   padding: 8px 10px;
 }
-select option { color: #1b1230; background: #fff; }
+select option { background: #1A1030; color: #F3EEFF; }
 .actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
 .form-error {
   grid-column: 1 / -1;

@@ -55,6 +55,7 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `GET /events/significant-fields` | signed-in caller |
 | `GET /venues`, `GET /venues/{id}`, `GET /venues/{id}/activity-log` | `coordinator`, `venue`, `techsupport` |
 | `POST /venues`, `PATCH /venues/{id}`, `POST /venues/{id}/retire` | `venue` |
+| `POST /venues/{id}/unavailability` | `venue` (SPM-115). Saves a block and does not read or change the event. If the block overlaps an approved booking, `acknowledgeConflicts` must be true; that booking stays approved |
 | `GET /venues/search` | `coordinator`, `venue` (SPM-61); with `eventId`, each result also carries that event's suitability `verdict` (SPM-62 AC9) |
 | `POST /venues/suitability` | `coordinator`, `venue` |
 | `POST /venues/bookings` | `coordinator` assigned to the event (SPM-63) |
@@ -62,6 +63,7 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `GET /venues/bookings/clashes` | `venue` (SPM-122); read only, lists confirmed bookings whose occupied windows overlap under the venue's current setup and turnaround |
 | `POST /venues/bookings/{id}/withdraw` | `coordinator` assigned to the event (SPM-46), so after a reassignment the new coordinator |
 | `POST /venues/bookings/{id}/cancel` | `coordinator` assigned to the event, or `venue` (SPM-114) |
+| `POST /venues/bookings/{id}/replacement` | `coordinator` assigned to the event (SPM-115). The booking must be `approved` and overlap an unavailability block. The new venue is checked on its own, using the booking's existing time and the event's current details. On success the original booking becomes `cancelled` and stays readable; the event is not changed |
 | `POST /venues/bookings/release` | `coordinator` assigned to the event, or an `organiser` from the event's own client organisation (SPM-114) |
 | `POST /venues/bookings/{id}/approve` or `/reject` | `venue`; approval is refused (409) when a confirmed booking, unavailability, or another request's active tentative hold overlaps the occupied window (SPM-64, SPM-116) |
 | `POST /venues/bookings/{id}/hold` and `/hold/release` | `venue` (SPM-116); a hold needs a pending request and an `expiresAt` in the future and no later than the event's start, and is refused (409) when the venue is already taken for that window; the event's coordinator is told in the app until when |

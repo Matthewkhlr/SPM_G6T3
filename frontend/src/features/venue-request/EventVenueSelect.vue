@@ -44,6 +44,15 @@
               </span>
             </span>
             <button
+              v-if="isAssignedCoordinator && booking.affectedByUnavailability"
+              type="button"
+              class="btn btn-ghost small"
+              data-testid="venue-replacement-open"
+              @click="openReplacement(booking)"
+            >
+              Find a replacement
+            </button>
+            <button
               v-if="isAssignedCoordinator && booking.status === 'pending'"
               type="button"
               class="btn btn-ghost small"
@@ -65,6 +74,37 @@
             </button>
           </li>
         </ul>
+      </div>
+      <div v-if="replacementFor" class="replacement" data-testid="venue-replacement">
+        <p>
+          Search for a replacement for {{ venueNameFor(replacementFor.venueId) }}.
+          This uses that booking's time and this event's current details. The event is not changed.
+        </p>
+        <button
+          type="button"
+          class="btn btn-solid small"
+          data-testid="venue-replacement-search"
+          :disabled="replacementSearching"
+          @click="searchReplacement"
+        >
+          {{ replacementSearching ? 'Searching…' : 'Search for a replacement' }}
+        </button>
+        <ul v-if="replacementResults" class="booking-list">
+          <li v-for="venue in replacementResults" :key="venue.venueId">
+            <span>{{ venue.name }}<template v-if="venue.verdict"> · {{ venue.verdict }}</template></span>
+            <button
+              type="button"
+              class="btn btn-ghost small"
+              :data-testid="`venue-replacement-${venue.venueId}`"
+              :disabled="busyId === replacementFor.bookingId"
+              @click="sendReplacement(venue)"
+            >
+              Request this venue
+            </button>
+          </li>
+          <li v-if="!replacementResults.length" class="empty-note">No other venue is free for this booking's time.</li>
+        </ul>
+        <p v-if="replacementError" class="form-error">{{ replacementError }}</p>
       </div>
       <p v-if="actionError" class="form-error">{{ actionError }}</p>
       <p v-if="notice" class="success-note" data-testid="venue-request-result">{{ notice }}</p>
@@ -166,6 +206,8 @@ import {
   getVenueBookings,
   getVenues,
   requestVenueBooking,
+  requestVenueReplacement,
+  searchVenues,
   withdrawVenueBooking,
 } from '../../api/venueService.js'
 import { session } from '../../store/session.js'
@@ -206,6 +248,10 @@ const requestError = ref('')
 const busyId = ref('')
 const actionError = ref('')
 const notice = ref('')
+const replacementFor = ref(null)
+const replacementResults = ref(null)
+const replacementSearching = ref(false)
+const replacementError = ref('')
 const STATUS_LABELS = {
   pending: 'Pending',
   approved: 'Approved',
@@ -345,6 +391,53 @@ async function requestVenue() {
   }
 }
 
+function openReplacement(booking) {
+  replacementFor.value = booking
+  replacementResults.value = null
+  replacementError.value = ''
+}
+
+async function searchReplacement() {
+  const booking = replacementFor.value
+  if (!booking) return
+  replacementSearching.value = true
+  replacementError.value = ''
+  try {
+    const { data } = await searchVenues({
+      eventId,
+      startsAt: booking.startsAt,
+      endsAt: booking.endsAt,
+      minCapacity: event.value.expectedAttendance || 0,
+      layout: event.value.layoutPreference || undefined,
+    })
+    replacementResults.value = data.filter((venue) => venue.venueId !== booking.venueId)
+  } catch (err) {
+    replacementError.value = err.response?.data?.detail || 'Unable to search for a replacement right now.'
+  } finally {
+    replacementSearching.value = false
+  }
+}
+
+async function sendReplacement(venue) {
+  const booking = replacementFor.value
+  if (!booking) return
+  busyId.value = booking.bookingId
+  replacementError.value = ''
+  notice.value = ''
+  try {
+    await requestVenueReplacement(booking.bookingId, { venueId: venue.venueId })
+    const { data } = await getVenueBookings({ eventId })
+    bookings.value = data
+    notice.value = `Replacement requested for ${venue.name}. The original booking stays on record and no longer holds the venue.`
+    replacementFor.value = null
+    replacementResults.value = null
+  } catch (err) {
+    replacementError.value = err.response?.data?.detail || 'Unable to request this replacement right now.'
+  } finally {
+    busyId.value = ''
+  }
+}
+
 async function withdraw(booking) {
   busyId.value = booking.bookingId
   actionError.value = ''
@@ -417,6 +510,11 @@ onMounted(async () => {
 .arrangement.complete {
   background: rgba(56, 224, 200, .08); border-color: rgba(56, 224, 200, .3);
 }
+.replacement {
+  margin: 0 0 18px; padding: 14px 16px; border-radius: 12px;
+  background: rgba(255, 138, 118, .06); border: 1px solid rgba(255, 138, 118, .25);
+}
+.replacement .booking-list { margin-top: 10px; }
 .arrangement p { margin: 0; font-size: 13px; color: var(--text); line-height: 1.6; }
 .booking-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .hold-tag {

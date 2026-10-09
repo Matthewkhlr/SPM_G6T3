@@ -5,30 +5,36 @@
          "Approve" / "Reject" buttons stay in the accessibility tree alongside the
          dialog's, so a role-based lookup for either matches two elements. -->
     <div :inert="dialogOpen || null" :aria-hidden="dialogOpen ? 'true' : null">
-    <div v-if="!loading && !error" class="queue-filters">
-      <button
-        class="filter-btn"
-        :class="{ active: filter === 'unassigned' }"
-        data-testid="queue-filter-unassigned"
-        @click="toggleFilter('unassigned')"
-      >
-        Unassigned only
-      </button>
-      <button
-        class="filter-btn"
-        :class="{ active: filter === 'mine' }"
-        data-testid="queue-filter-mine"
-        @click="toggleFilter('mine')"
-      >
-        My assignments
-      </button>
-      <button
-        class="filter-btn sort-btn"
-        :class="{ active: sortMode === 'proposedStartAt' }"
-        @click="toggleSort"
-      >
-        {{ sortMode === 'proposedStartAt' ? 'Sorted by event date' : 'Sort by event date' }}
-      </button>
+    <div v-if="!loading && !error" class="queue-toolbar">
+      <label class="search">
+        Search
+        <input v-model="query" type="search" placeholder="Event or organisation" />
+      </label>
+      <div class="queue-filters">
+        <button
+          class="filter-btn"
+          :class="{ active: filter === 'unassigned' }"
+          data-testid="queue-filter-unassigned"
+          @click="toggleFilter('unassigned')"
+        >
+          Unassigned only
+        </button>
+        <button
+          class="filter-btn"
+          :class="{ active: filter === 'mine' }"
+          data-testid="queue-filter-mine"
+          @click="toggleFilter('mine')"
+        >
+          My assignments
+        </button>
+        <button
+          class="filter-btn sort-btn"
+          :class="{ active: sortMode === 'proposedStartAt' }"
+          @click="toggleSort"
+        >
+          {{ sortMode === 'proposedStartAt' ? 'Sorted by event date' : 'Sort by event date' }}
+        </button>
+      </div>
     </div>
 
     <p v-if="loading" class="empty-note">Loading submitted events…</p>
@@ -37,35 +43,35 @@
       {{ emptyMessage }}
     </p>
 
-    <div
-      v-for="event in filteredEvents"
-      :key="event.eventId"
-      class="event-card"
-      :data-testid="`review-queue-${event.eventId}`"
-      :data-assigned="String(!!event.coordinatorId)"
-      role="button"
-      tabindex="0"
-      @click="openDetails(event)"
-      @keydown.enter="openDetails(event)"
-    >
-      <div class="event-head">
-        <div class="event-main">
+    <div v-else class="event-list">
+      <div
+        v-for="event in filteredEvents"
+        :key="event.eventId"
+        class="event-card"
+        :data-testid="`review-queue-${event.eventId}`"
+        :data-assigned="String(!!event.coordinatorId)"
+        role="button"
+        tabindex="0"
+        @click="openDetails(event)"
+        @keydown.enter="openDetails(event)"
+      >
+        <div class="event-top">
           <div class="event-name-row">
             <span class="event-name">{{ event.eventName }}</span>
             <span v-if="event.dateNear" class="near-flag">Date is near</span>
           </div>
-          <div v-if="event.organisationName" class="event-org">{{ event.organisationName }}</div>
-          <div class="event-meta">
-            <span data-testid="queue-datetime">
-              {{ formatLocal(event.proposedStartAt) }} – {{ formatLocal(event.proposedEndAt) }}
-            </span>
-            <span data-testid="queue-attendance">{{ event.expectedAttendance }} attendees</span>
-            <span data-testid="queue-status" class="status-pill">{{ event.status }}</span>
-            <span data-testid="queue-submitted-at">
-              Submitted {{ formatSubmitted(event.submittedAt) }} · waiting {{ waitingFor(event.submittedAt) }}
-            </span>
-          </div>
-          <div class="event-assignee">{{ event.coordinatorId ? 'Assigned' : 'Unassigned' }}</div>
+          <span data-testid="queue-status" class="status-pill">{{ event.status }}</span>
+        </div>
+        <div v-if="event.organisationName" class="event-org">{{ event.organisationName }}</div>
+        <div class="event-when" data-testid="queue-datetime">
+          {{ formatLocal(event.proposedStartAt) }} – {{ formatLocal(event.proposedEndAt) }}
+        </div>
+        <div class="event-wait" data-testid="queue-submitted-at">
+          Submitted {{ formatSubmitted(event.submittedAt) }} · waiting {{ waitingFor(event.submittedAt) }}
+        </div>
+        <div class="event-facts">
+          <span data-testid="queue-attendance">{{ event.expectedAttendance }} attendees</span>
+          <span class="event-assignee">{{ event.coordinatorId ? 'Assigned' : 'Unassigned' }}</span>
         </div>
         <div class="actions">
           <button
@@ -84,8 +90,8 @@
             Reject
           </button>
         </div>
+        <p v-if="rowErrors[event.eventId]" class="row-error">{{ rowErrors[event.eventId] }}</p>
       </div>
-      <p v-if="rowErrors[event.eventId]" class="row-error">{{ rowErrors[event.eventId] }}</p>
     </div>
 
     <!-- Event details popup -->
@@ -101,7 +107,7 @@
 
         <div class="details-body">
           <dl>
-            <div v-for="row in detailRows(selected)" :key="row.label" class="detail-row">
+            <div v-for="row in detailRows(selected)" :key="row.label" class="detail-row" :class="{ wide: row.wide }">
               <dt>{{ row.label }}</dt>
               <dd :class="{ empty: row.empty }">{{ row.value }}</dd>
             </div>
@@ -191,6 +197,7 @@ const dialogOpen = computed(() => Boolean(assigning.value || rejecting.value || 
 
 // 'all' | 'unassigned' | 'mine'
 const filter = ref('all')
+const query = ref('')
 // 'waiting' (default, server-side longest-wait-first) | 'proposedStartAt'
 const sortMode = ref('waiting')
 const myUserId = ref(null)
@@ -246,14 +253,22 @@ function formatSubmitted(value) {
 }
 
 const filteredEvents = computed(() => {
-  if (filter.value === 'unassigned') return events.value.filter((event) => !event.coordinatorId)
-  if (filter.value === 'mine') {
-    return events.value.filter((event) => event.coordinatorId && event.coordinatorId === myUserId.value)
+  let list = events.value
+  if (filter.value === 'unassigned') list = list.filter((event) => !event.coordinatorId)
+  else if (filter.value === 'mine') {
+    list = list.filter((event) => event.coordinatorId && event.coordinatorId === myUserId.value)
   }
-  return events.value
+  const term = query.value.trim().toLowerCase()
+  if (!term) return list
+  return list.filter((event) => {
+    const name = (event.eventName || '').toLowerCase()
+    const organisation = (event.organisationName || '').toLowerCase()
+    return name.includes(term) || organisation.includes(term)
+  })
 })
 
 const emptyMessage = computed(() => {
+  if (query.value.trim()) return 'No requests match this search.'
   if (filter.value === 'unassigned') return 'No unassigned requests match this filter.'
   if (filter.value === 'mine') return 'No requests are currently assigned to you.'
   return 'No requests are awaiting review.'
@@ -269,6 +284,13 @@ async function toggleSort() {
 }
 
 function detailRows(event) {
+  const wideLabels = new Set([
+    'Purpose',
+    'Description',
+    'Venue requirements',
+    'Equipment requirements',
+    'Accessibility needs',
+  ])
   const rows = [
     { label: 'Organisation', value: event.organisationName },
     { label: 'Submitted', value: formatSubmitted(event.submittedAt) },
@@ -285,7 +307,7 @@ function detailRows(event) {
     { label: 'Accessibility needs', value: event.accessibilityNeeds },
     { label: 'Layout preference', value: event.layoutPreference },
     { label: 'Registration', value: event.registrationEnabled ? 'Enabled' : 'Not enabled' },
-  ]
+  ].map((row) => ({ ...row, wide: wideLabels.has(row.label) }))
   if (event.registrationEnabled) {
     rows.push(
       { label: 'Registration opens', value: formatLocal(event.registrationOpensAt) },
@@ -387,9 +409,36 @@ onUnmounted(() => clearInterval(ticker))
 </script>
 
 <style scoped>
-.review-queue { display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
+.review-queue { display: flex; flex-direction: column; gap: 16px; width: 100%; }
 
-.queue-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.queue-toolbar { display: flex; flex-direction: column; gap: 14px; }
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.search input {
+  width: 100%;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 9px 12px;
+  color-scheme: dark;
+}
+.search input:focus {
+  outline: none;
+  border-color: rgba(167, 139, 250, .5);
+}
+.queue-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .filter-btn {
   background: var(--glass);
   border: 1px solid var(--hairline);
@@ -410,7 +459,17 @@ onUnmounted(() => clearInterval(ticker))
 
 .empty-note { font-size: 14px; color: var(--muted); }
 
+.event-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
 .event-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 176px;
   background: var(--glass);
   border: 1px solid var(--hairline);
   backdrop-filter: blur(14px);
@@ -422,13 +481,22 @@ onUnmounted(() => clearInterval(ticker))
 }
 .event-card:focus-visible { outline: none; border-color: rgba(167, 139, 250, .6); box-shadow: 0 0 0 3px rgba(124, 77, 255, .16); }
 .event-card:hover { border-color: rgba(167, 139, 250, .3); background: var(--glass-strong); }
-.event-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.event-main { min-width: 0; }
-.event-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.event-name { font-family: 'Space Grotesk', sans-serif; font-weight: 500; color: var(--text); font-size: 15px; }
-.event-org { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.event-meta { font-size: 12px; margin-top: 6px; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.event-assignee { font-size: 11px; color: var(--muted); margin-top: 6px; text-transform: uppercase; letter-spacing: .06em; }
+.event-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.event-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.event-name { font-family: 'Space Grotesk', sans-serif; font-weight: 500; color: var(--text); font-size: 16px; line-height: 1.35; }
+.event-org { font-size: 13px; color: var(--body); }
+.event-when,
+.event-wait { font-size: 13px; color: var(--muted); line-height: 1.45; }
+.event-facts { display: flex; flex-wrap: wrap; gap: 8px; }
+.event-facts span,
+.event-assignee {
+  font-size: 12px;
+  color: var(--body);
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
 
 .near-flag {
   font-size: 10px;
@@ -441,9 +509,10 @@ onUnmounted(() => clearInterval(ticker))
   padding: 2px 8px;
 }
 
-.actions { display: flex; gap: 10px; flex-shrink: 0; }
+.actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: auto; }
 
 .status-pill {
+  flex-shrink: 0;
   display: inline-block;
   font-size: 11px;
   letter-spacing: .06em;
@@ -508,8 +577,7 @@ onUnmounted(() => clearInterval(ticker))
 
 /* Details popup */
 .details-modal {
-  width: 580px;
-  max-width: calc(100vw - 32px);
+  width: min(880px, calc(100vw - 48px));
   max-height: calc(100vh - 64px);
   display: flex;
   flex-direction: column;
@@ -538,12 +606,21 @@ onUnmounted(() => clearInterval(ticker))
 }
 .detail-row dd { margin: 0; font-size: 14px; color: var(--text); line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
 .detail-row dd.empty { color: var(--muted); font-style: italic; }
-.details-body dl { margin: 0; }
+.details-body dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 28px;
+}
+.detail-row.wide { grid-column: 1 / -1; }
 .details-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hairline); }
 
-@media (max-width: 560px) {
-  .event-head { flex-direction: column; align-items: flex-start; }
-  .detail-row { grid-template-columns: 1fr; }
+@media (max-width: 900px) {
+  .event-list { grid-template-columns: 1fr; }
+  .details-body dl { grid-template-columns: 1fr; }
   .sort-btn { margin-left: 0; }
+}
+@media (max-width: 560px) {
+  .detail-row { grid-template-columns: 1fr; }
 }
 </style>

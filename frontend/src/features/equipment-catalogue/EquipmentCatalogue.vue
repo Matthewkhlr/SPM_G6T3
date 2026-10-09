@@ -277,8 +277,8 @@ onMounted(async () => {
   min-width: 160px;
 }
 .filters select option {
-  color: #1b1230;
-  background: #ffffff;
+  color: #F3EEFF;
+  background: #1A1030;
 }
 .result-count { margin: 0 0 8px auto; font-size: 12px; color: var(--muted); }
 

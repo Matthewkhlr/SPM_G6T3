@@ -133,8 +133,8 @@ input, textarea, select {
   padding: 8px 10px;
 }
 select option {
-  color: #1b1230;
-  background: #ffffff;
+  color: #F3EEFF;
+  background: #1A1030;
 }
 .warning {
   margin: 16px 0 0;

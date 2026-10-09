@@ -33,6 +33,7 @@
     "test:spm112": "npm run test:prepare && playwright test e2e/spm112.spec.js",
     "test:spm122": "npm run test:prepare && playwright test e2e/spm122.spec.js",
     "test:spm116": "npm run test:prepare && playwright test e2e/spm116.spec.js",
+    "test:spm115": "npm run test:prepare && playwright test e2e/spm115.spec.js",
     "test:spm108": "npm run test:prepare && playwright test e2e/spm108.spec.js",
     "test:spm05": "npm run test:prepare && playwright test e2e/spm05.spec.js",
     "test:spm15": "npm run test:prepare && playwright test e2e/spm15.spec.js",

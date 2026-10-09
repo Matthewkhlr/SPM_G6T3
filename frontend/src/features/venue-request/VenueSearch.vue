@@ -179,7 +179,7 @@ function reset() {
   font: inherit; font-size: 13px; color: var(--text); color-scheme: dark;
   background: rgba(255, 255, 255, .03); border: 1px solid var(--hairline); border-radius: 9px; padding: 8px 10px;
 }
-.fields select option { background: var(--deep); color: var(--text); }
+.fields select option { background: #1A1030; color: #F3EEFF; }
 .check input { accent-color: var(--iris); }
 fieldset { border: 0; padding: 0; margin: 0 0 12px; }
 legend { font-size: 13px; color: var(--text); margin-bottom: 6px; }

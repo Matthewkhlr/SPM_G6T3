@@ -316,7 +316,7 @@ Stores maintenance and blocked periods.
 | created_by | VARCHAR(64) | Logical FK → users |
 | created_at | DATETIME | |
 
-The suitability check (SPM-62) reads this table: an overlapping period makes a venue not suitable. There is no router yet for recording a period.
+The suitability check (SPM-62) reads this table: an overlapping period makes a venue not suitable. Venue Staff record a period with `POST /venues/{id}/unavailability` (SPM-115). That save does not read or change the event. When the period overlaps an approved booking's occupied window, the caller must set `acknowledgeConflicts`; the booking stays `approved` until the assigned coordinator requests a replacement. A period that only touches the window does not count. Pending requests do not require that confirmation.
 
 ### venue_bookings
 
@@ -358,6 +358,8 @@ Index: `(venue_id, starts_at, ends_at)`.
 **Booking request rules (SPM-63, `POST /venues/bookings`):** only the coordinator assigned to the event may request a venue, and only while the event is `approved` or `planning`. The suitability rule runs first: any failure refuses the request (409, with the failures), and warnings refuse it unless `acknowledgeWarnings` is true, in which case they are stored in `warnings`. An event may have several live bookings, one pending or approved booking per venue. A second request for a venue that already has a pending or approved booking is refused (409). A withdrawn, rejected, or cancelled row can be requested again. The coordinator who sent a pending request can withdraw it (`withdrawn`), after which it no longer counts in suitability checks. Venue Staff are notified of each request and withdrawal (best effort through notification-service). Requests are listed oldest first.
 
 Approval enforces the conflict rule (SPM-64). Booking requests no longer take setup and teardown times from the caller: the server derives the occupied window from the venue's setup and turnaround times (the Week 7 customer change, which replaced the earlier answer that turnaround need not be considered). The review flow moves a pending booking to `approved` or `rejected`. A `withdrawn`, `rejected`, or `cancelled` row no longer holds the venue, so its period is free again (SPM-64 AC8); SPM-114's `POST /venues/bookings/release` (for event cancellation) and `POST /venues/bookings/{id}/cancel` set `cancelled`.
+
+**Replacement (SPM-115, `POST /venues/bookings/{id}/replacement`):** the coordinator assigned to the event can request another venue when an `approved` booking's occupied window overlaps an unavailability block, and only while the event is `approved` or `planning`. The new venue is checked on its own for suitability, availability, and conflicts. The request uses the original booking's start and end and the event's current details; the event record is not written. If the check fails, the original booking stays `approved`. If it passes, a new `pending` booking is saved and the original becomes `cancelled`, and that original row can still be read. Other bookings for the same event stay as they are. A booking reply includes `affectedByUnavailability` when an approved booking overlaps a block.
 
 ---
 

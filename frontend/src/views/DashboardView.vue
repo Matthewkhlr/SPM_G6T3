@@ -118,23 +118,42 @@ async function logout() {
 </script>
 
 <style scoped>
-.shell { display: flex; min-height: 100vh; }
+.shell {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
 
 .sidebar {
   width: 240px;
   flex-shrink: 0;
+  height: 100%;
+  min-height: 0;
   background: rgba(11, 5, 26, .55);
   border-right: 1px solid var(--hairline);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   color: var(--text);
-  padding: 24px 18px;
+  padding: 24px 18px 18px;
   display: flex;
   flex-direction: column;
   gap: 24px;
+  overflow: hidden;
 }
 
-.nav { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.sidebar :deep(.logo) { flex-shrink: 0; }
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
 .nav-item {
   position: relative;
   padding: 11px 14px;
@@ -161,7 +180,14 @@ async function logout() {
 }
 .nav-item:hover:not(.active) { background: rgba(255, 255, 255, .04); color: var(--text); }
 
-.sidebar-footer { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+.sidebar-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
 .role-label { font-size: 11px; line-height: 1.6; color: var(--muted); }
 .logout-btn {
   background: none;
@@ -181,7 +207,13 @@ async function logout() {
   color: var(--text);
 }
 
-.content { flex: 1; min-width: 0; padding: 38px 40px; }
+.content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 38px 40px;
+}
 .content h2 {
   margin: 0 0 26px;
   font-size: 22px;
@@ -200,7 +232,13 @@ async function logout() {
 
 @media (max-width: 720px) {
   .shell { flex-direction: column; }
-  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--hairline); }
+  .sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 46vh;
+    border-right: none;
+    border-bottom: 1px solid var(--hairline);
+  }
   .content { padding: 28px 22px; }
 }
 </style>

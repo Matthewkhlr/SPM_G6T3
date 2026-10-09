@@ -43,6 +43,22 @@ class TestEventRoutes(ServiceTestCase):
         }
         created = self.client.post("/events", headers=headers, json=body)
         self.assertEqual(created.status_code, 201)
+        # The organiser form sends accessibility options as a list, plus fields the draft form also sends.
+        form_shaped = self.client.post(
+            "/events",
+            headers=headers,
+            json={
+                **body,
+                "eventName": "Form submit",
+                "layoutPreference": "Theatre",
+                "preferredLocation": "",
+                "requiredFacilities": [],
+                "accessibilityNeeds": ["Wheelchair accessible"],
+                "accessibilityNote": "",
+            },
+        )
+        self.assertEqual(form_shaped.status_code, 201, form_shaped.text)
+        self.assertIn("Wheelchair", form_shaped.json()["accessibilityNeeds"])
         event_id = created.json()["eventId"]
 
         self.assertEqual(self.client.get("/events", headers=headers).status_code, 200)
@@ -135,9 +151,14 @@ class TestEventRoutes(ServiceTestCase):
                 "proposedStartAt": "2026-10-06T09:00:00",
                 "proposedEndAt": "2026-10-06T17:00:00",
                 "expectedAttendance": 4,
+                "accessibilityNeeds": ["Wheelchair accessible"],
+                "requiredFacilities": ["Projector"],
+                "preferredLocation": "",
+                "accessibilityNote": "",
             },
         )
-        self.assertEqual(submitted.status_code, 200)
+        self.assertEqual(submitted.status_code, 200, submitted.text)
+        self.assertIn("Wheelchair", submitted.json()["accessibilityNeeds"])
 
         another = self.client.post("/events/drafts", headers=headers, json={"eventName": "Throwaway"})
         discarded = self.client.delete(f"/events/{another.json()['eventId']}", headers=headers)
