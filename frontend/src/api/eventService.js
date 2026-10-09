@@ -136,10 +136,20 @@ export const resolveClarification = (eventId, clarificationId) =>
 
 // Coordinator only — internal notes are never on the shared event read.
 export const getInternalNotes = (eventId) => axiosClient.get(`/events/${eventId}/internal-notes`);
-// SPM-120: safety review. The assigned coordinator submits a planning event once
-// its venue and equipment are confirmed; a 409 names what is still `missing`.
+// SPM-120: safety review. The assigned coordinator can also submit a planning event, with
+// both notes at once, once its venue and equipment are confirmed; a 409 names what is still `missing`.
 export const submitSafetyReview = (eventId, crowdMovement, equipmentPlacement = "") =>
   axiosClient.post(`/events/${eventId}/safety-reviews`, { crowdMovement, equipmentPlacement });
+
+// SPM-120, change 6: Venue Staff send the venue arrangements and technical support the
+// technical ones. The review opens once every part the event needs is in (`review` is then set).
+export const getSafetyHandoff = (eventId) => axiosClient.get(`/events/${eventId}/safety-handoff`);
+
+export const sendVenueArrangements = (eventId, crowdMovement) =>
+  axiosClient.post(`/events/${eventId}/safety-handoff/venue`, { crowdMovement });
+
+export const sendTechnicalArrangements = (eventId, equipmentPlacement) =>
+  axiosClient.post(`/events/${eventId}/safety-handoff/technical`, { equipmentPlacement });
 
 // Safety Officers only: reviews with this status, longest-waiting first.
 export const getSafetyReviewQueue = (status = "pending") =>

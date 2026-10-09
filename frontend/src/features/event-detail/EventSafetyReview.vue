@@ -20,8 +20,9 @@
     <!-- AC1: offered in planning; the server refuses until venue and equipment are confirmed. -->
     <form v-if="submitting" class="submit-form" data-testid="safety-submit-form" @submit.prevent="submit">
       <p class="hint">
-        The Safety Officer sees the confirmed venue and equipment with these notes. The event waits in Safety
-        review until they decide.
+        Venue Staff and technical support usually send their arrangements themselves. Submitting here sends
+        everything at once. The Safety Officer sees the confirmed venue and equipment with these notes, and the
+        event waits in Safety review until they decide.
       </p>
       <label for="safety-crowd">Crowd movement</label>
       <textarea
@@ -194,13 +195,14 @@
     </details>
 
     <p v-if="!reviews.length && !submitting && !loadError" class="empty-note">
-      Not submitted yet. It can be submitted once the venue booking and the equipment are confirmed.
+      Not sent yet. Venue Staff and technical support send their arrangements once they are confirmed, or the
+      coordinator can submit everything at once.
     </p>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   approveSafetyReview,
   getSafetyReviews,
@@ -357,6 +359,10 @@ onMounted(() => {
   load()
   loadNames()
 })
+
+// Venue Staff or technical support can open the review from their own panel
+// (SPM-120, change 6), so read the reviews again whenever the status moves.
+watch(() => props.event.status, load)
 </script>
 
 <style scoped>

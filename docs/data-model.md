@@ -184,7 +184,7 @@ SPM-120: one row per submission for a safety review. A resubmission adds a row, 
 | review_id | VARCHAR(64) PK | |
 | event_id | VARCHAR(64) | FK → events |
 | status | VARCHAR(32) | `pending` \| `approved` \| `rejected` \| `changes_requested` \| `superseded` |
-| submitted_by | VARCHAR(64) | The assigned coordinator |
+| submitted_by | VARCHAR(64) | Whoever sent the last part (Venue Staff or technical support), or the assigned coordinator |
 | submitted_at | DATETIME | |
 | crowd_movement | TEXT | The coordinator's note |
 | equipment_placement | TEXT | The coordinator's note; empty when no equipment is reserved |
@@ -194,7 +194,21 @@ SPM-120: one row per submission for a safety review. A resubmission adds a row, 
 | decision_note | TEXT nullable | Approval note, rejection reason, required changes, or what changed |
 | affected | JSON nullable | Arrangements flagged on a change request: `venue`, `technical` |
 
-Only the assigned coordinator submits, and only a `planning` event that passes the SPM-72 arrangement check. Every live venue booking must be `approved` for the event's own date and time. Every equipment request must be settled, and every equipment line held or recorded as not required. Only role `safety` decides. A significant event change while a review is pending supersedes it. After approval, the same change sends the event back to `planning`, and the approved row stays.
+Venue Staff and technical support send their parts (see `event_safety_handoffs`), or the assigned coordinator submits both at once, and only for a `planning` event that passes the SPM-72 arrangement check. Every live venue booking must be `approved` for the event's own date and time. Every equipment request must be settled, and every equipment line held or recorded as not required. Only role `safety` decides. A significant event change while a review is pending supersedes it. After approval, the same change sends the event back to `planning`, and the approved row stays.
+
+### event_safety_handoffs
+
+SPM-120, Week 7 change 6: the arrangements on their way to a Safety Officer, one row per event for the current round (`0010` migration). When every part the event needs is in, the row becomes an `event_safety_reviews` row and is deleted. A part whose arrangements changed since it was sent is cleared. A significant change to the event, or the coordinator submitting both parts at once, deletes the row.
+
+| Column | Type | Notes |
+|---|---|---|
+| event_id | VARCHAR(64) PK | FK → events |
+| crowd_movement | TEXT nullable | Venue Staff's note |
+| venue_sent_by | VARCHAR(64) nullable | Venue Staff user; null until the venue part is sent |
+| venue_sent_at | DATETIME nullable | |
+| equipment_placement | TEXT nullable | Technical support's note |
+| technical_sent_by | VARCHAR(64) nullable | Technical support user; null until sent, and never needed when the event has no equipment |
+| technical_sent_at | DATETIME nullable | |
 
 ### event_change_requests
 

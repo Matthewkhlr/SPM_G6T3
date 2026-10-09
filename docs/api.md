@@ -35,6 +35,9 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `GET /events/{id}/clarifications` | `organiser` of that event's organisation, `coordinator`, `venue`, `techsupport` (SPM-68) |
 | `POST /events/{id}/clarifications`, `POST /events/{id}/clarifications/{cid}/resolve` | `coordinator` assigned to the event (SPM-68) |
 | `POST /events/{id}/clarifications/{cid}/reply` | `organiser` of that event's organisation, or the assigned `coordinator` |
+| `POST /events/{id}/safety-handoff/venue` | `venue` (SPM-120, change 6); only from `planning` |
+| `POST /events/{id}/safety-handoff/technical` | `techsupport` (SPM-120, change 6); only from `planning` |
+| `GET /events/{id}/safety-handoff` | `organiser` of that event's organisation, `coordinator`, `venue`, `techsupport`, `safety` |
 | `POST /events/{id}/safety-reviews` | `coordinator` assigned to the event (SPM-120); only from `planning` |
 | `GET /events/safety-reviews` | `safety` |
 | `GET /events/{id}/safety-reviews` | `organiser` of that event's organisation, `coordinator`, `venue`, `techsupport`, `safety` |
@@ -163,7 +166,16 @@ Each changed setting is written to `GET /events/{id}/activity-log` as a `kind: "
 
 A Safety Officer (role `safety`; demo account `safety@connectsphere.com` / `safety123`) reviews an event once its venue and technical arrangements are confirmed. While a review is pending, the event's status is `safety review`.
 
-`POST /events/{id}/safety-reviews` with `{"crowdMovement": "…", "equipmentPlacement": "…"}`: the assigned coordinator submits a `planning` event (201).
+Week 7 change 6: the staff who confirmed each arrangement send it to the Safety Officer. The review opens once every part the event needs is in:
+
+- `POST /events/{id}/safety-handoff/venue` with `{"crowdMovement": "…"}`: Venue Staff send the venue arrangements. Refused (409, `missing: ["venue"]`) until every requested venue is `approved` for the event's own date and time.
+- `POST /events/{id}/safety-handoff/technical` with `{"equipmentPlacement": "…"}`: technical support send the technical arrangements. Refused (409, `missing: ["equipment"]`) until every equipment line is reserved or recorded as not required, and 409 when the event has no equipment at all.
+- Both return the hand-off: `venue` and `technical` (`sentBy`, `sentAt`, `note`, or null), `technicalNeeded` (false when the event has no equipment, so the venue part alone is enough), and `review`, which is set when this part opened the review.
+- **Opening:** the last part needed opens the review, after checking all the arrangements again. If the other part's arrangements changed since it was sent, that part is cleared and must be sent again. The coordinator is told the review has started.
+- **Resending:** sending a part again replaces its note. A significant change to the event clears both parts.
+- `GET /events/{id}/safety-handoff` shows what has been sent this round.
+
+`POST /events/{id}/safety-reviews` with `{"crowdMovement": "…", "equipmentPlacement": "…"}`: the assigned coordinator can also submit a `planning` event with both notes at once (201), for example after revising rejected arrangements (AC9). This replaces any part already sent.
 
 - **When it's allowed:** once the venue and equipment pass the same check as confirming (see SPM-72 below). Every requested venue is `approved` for the event's own date and time. Every equipment request is reserved, complete, or accepted short. Every equipment line on the event is held or recorded as not required. An event needing no equipment has nothing technical to wait for.
 - **When it's refused:** until then it returns 409 with `{"message": …, "missing": ["venue", "equipment"], "gaps": [{"kind": "venue", "message": …}]}`. If venue-service or equipment-service can't be reached, it returns 503 and nothing is submitted.
@@ -172,7 +184,7 @@ A Safety Officer (role `safety`; demo account `safety@connectsphere.com` / `safe
   - each booked venue with its capacity in the event's layout (its largest layout when it doesn't offer that one), layouts, accessibility features, emergency access, known restrictions and opening hours;
   - the event's accessibility requirements;
   - the equipment lines;
-  - the equipment placement (required when equipment is reserved);
+  - the equipment placement (required when the event has any equipment);
   - crowd movement.
 - **Flags:** a booking or reservation already flagged for re-checking still counts as confirmed, because nothing can clear the flag until SPM-86. The flag is shown in the package instead.
 - **Who's told:** every Safety Officer is notified.
@@ -204,7 +216,7 @@ The assigned coordinator confirms an event after the Safety Officer approves it.
   "missing": [
     {"kind": "venue", "message": "The booking at Marina Hall A (01 Dec 2026 09:00 to 01 Dec 2026 12:00) is not for the event's date and time. Cancel it and request the venue for the event's time."},
     {"kind": "equipment", "equipmentId": "eq1", "message": "1 × Projector is neither reserved nor recorded as not required."},
-    {"kind": "safety", "message": "It has not been submitted for a safety review yet. Submit it once the venue and equipment are confirmed."}
+    {"kind": "safety", "message": "It has not been sent for a safety review yet. Venue Staff and technical support send their arrangements once they are confirmed."}
   ]
 }
 ```

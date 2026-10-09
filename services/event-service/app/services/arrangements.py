@@ -33,6 +33,17 @@ def requested_lines(requests: list) -> list:
     ]
 
 
+def technical_needed(lines: list, requests: list, reservations: list) -> bool:
+    """SPM-120, change 6: the event has equipment, so technical support send
+    the technical arrangements, with where the equipment goes, to the Safety
+    Officer. Without any, the venue arrangements alone are enough."""
+    return (
+        bool(requested_lines(requests))
+        or any(row.get("status") in HOLDING_RESERVATIONS for row in reservations)
+        or any(not line.get("notRequired") for line in lines)
+    )
+
+
 def equipment_status(requests: list, reservations: list) -> str:
     """`ready`, `needs attention`, or `outstanding` for an event's equipment (SPM-5)."""
     real = [row for row in requests if row.get("status") != "rejected" and row.get("reviewNote") != CATALOGUE_NOTE]

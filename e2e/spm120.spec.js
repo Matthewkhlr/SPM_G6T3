@@ -4,10 +4,12 @@ import { account } from './support/test-data.js'
 import { eventApi } from './support/event.js'
 import { notificationApi } from './support/registration.js'
 import { THEATRE_EVENT, approvedEvent, requestVenue } from './support/venue-request.js'
-import { distantPeriod } from './support/confirmation.js'
+import { distantPeriod, events } from './support/confirmation.js'
+import { equipmentApi } from './support/equipment.js'
 import { venueRequest } from './support/venue.js'
 
 const CROWD = 'Guests enter by the lift lobby and leave by the promenade doors; aisles stay 2 m wide.'
+const PLACEMENT = 'Projector on the lectern; cables taped along the stage edge.'
 
 // A planning event of its own (Theatre, 50 people) so no seeded event changes.
 // It is held on a distant day, so its venue booking can be for the event's own time.
@@ -64,6 +66,85 @@ test.describe('SPM-120 Safety review after venue and technical arrangements are 
     expect(submitted.body.status).toBe('pending')
     const stored = await eventApi('GET', `/${event.eventId}`, 'EC-01')
     expect(stored.body.status).toBe('safety review')
+  })
+
+  test('TC-SPM120-AC01 Venue Staff and technical support send their confirmed arrangements, and the review opens once both are in', async () => {
+    const event = await planningEvent('handoff')
+    const sendVenue = (accountId) =>
+      events('POST', `/${event.eventId}/safety-handoff/venue`, accountId, { crowdMovement: CROWD })
+    const sendTechnical = (accountId) =>
+      events('POST', `/${event.eventId}/safety-handoff/technical`, accountId, { equipmentPlacement: PLACEMENT })
+
+    // Each part is sent by its own staff only.
+    for (const accountId of ['EC-01', 'TS-01', 'SO-01']) {
+      expect((await sendVenue(accountId)).status, accountId).toBe(403)
+    }
+    for (const accountId of ['EC-01', 'VS-01', 'SO-01']) {
+      expect((await sendTechnical(accountId)).status, accountId).toBe(403)
+    }
+    const early = await sendVenue('VS-01')
+    expect(early.status).toBe(409)
+    expect(early.body.detail.missing).toEqual(['venue'])
+
+    await confirmVenue(event)
+    const requested = await equipmentApi('POST', '/equipment/requests', 'EC-01', {
+      eventId: event.eventId,
+      equipmentId: 'eq1',
+      quantity: 1,
+      technicalRequirements: 'AUTO-SPM120 HDMI to the lectern',
+      startsAt: event.period.startsAt,
+      endsAt: event.period.endsAt,
+    })
+    expect(requested.status, JSON.stringify(requested.body)).toBe(201)
+    const unreserved = await sendTechnical('TS-01')
+    expect(unreserved.status).toBe(409)
+    expect(unreserved.body.detail.missing).toEqual(['equipment'])
+    const reviewed = await equipmentApi('POST', `/equipment/requests/${requested.body.requestId}/review`, 'TS-01', {
+      approve: true,
+      reviewNote: 'AUTO-SPM120',
+    })
+    expect(reviewed.status, JSON.stringify(reviewed.body)).toBe(200)
+    const reserved = await equipmentApi('POST', `/equipment/requests/${requested.body.requestId}/reserve`, 'TS-01')
+    expect(reserved.status, JSON.stringify(reserved.body)).toBe(201)
+
+    const venueSent = await sendVenue('VS-01')
+    expect(venueSent.status, JSON.stringify(venueSent.body)).toBe(200)
+    expect(venueSent.body).toMatchObject({ technicalNeeded: true, technical: null, review: null })
+    expect(venueSent.body.venue.sentBy).toBe('u3')
+    expect((await events('GET', `/${event.eventId}`, 'EC-01')).body.status).toBe('planning')
+
+    const technicalSent = await sendTechnical('TS-01')
+    expect(technicalSent.status, JSON.stringify(technicalSent.body)).toBe(200)
+    expect(technicalSent.body.review).toMatchObject({ status: 'pending', submittedBy: 'u4' })
+    expect(technicalSent.body.review.package).toMatchObject({ crowdMovement: CROWD, equipmentPlacement: PLACEMENT })
+    expect((await events('GET', `/${event.eventId}`, 'EC-01')).body.status).toBe('safety review')
+    const queue = await events('GET', '/safety-reviews', 'SO-01')
+    expect(queue.body.map((row) => row.eventId)).toContain(event.eventId)
+    const inbox = await notificationApi('GET', '/notifications', 'EC-01')
+    expect(JSON.stringify(inbox.body)).toContain(`${event.eventName} is with the Safety Officer`)
+  })
+
+  test('TC-SPM120-AC01 Venue Staff send the venue arrangements from the event page, which starts the review when there is no equipment', async ({
+    page,
+  }) => {
+    const event = await planningEvent('handoff-ui')
+    await confirmVenue(event)
+    await login(page, account('VS-01'))
+    await page.goto(`/app/events/${event.eventId}`)
+    const panel = page.getByTestId('safety-handoff')
+    await expect(panel.getByTestId('safety-handoff-technical-status')).toContainText('Not needed')
+    await expect(panel.getByTestId('safety-handoff-venue-status')).toContainText('Waiting for Venue Staff')
+    await panel.getByTestId('safety-handoff-note').fill(CROWD)
+    const sent = page.waitForResponse(
+      (response) => /\/safety-handoff\/venue$/.test(response.url()) && response.request().method() === 'POST',
+    )
+    await panel.getByTestId('safety-handoff-send').click()
+    const response = await sent
+    expect(response.status()).toBe(200)
+    expect((await response.json()).review.status).toBe('pending')
+    await expect(page.getByTestId('safety-pending')).toBeVisible()
+    await expect(page.getByTestId('safety-handoff')).toHaveCount(0)
+    expect((await events('GET', `/${event.eventId}`, 'EC-01')).body.status).toBe('safety review')
   })
 
   test('TC-SPM120-AC02 the Safety Officer sees attendance, venue capacity and layout, emergency access, accessibility, equipment placement, crowd movement, and restrictions', async ({

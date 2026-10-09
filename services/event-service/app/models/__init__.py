@@ -5,5 +5,6 @@ from .event_change_request import EventChangeRequest
 from .event_clarification_reply import EventClarificationReply
 from .event_field_change import EventFieldChange
 from .event_review import EventReview
+from .event_safety_handoff import EventSafetyHandoff
 from .event_safety_review import EventSafetyReview
 from .event_status_history import EventStatusHistory
