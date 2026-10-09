@@ -155,6 +155,23 @@ test.describe('SPM-62 Venue suitability check for an event', () => {
     await expect(page.locator('.verdict-panel h3')).toHaveText('Marina Hall A')
   })
 
+  test('TC-SPM62-AC09 after a search, each venue shows the verdict the check gives when it is picked', async ({
+    page,
+  }) => {
+    // 280 people in v1's Theatre (300) is a tight fit, so v1 is listed with a warning.
+    const tight = await approvedEvent({ layoutPreference: 'Theatre', expectedAttendance: 280 })
+    await login(page, account('EC-01'))
+    await page.goto(`/app/events/${tight.eventId}/venues`)
+    await page.getByTestId('venue-search-submit').click()
+    await expect(page.getByTestId('venue-search-summary')).toBeVisible()
+
+    const listed = page.getByTestId('venue-verdict-v1')
+    await expect(listed).toHaveText(/suitable with warnings/i)
+    await page.getByTestId('venue-select-v1').click()
+    // Both are styled in capitals, so compare the text itself, not how it is drawn.
+    await expect(page.getByTestId('suitability-verdict')).toHaveText((await listed.textContent()).trim())
+  })
+
   test('TC-SPM62-AC09 search, booking, and re-verification use the same suitability rule', async () => {
     const direct = await suitability('e1', 'v1')
     const search = await venueRequest('GET', '/venues/search?eventId=e1', 'EC-01')

@@ -38,6 +38,19 @@ async function confirmedBooking(venueId, period) {
   return approved.body
 }
 
+// SPM-116: Venue Staff hold another event's pending request for `venueId`.
+async function heldRequest(venueId, period, expiresAt) {
+  const sent = await requestVenue(await approvedEvent(THEATRE_EVENT), venueId, period)
+  expect(sent.status, JSON.stringify(sent.body)).toBe(201)
+  const held = await venueRequest('POST', `/venues/bookings/${sent.body.bookingId}/hold`, 'VS-01', { expiresAt })
+  expect(held.status, JSON.stringify(held.body)).toBe(200)
+  return { booking: held.body }
+}
+
+function releaseHold(booking) {
+  return venueRequest('POST', `/venues/bookings/${booking.bookingId}/hold/release`, 'VS-01')
+}
+
 function freshEvent() {
   const period = freshPeriod()
   return approvedEvent({ ...THEATRE_EVENT, proposedStartAt: period.startsAt, proposedEndAt: period.endsAt })
@@ -100,15 +113,34 @@ test.describe('SPM-61 Search and filter venues against event requirements', () =
     expect(ids(touching)).toContain('v1')
   })
 
-  test('TC-SPM61-AC03 an unavailability period or active tentative hold excludes the venue', async () => {
+  test('TC-SPM61-AC03 an unavailability period excludes the venue', async () => {
     test.skip(
       true,
-      'Recording unavailability is SPM-9 and tentative holds are SPM-116, neither built yet. The unavailability rule is unit-tested in test_venue_search.py.',
+      'Recording unavailability is SPM-9, not built yet. The unavailability rule is unit-tested in test_venue_search.py.',
     )
   })
 
+  test('TC-SPM61-AC03 an active tentative hold excludes the venue, including its setup and turnaround', async () => {
+    const period = freshPeriod()
+    const { booking } = await heldRequest('v1', period, shift(period.startsAt, -24 * 60))
+    try {
+      expect(ids(await search({ startsAt: period.startsAt, endsAt: period.endsAt }))).not.toContain('v1')
+      // 30 minutes after it ends: this search's setup runs into the held turnaround.
+      expect(ids(await search({ startsAt: shift(period.endsAt, 30), endsAt: shift(period.endsAt, 150) }))).not.toContain('v1')
+    } finally {
+      await releaseHold(booking)
+    }
+  })
+
   test('TC-SPM61-AC04 an expired tentative hold does not exclude the venue', async () => {
-    test.skip(true, 'Tentative holds are SPM-116, not built yet; remove this skip when it ships.')
+    test.setTimeout(180_000)
+    const period = freshPeriod()
+    await heldRequest('v1', period, new Date(Date.now() + 65 * 1000).toISOString())
+    expect(ids(await search({ startsAt: period.startsAt, endsAt: period.endsAt }))).not.toContain('v1')
+
+    await new Promise((done) => setTimeout(done, 70 * 1000))
+
+    expect(ids(await search({ startsAt: period.startsAt, endsAt: period.endsAt }))).toContain('v1')
   })
 
   test('TC-SPM61-AC05 an unsupported layout or too little capacity in that layout excludes the venue', async () => {

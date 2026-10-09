@@ -113,6 +113,8 @@
           </template>
         </section>
 
+        <VenueHolds v-if="canWrite && selected.isActive" :venue-id="selected.venueId" />
+
         <div v-if="confirmingRetire" class="retire-warning">
           <p>Retire "{{ selected.name || 'this venue' }}"? It will be hidden from the catalogue's default list (Venue Staff can
             still find it with "Show retired venues"), and its booking history is kept.</p>
@@ -149,6 +151,7 @@ import { getBookingClashes, getVenue, getVenues, retireVenue } from '../../api/v
 import { session } from '../../store/session.js'
 import VenueForm from './VenueForm.vue'
 import VenueActivityLog from './VenueActivityLog.vue'
+import VenueHolds from './VenueHolds.vue'
 
 const venues = ref([])
 const selected = ref(null)

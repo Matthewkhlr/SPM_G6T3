@@ -52,7 +52,7 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `GET /events/significant-fields` | signed-in caller |
 | `GET /venues`, `GET /venues/{id}`, `GET /venues/{id}/activity-log` | `coordinator`, `venue`, `techsupport` |
 | `POST /venues`, `PATCH /venues/{id}`, `POST /venues/{id}/retire` | `venue` |
-| `GET /venues/search` | `coordinator`, `venue` (SPM-61) |
+| `GET /venues/search` | `coordinator`, `venue` (SPM-61); with `eventId`, each result also carries that event's suitability `verdict` (SPM-62 AC9) |
 | `POST /venues/suitability` | `coordinator`, `venue` |
 | `POST /venues/bookings` | `coordinator` assigned to the event (SPM-63) |
 | `GET /venues/bookings`, `GET /venues/bookings/{id}` | `coordinator`, `venue` |
@@ -60,7 +60,8 @@ Role gates (enforced by forwarding the token to `GET /users/me`):
 | `POST /venues/bookings/{id}/withdraw` | `coordinator` assigned to the event (SPM-46), so after a reassignment the new coordinator |
 | `POST /venues/bookings/{id}/cancel` | `coordinator` assigned to the event, or `venue` (SPM-114) |
 | `POST /venues/bookings/release` | `coordinator` assigned to the event, or an `organiser` from the event's own client organisation (SPM-114) |
-| `POST /venues/bookings/{id}/approve` or `/reject` | `venue`; approval is refused (409) when a confirmed booking or unavailability overlaps the occupied window (SPM-64) |
+| `POST /venues/bookings/{id}/approve` or `/reject` | `venue`; approval is refused (409) when a confirmed booking, unavailability, or another request's active tentative hold overlaps the occupied window (SPM-64, SPM-116) |
+| `POST /venues/bookings/{id}/hold` and `/hold/release` | `venue` (SPM-116); a hold needs a pending request and an `expiresAt` in the future and no later than the event's start, and is refused (409) when the venue is already taken for that window; the event's coordinator is told in the app until when |
 | `POST /venues/bookings/reverification` | `coordinator`, `safety` (event-service calls it on a confirmed significant edit, or when a Safety Officer requests changes) |
 | `POST /equipment/requests` | `coordinator` assigned to the event (SPM-46) |
 | `PATCH /equipment/requests/{id}/details` | `coordinator` assigned to the event (SPM-46), and only while the request is still pending |

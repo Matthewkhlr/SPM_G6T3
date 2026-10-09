@@ -16,6 +16,7 @@ from app.schemas.venue import (
     BookingClashOut,
     ClashingBooking,
     EventFacts,
+    HoldOut,
     SuitabilityOut,
     SuitabilityRequest,
     VenueActivityLogOut,
@@ -89,6 +90,22 @@ def _occupied_window(row: VenueBooking) -> tuple[datetime, datetime]:
     return occupancy.occupied_window(row.startsAt, row.endsAt, row.venue.setupMinutes, row.venue.turnaroundMinutes)
 
 
+def _hold_out(row: VenueBooking) -> HoldOut | None:
+    """SPM-116: the request's hold as it stands right now."""
+    state = occupancy.hold_state(row, datetime.utcnow())
+    if state is None:
+        return None
+    return HoldOut(expiresAt=row.holdExpiresAt, placedBy=row.holdPlacedBy, placedAt=row.holdPlacedAt, state=state)
+
+
+def _end_hold(row: VenueBooking, reason: str) -> None:
+    """SPM-116: a request's active hold ends with the request (AC6 for a
+    rejection). An expired hold is left as expired."""
+    now = datetime.utcnow()
+    if occupancy.hold_state(row, now) == "active":
+        row.holdEndedAt, row.holdEndReason = now, reason
+
+
 def _booking_to_out(row: VenueBooking) -> VenueBookingOut:
     setup_from, turnaround_until = _occupied_window(row)
     return VenueBookingOut(
@@ -112,6 +129,7 @@ def _booking_to_out(row: VenueBooking) -> VenueBookingOut:
         venueName=row.venue.name if row.venue else None,
         needsReverification=bool(row.needsReverification),
         reverificationNote=row.reverificationNote,
+        hold=_hold_out(row),
     )
 
 
@@ -129,23 +147,34 @@ def _clashing(row: VenueBooking, window: tuple[datetime, datetime]) -> ClashingB
     )
 
 
-def _approval_blocked(venue: VenueInfo, held: occupancy.Commitments) -> str:
-    """SPM-64 AC3, AC4 and AC7: why an approval was refused, naming the clash."""
-    if held.confirmed:
-        booking = held.confirmed[0]
-        when = suitability._span(
-            *occupancy.occupied_window(booking.startsAt, booking.endsAt, venue.setupMinutes, venue.turnaroundMinutes)
-        )
-        return (
-            f"{venue.name} is already confirmed for {suitability._event_label(booking)} at an overlapping time "
-            f"({when}, including setup and turnaround), so this request cannot be approved."
-        )
+def _taken_by(venue: VenueInfo, held: occupancy.Commitments) -> str:
+    """What already holds the venue, in plain words, naming the clash."""
+    for kind in ("confirmed", "held"):
+        bookings = getattr(held, kind)
+        if bookings:
+            booking = bookings[0]
+            when = suitability._span(
+                *occupancy.occupied_window(
+                    booking.startsAt, booking.endsAt, venue.setupMinutes, venue.turnaroundMinutes
+                )
+            )
+            what = (
+                "already confirmed for"
+                if kind == "confirmed"
+                else f"on a tentative hold until {suitability._moment(booking.holdExpiresAt)} for"
+            )
+            return (
+                f"{venue.name} is {what} {suitability._event_label(booking)} at an overlapping time "
+                f"({when}, including setup and turnaround)"
+            )
     period = held.unavailability[0]
     why = f" ({period.reason})" if period.reason else ""
-    return (
-        f"{venue.name} is unavailable from {suitability._span(period.startsAt, period.endsAt)}{why}, "
-        "so this request cannot be approved."
-    )
+    return f"{venue.name} is unavailable from {suitability._span(period.startsAt, period.endsAt)}{why}"
+
+
+def _approval_blocked(venue: VenueInfo, held: occupancy.Commitments) -> str:
+    """SPM-64 AC3, AC4 and AC7, SPM-116 AC2: why an approval was refused, naming the clash."""
+    return f"{_taken_by(venue, held)}, so this request cannot be approved."
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -350,20 +379,33 @@ class VenueService(BaseService):
         ends_at: datetime,
         exclude_event_id: str | None = None,
         lock: bool = False,
+        exclude_booking_id: str | None = None,
     ) -> occupancy.Commitments:
         """SPM-64 AC1: the one rule for what already holds `venue` while an event
         from `starts_at` to `ends_at` would occupy it, setup and turnaround
-        included. Search, suitability and booking approval all use it."""
+        included. Search, suitability and booking approval all use it.
+        `exclude_booking_id` leaves out the request being approved or held, so
+        its own hold never stands in its way (SPM-116)."""
         window = occupancy.occupied_window(starts_at, ends_at, venue.setupMinutes, venue.turnaroundMinutes)
         reach = occupancy.reach(venue.setupMinutes, venue.turnaroundMinutes)
-        nearby = self.booking_dao.find_event_times_overlapping(
-            venue.venueId, starts_at - reach, ends_at + reach, exclude_event_id, lock
-        )
+        nearby = [
+            booking
+            for booking in self.booking_dao.find_event_times_overlapping(
+                venue.venueId, starts_at - reach, ends_at + reach, exclude_event_id, lock
+            )
+            if booking.bookingId != exclude_booking_id
+        ]
+        now = datetime.utcnow()
+        waiting = [booking for booking in nearby if booking.status == "pending"]
+        held = [booking for booking in waiting if occupancy.hold_state(booking, now) == "active"]
         return occupancy.Commitments(
             confirmed=[booking for booking in nearby if booking.status == "approved"],
-            pending=[booking for booking in nearby if booking.status == "pending"],
+            # SPM-61 AC9 and SPM-62 AC7: a pending request that is not an active hold only warns.
+            pending=[booking for booking in waiting if booking not in held],
             # AC4: an unavailability period conflicts when it overlaps the occupied window.
             unavailability=self.unavailability_dao.find_overlapping(venue.venueId, *window),
+            # SPM-116 AC2 to AC4: an active hold reserves the venue; an expired one does not.
+            held=held,
         )
 
     def booking_clashes(self, venue_id: str | None = None) -> list[BookingClashOut]:
@@ -403,28 +445,31 @@ class VenueService(BaseService):
         requests and re-verification all get the same verdict (AC9)."""
         venue = self.get_venue(request.venueId)
         needs = suitability.needs_for(request, event)
-        bookings, unavailability = [], []
+        bookings, unavailability, holds = [], [], []
         period = suitability.event_period(needs)
         if period:
             held = self.commitments(venue, *period, exclude_event_id=request.eventId)
-            bookings, unavailability = held.confirmed + held.pending, held.unavailability
-        verdict, reasons = suitability.assess(venue, needs, bookings, unavailability)
+            bookings, unavailability, holds = held.confirmed + held.pending, held.unavailability, held.held
+        verdict, reasons = suitability.assess(venue, needs, bookings, unavailability, holds)
         return SuitabilityOut(eventId=request.eventId, venueId=venue.venueId, verdict=verdict, reasons=reasons)
 
     def search_venues(
         self,
         starts_at: datetime | None = None,
         ends_at: datetime | None = None,
-        min_capacity: int = 0,
+        min_capacity: int | None = None,
         location: str | None = None,
         layout: str | None = None,
         facilities: list[str] | None = None,
         accessibility: list[str] | None = None,
         exclude_event_id: str | None = None,
+        event: EventFacts | None = None,
     ) -> list[VenueSearchResult]:
         """SPM-61: the shortlist of active venues that fit the requirements and,
         when a period is given, are free for it. Without a period only the
-        venue's own facts are checked."""
+        venue's own facts are checked. SPM-62 AC9: a search made for an event
+        (`exclude_event_id` and `event`) also gives each venue the verdict of
+        the same suitability check a booking request runs."""
         if (starts_at is None) != (ends_at is None):
             raise HTTPException(
                 status_code=422,
@@ -436,10 +481,11 @@ class VenueService(BaseService):
                 status_code=422,
                 detail="The end time must be after the start time.",
             )
+        layout = layout.strip() if layout and layout.strip() else None
         filters = venue_search.SearchFilters(
             starts_at=starts_at,
             ends_at=ends_at,
-            min_capacity=min_capacity,
+            min_capacity=min_capacity or 0,
             location=location,
             layout=layout,
             facilities=facilities or [],
@@ -458,6 +504,23 @@ class VenueService(BaseService):
                 if held.conflicts:
                     continue
                 contested = bool(held.pending)
+            verdict = None
+            if event is not None and exclude_event_id:
+                # Whatever the search leaves out comes from the event, exactly as
+                # when the coordinator checks this venue on its own.
+                verdict = self.check_suitability(
+                    SuitabilityRequest(
+                        eventId=exclude_event_id,
+                        venueId=venue.venueId,
+                        expectedAttendance=min_capacity,
+                        layout=layout,
+                        requiredFacilities=facilities or [],
+                        requiredAccessibility=accessibility or [],
+                        startsAt=starts_at,
+                        endsAt=ends_at,
+                    ),
+                    event,
+                ).verdict
             results.append(
                 VenueSearchResult(
                     venueId=venue.venueId,
@@ -465,12 +528,13 @@ class VenueService(BaseService):
                     name=venue.name,
                     location=venue.location,
                     capacity=venue.capacity,
-                    layout=layout.strip() if layout and layout.strip() else None,
+                    layout=layout,
                     layoutCapacity=capacity,
-                    headroom=capacity - min_capacity,
+                    headroom=capacity - filters.min_capacity,
                     setupMinutes=venue.setupMinutes,
                     turnaroundMinutes=venue.turnaroundMinutes,
                     contested=contested,
+                    verdict=verdict,
                 )
             )
         return sorted(results, key=lambda row: row.name.casefold())
@@ -593,6 +657,7 @@ class VenueService(BaseService):
             raise forbidden("Only the coordinator assigned to this event can withdraw its venue request.")
         if row.status != "pending":
             raise conflict(f"Only a pending request can be withdrawn. This request is already {row.status}.")
+        _end_hold(row, "withdrawn")
         row.status = "withdrawn"
         self.db.commit()
         self.db.refresh(row)
@@ -630,6 +695,7 @@ class VenueService(BaseService):
         """
         rows = self.booking_dao.list_open_for_event(event_id)
         for row in rows:
+            _end_hold(row, "cancelled")
             row.status = "cancelled"
         self.db.commit()
         return [_booking_to_out(row) for row in rows]
@@ -668,6 +734,59 @@ class VenueService(BaseService):
             f"The coordinator has withdrawn their request for {venue} for {event}, {when}. No action is needed.",
         )
 
+    def place_hold(self, booking_id: str, expires_at: datetime, caller: dict) -> VenueBookingOut:
+        """SPM-116 AC1 and AC2: Venue Staff hold a pending request's venue until
+        `expires_at`, which must be in the future and no later than the event's
+        start, while its coordinator finishes the arrangements (Week 7 change 4).
+        The venue must be free for the request's occupied window, so two holds,
+        or a hold and a confirmed booking, never overlap."""
+        row = self._require_booking(booking_id)
+        if row.status != "pending":
+            raise conflict(f"Only a pending booking request can be held. This request is already {row.status}.")
+        now = datetime.utcnow()
+        expires_at = suitability._utc(expires_at)
+        if expires_at <= now:
+            raise HTTPException(status_code=422, detail="The hold must expire at a future date and time.")
+        if expires_at > row.startsAt:
+            raise HTTPException(
+                status_code=422,
+                detail=f"The hold must expire no later than the event's start ({suitability._moment(row.startsAt)}).",
+            )
+        if occupancy.hold_state(row, now) == "active":
+            raise conflict(
+                f"This request is already held until {suitability._moment(row.holdExpiresAt)}. "
+                "Release that hold first to set a new expiry."
+            )
+        venue = self._require_venue(row.venueId)
+        held = self.commitments(venue, row.startsAt, row.endsAt, lock=True, exclude_booking_id=row.bookingId)
+        if held.conflicts:
+            raise conflict(f"{_taken_by(venue, held)}, so this request cannot be held.")
+        row.holdExpiresAt, row.holdPlacedBy, row.holdPlacedAt = expires_at, caller["userId"], now
+        row.holdEndedAt = row.holdEndReason = None
+        self.db.commit()
+        self.db.refresh(row)
+        return _booking_to_out(row)
+
+    def release_hold(self, booking_id: str) -> VenueBookingOut:
+        """SPM-116 AC2: Venue Staff end a hold before it expires; the venue is free again."""
+        row = self._require_booking(booking_id)
+        if occupancy.hold_state(row, datetime.utcnow()) != "active":
+            raise conflict("This request has no active hold to release.")
+        _end_hold(row, "released")
+        self.db.commit()
+        self.db.refresh(row)
+        return _booking_to_out(row)
+
+    def hold_notice(self, booking: VenueBookingOut, event: EventFacts) -> tuple[str, str]:
+        """SPM-116 AC5: the coordinator is told, before it expires, when the hold ends."""
+        name = event.eventName or booking.eventId
+        return (
+            "Venue on hold for your event",
+            f'{booking.venueName or booking.venueId} is on a tentative hold for "{name}" until '
+            f"{suitability._moment(booking.hold.expiresAt)}. If the request is not approved by then, the hold "
+            "expires and the venue becomes available to other requests.",
+        )
+
     def approve_booking(self, booking_id: str, reviewer_id: str, reason: str | None) -> VenueBookingOut:
         """Approval is where a venue becomes committed, so it applies the SPM-64
         rule: refused when a confirmed booking or unavailability overlaps the
@@ -679,13 +798,15 @@ class VenueService(BaseService):
         if row.status != "pending":
             raise conflict(f"Booking is already {row.status}")
         venue = self._require_venue(row.venueId)
-        # The request itself is pending, and pending requests never block, so it needs no exclusion.
-        held = self.commitments(venue, row.startsAt, row.endsAt, lock=True)
+        # SPM-116: the request's own hold never stands in its way.
+        held = self.commitments(venue, row.startsAt, row.endsAt, lock=True, exclude_booking_id=row.bookingId)
         if held.conflicts:
             raise conflict(_approval_blocked(venue, held))
         row.setupStartsAt, row.teardownEndsAt = occupancy.occupied_window(
             row.startsAt, row.endsAt, venue.setupMinutes, venue.turnaroundMinutes
         )
+        # SPM-116: the arrangement it held the venue for is done; the booking now holds it.
+        _end_hold(row, "approved")
         row.status = "approved"
         row.decisionReason = reason
         row.reviewedBy = reviewer_id
@@ -704,6 +825,7 @@ class VenueService(BaseService):
         row = self._require_booking(booking_id)
         if row.status != "pending":
             raise conflict(f"Booking is already {row.status}")
+        _end_hold(row, "rejected")  # SPM-116 AC6
         row.status = "rejected"
         row.decisionReason = reason
         row.reviewedBy = reviewer_id

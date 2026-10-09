@@ -210,6 +210,30 @@ class VenueBookingDecision(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"reason": "Hall A is free that day."}})
 
 
+class HoldRequest(BaseModel):
+    """SPM-116 AC1: Venue Staff hold a pending request's venue until this time (UTC)."""
+
+    expiresAt: datetime = Field(
+        description="When the hold expires: in the future, and no later than the event's start. UTC."
+    )
+
+    model_config = ConfigDict(json_schema_extra={"example": {"expiresAt": "2030-01-04T17:00:00Z"}})
+
+
+class HoldOut(BaseModel):
+    """SPM-116: a tentative hold on a booking request."""
+
+    expiresAt: datetime
+    placedBy: str | None
+    placedAt: datetime | None
+    state: Literal["active", "expired", "released", "approved", "rejected", "withdrawn", "cancelled"] = Field(
+        description=(
+            "`active` while it reserves the venue; `expired` once its expiry has passed, when it reserves nothing "
+            "and is not a confirmed booking; otherwise how it ended."
+        )
+    )
+
+
 class BookingReleaseRequest(BaseModel):
     """SPM-114: event cancellation asks venue-service to free every open booking."""
 
@@ -267,6 +291,7 @@ class VenueBookingOut(BaseModel):
         default=False, description="A significant event change may have invalidated this booking (SPM-71)."
     )
     reverificationNote: str | None = Field(default=None, description="What changed on the event.")
+    hold: HoldOut | None = Field(default=None, description="SPM-116: the tentative hold, if Venue Staff placed one.")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -332,6 +357,14 @@ class VenueSearchResult(BaseModel):
     turnaroundMinutes: int
     contested: bool = Field(
         description="True when another event's pending request overlaps this period. The venue is still shown."
+    )
+    verdict: Literal["suitable", "suitable with warnings", "not suitable"] | None = Field(
+        default=None,
+        description=(
+            "SPM-62 AC9: when the search is made for an event (`eventId`), the verdict of the same suitability "
+            "check a booking request uses, from the search's filters and, for anything left out, the event's own "
+            "requirements. Null for a search without an event."
+        ),
     )
 
 

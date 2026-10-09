@@ -30,6 +30,11 @@ async function pending(period, venueId = 'v1') {
   return { event, booking: sent.body }
 }
 
+// SPM-116: Venue Staff hold a pending request until `expiresAt`.
+function hold(booking, expiresAt) {
+  return venueRequest('POST', `/venues/bookings/${booking.bookingId}/hold`, 'VS-01', { expiresAt })
+}
+
 function approve(booking) {
   return venueRequest('POST', `/venues/bookings/${booking.bookingId}/approve`, 'VS-01', { reason: 'SPM-64 test' })
 }
@@ -81,15 +86,41 @@ test.describe('SPM-64 Prevent double-booking of a venue', () => {
     // services/venue-service/tests/integration/test_double_booking_mysql.py.
   })
 
-  test('TC-SPM64-AC04 a confirmed booking conflicts with unavailability and with an active hold', async () => {
+  test('TC-SPM64-AC04 a confirmed booking conflicts with an overlapping unavailability period', async () => {
     test.skip(
       true,
-      'Recording unavailability is SPM-9 and tentative holds are SPM-116, neither built yet. The unavailability rule is unit-tested in test_venue_double_booking.py.',
+      'Recording unavailability is SPM-9, not built yet. The unavailability rule is unit-tested in test_venue_double_booking.py.',
     )
   })
 
-  test('TC-SPM64-AC05 an expired tentative hold does not conflict', async () => {
-    test.skip(true, 'Tentative holds are SPM-116, not built yet; remove this skip when it ships.')
+  test('TC-SPM64-AC04 a booking cannot be confirmed over an active tentative hold', async () => {
+    const base = freshPeriod()
+    const first = await pending(base)
+    const second = await pending(slot(base, 120, 180)) // starts as the first ends, set up from 11:30
+    const held = await hold(first.booking, shift(base.startsAt, -24 * 60))
+    expect(held.status, JSON.stringify(held.body)).toBe(200)
+
+    const refused = await approve(second.booking)
+
+    expect(refused.status).toBe(409)
+    expect(refused.body.detail).toContain(`Marina Hall A is on a tentative hold until`)
+    expect(refused.body.detail).toContain(`for "${first.event.eventName}"`)
+    await venueRequest('POST', `/venues/bookings/${first.booking.bookingId}/hold/release`, 'VS-01')
+  })
+
+  test('TC-SPM64-AC05 an expired tentative hold does not conflict and is not a confirmed booking', async () => {
+    test.setTimeout(180_000)
+    const base = freshPeriod()
+    const first = await pending(base)
+    const second = await pending(slot(base, 120, 180))
+    expect((await hold(first.booking, new Date(Date.now() + 65 * 1000).toISOString())).status).toBe(200)
+    expect((await approve(second.booking)).status).toBe(409)
+
+    await new Promise((done) => setTimeout(done, 70 * 1000))
+
+    const expired = await venueRequest('GET', `/venues/bookings/${first.booking.bookingId}`, 'VS-01')
+    expect([expired.body.status, expired.body.hold.state]).toEqual(['pending', 'expired'])
+    expect((await approve(second.booking)).status).toBe(200)
   })
 
   test('TC-SPM64-AC06 touching windows are fine, touching event times can still clash', async () => {

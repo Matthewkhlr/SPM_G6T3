@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.venue_unavailability import VenueUnavailability
-from app.schemas.venue import Layout, OperatingHours
+from app.schemas.venue import EventFacts, Layout, OperatingHours, SuitabilityRequest
 from shared.auth.deps import require_authenticated_user
 from tests.unit.support import CALLER, VenueCase, booking_create, venue_create
 from tests.unit.test_venue_route_guards import HEADERS, signed_in_as
@@ -295,6 +295,58 @@ class TestPeriod(SearchCase):
         )
 
 
+class TestSearchGivesTheSuitabilityVerdict(SearchCase):
+    """SPM-62 AC9: a search for an event gives each venue the verdict of the same
+    check a booking request runs, so the two always agree."""
+
+    EVENT = EventFacts(
+        expectedAttendance=95, layoutPreference="Theatre", proposedStartAt=at(10), proposedEndAt=at(12)
+    )
+
+    def setUp(self):
+        super().setUp()
+        self.room = self.add_venue(name="Riverside Room", layouts=[Layout(name="Boardroom", capacity=20)])
+
+    def verdicts(self, **filters):
+        rows = self.search(exclude_event_id="e-mine", event=self.EVENT, **filters)
+        return {row.name: row.verdict for row in rows}
+
+    def direct(self, venue, **request):
+        return self.service.check_suitability(
+            SuitabilityRequest(eventId="e-mine", venueId=venue.venueId, **request), self.EVENT
+        ).verdict
+
+    def test_each_result_carries_the_same_verdict_as_checking_that_venue_directly(self):
+        found = self.verdicts(starts_at=None, ends_at=None)
+
+        # Left out of the search, the event's own 95 people in a Theatre are judged:
+        # a tight fit in the hall (95 of 100), and the room offers no Theatre.
+        self.assertEqual(found, {"Marina Hall A": "suitable with warnings", "Riverside Room": "not suitable"})
+        self.assertEqual(found["Marina Hall A"], self.direct(self.hall))
+        self.assertEqual(found["Riverside Room"], self.direct(self.room))
+
+    def test_another_events_pending_request_gives_the_same_warning(self):
+        self.book(at(10), at(12), status="pending")
+
+        found = self.verdicts(min_capacity=10)
+
+        self.assertEqual(found["Marina Hall A"], "suitable with warnings")
+        self.assertEqual(found["Marina Hall A"], self.direct(self.hall, expectedAttendance=10))
+
+    def test_the_searchs_own_filters_are_what_the_verdict_judges(self):
+        # 38 people: a tight fit in the hall's Classroom (40), though not in its Theatre (100).
+        found = self.verdicts(min_capacity=38, layout=" classroom ")
+        roomy = self.verdicts(min_capacity=38)
+
+        self.assertEqual(found, {"Marina Hall A": "suitable with warnings"})
+        self.assertEqual(found["Marina Hall A"], self.direct(self.hall, expectedAttendance=38, layout="classroom"))
+        self.assertEqual(roomy["Marina Hall A"], "suitable")
+
+    def test_a_search_without_an_event_has_no_verdict(self):
+        self.assertEqual({row.verdict for row in self.search()}, {None})
+        self.assertEqual({row.verdict for row in self.search(exclude_event_id="e-mine")}, {None})
+
+
 class TestSearchRoute(SearchCase):
     def setUp(self):
         super().setUp()
@@ -318,8 +370,10 @@ class TestSearchRoute(SearchCase):
             "&layout=Theatre&facility=PA%20system&facility=Stage&accessibility=Wheelchair%20accessible&eventId=e-mine"
         )
 
-        response = self.get(query=query)
+        with patch("app.routers.venue.fetch_event_facts", return_value=EventFacts(expectedAttendance=60)) as fetch:
+            response = self.get(query=query)
 
+        fetch.assert_called_once_with("e-mine", HEADERS["Authorization"])
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
@@ -336,10 +390,24 @@ class TestSearchRoute(SearchCase):
                     "setupMinutes": 30,
                     "turnaroundMinutes": 60,
                     "contested": False,
+                    "verdict": "suitable",
                 }
             ],
         )
         self.assertEqual(self.get(query="?facility=PA%20system&facility=Loading%20dock").json(), [])
+
+    def test_a_search_without_an_event_does_not_read_one_or_give_a_verdict(self):
+        with patch("app.routers.venue.fetch_event_facts") as fetch:
+            response = self.get()
+
+        fetch.assert_not_called()
+        self.assertEqual([row["verdict"] for row in response.json()], [None])
+
+    def test_an_unknown_event_is_reported(self):
+        with patch("app.routers.venue.fetch_event_facts", side_effect=HTTPException(404, "Event not found")):
+            response = self.get(query="?eventId=nope")
+
+        self.assertEqual((response.status_code, response.json()["detail"]), (404, "Event not found"))
 
     def test_venue_staff_can_search_too(self):
         self.assertEqual(self.get(role="venue").status_code, 200)

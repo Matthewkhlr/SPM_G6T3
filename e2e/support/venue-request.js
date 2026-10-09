@@ -23,10 +23,12 @@ export async function approvedEvent(overrides = {}) {
   return approved.body
 }
 
-// A 10:00 to 12:00 UTC slot on a random day years ahead, so a rerun never
-// overlaps a booking an earlier run left behind.
+// A 10:00 to 12:00 UTC slot on a random day years ahead, so a rerun rarely
+// meets a booking an earlier run left behind. The days span about 80 years:
+// earlier runs leave confirmed bookings on seeded venues such as v1, and over a
+// shorter span a new request often landed on one of those days and was refused.
 export function freshPeriod(hours = 2) {
-  return venuePeriod(300 + Math.floor(Math.random() * 3000), hours)
+  return venuePeriod(300 + Math.floor(Math.random() * 30000), hours)
 }
 
 export function requestVenue(event, venueId, period = freshPeriod(), extras = {}) {

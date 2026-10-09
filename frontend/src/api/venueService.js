@@ -40,3 +40,9 @@ export const getPublicVenue = (eventId) =>
 export const withdrawVenueBooking = (bookingId) => axiosClient.post(`/venues/bookings/${bookingId}/withdraw`);
 
 export const cancelVenueBooking = (bookingId) => axiosClient.post(`/venues/bookings/${bookingId}/cancel`);
+
+// SPM-116: Venue Staff hold a pending request's venue until `expiresAt` (UTC), or release it early.
+export const placeVenueHold = (bookingId, expiresAt) =>
+  axiosClient.post(`/venues/bookings/${bookingId}/hold`, { expiresAt });
+
+export const releaseVenueHold = (bookingId) => axiosClient.post(`/venues/bookings/${bookingId}/hold/release`);

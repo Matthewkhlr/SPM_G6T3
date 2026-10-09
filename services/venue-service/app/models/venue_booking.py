@@ -32,6 +32,13 @@ class VenueBooking(Base):
         "needs_reverification", Boolean, default=False, server_default=false()
     )
     reverificationNote: Mapped[str | None] = mapped_column("reverification_note", Text, nullable=True)
+    # SPM-116: a tentative hold placed by Venue Staff on this pending request.
+    # It reserves the venue until it expires or ends; see app/services/occupancy.py.
+    holdExpiresAt: Mapped[datetime | None] = mapped_column("hold_expires_at", DateTime, nullable=True)
+    holdPlacedBy: Mapped[str | None] = mapped_column("hold_placed_by", String(64), nullable=True)
+    holdPlacedAt: Mapped[datetime | None] = mapped_column("hold_placed_at", DateTime, nullable=True)
+    holdEndedAt: Mapped[datetime | None] = mapped_column("hold_ended_at", DateTime, nullable=True)
+    holdEndReason: Mapped[str | None] = mapped_column("hold_end_reason", String(32), nullable=True)
     decisionReason: Mapped[str | None] = mapped_column("decision_reason", Text, nullable=True)
     reviewedBy: Mapped[str | None] = mapped_column("reviewed_by", String(64), nullable=True)
     reviewedAt: Mapped[datetime | None] = mapped_column("reviewed_at", DateTime, nullable=True)

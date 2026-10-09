@@ -32,6 +32,16 @@
               <strong>{{ venueNameFor(booking.venueId) }}</strong>
               · {{ statusLabel(booking.status) }}
               <template v-if="booking.createdAt"> · sent {{ formatUtc(booking.createdAt) }} UTC</template>
+              <!-- SPM-116: Venue Staff are holding this venue while the arrangements are finished. -->
+              <span
+                v-if="booking.hold && ['active', 'expired'].includes(booking.hold.state)"
+                class="hold-tag"
+                :class="booking.hold.state"
+                :data-testid="`venue-hold-${booking.bookingId}`"
+              >
+                {{ booking.hold.state === 'active' ? 'Held until' : 'Hold expired' }}
+                {{ formatUtc(booking.hold.expiresAt) }} UTC
+              </span>
             </span>
             <button
               v-if="isAssignedCoordinator && booking.status === 'pending'"
@@ -83,6 +93,13 @@
               class="contested"
               :data-testid="`venue-contested-${venue.venueId}`"
             >Contested: another event's request for this time is waiting for Venue Staff</span>
+            <!-- SPM-62 AC9: the same verdict the check below gives when this venue is picked. -->
+            <span
+              v-if="venue.verdict"
+              class="row-verdict"
+              :class="VERDICT_CLASSES[venue.verdict]"
+              :data-testid="`venue-verdict-${venue.venueId}`"
+            >{{ VERDICT_LABELS[venue.verdict] }}</span>
           </div>
           <p v-if="!shownVenues.length" class="empty-note">
             {{ searchResults ? 'No venue fits these requirements.' : 'No venues are currently available.' }}
@@ -255,11 +272,13 @@ function statusLabel(status) {
 // venue can never appear under the venue picked after it.
 let checkToken = 0
 
-const verdictClass = computed(() => ({
+const VERDICT_CLASSES = {
   suitable: 'ok',
   'suitable with warnings': 'warn',
   'not suitable': 'fail',
-})[result.value?.verdict])
+}
+
+const verdictClass = computed(() => VERDICT_CLASSES[result.value?.verdict])
 
 // The team shows every time in UTC until the customer specifies a timezone.
 function formatUtc(iso) {
@@ -400,6 +419,11 @@ onMounted(async () => {
 }
 .arrangement p { margin: 0; font-size: 13px; color: var(--text); line-height: 1.6; }
 .booking-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.hold-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 11px;
+}
+.hold-tag.active { color: #FFC66D; background: rgba(255, 198, 109, .15); }
+.hold-tag.expired { color: var(--muted); background: rgba(255, 255, 255, .06); }
 .booking-list li {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   font-size: 13px; color: var(--text);
@@ -447,6 +471,13 @@ onMounted(async () => {
   display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px;
   color: var(--text); background: rgba(255, 198, 109, .12); border: 1px solid rgba(255, 198, 109, .35);
 }
+.row-verdict {
+  display: inline-block; margin: 6px 0 0 6px; padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+}
+.row-verdict.ok { color: var(--signal); background: rgba(56, 224, 200, .15); }
+.row-verdict.warn { color: #FFC66D; background: rgba(255, 198, 109, .15); }
+.row-verdict.fail { color: #FF8A76; background: rgba(255, 138, 118, .15); }
 
 .verdict-panel {
   background: var(--glass); border: 1px solid var(--hairline);

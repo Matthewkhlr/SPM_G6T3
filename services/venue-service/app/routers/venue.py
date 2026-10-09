@@ -9,11 +9,12 @@ from app.dao.venue_booking_dao import VenueBookingDAO
 from app.dao.venue_dao import VenueDAO
 from app.dao.venue_unavailability_dao import VenueUnavailabilityDAO
 from app.db.session import get_db
-from app.orchestration.clients import fetch_event_facts, notify_venue_staff
+from app.orchestration.clients import fetch_event_facts, notify_coordinator, notify_venue_staff
 from app.schemas.venue import (
     BookingClashOut,
     BookingReleaseRequest,
     BookingReverificationRequest,
+    HoldRequest,
     SuitabilityOut,
     SuitabilityRequest,
     VenueActivityLogOut,
@@ -179,14 +180,18 @@ def get_booking(
         "a venue is left out when the period falls outside its opening hours, or when a confirmed booking or "
         "an unavailability period overlaps the period widened by the venue's setup and turnaround time; "
         "another event's pending request only marks it `contested`. Pass `eventId` to ignore that event's own "
-        "requests. `facility` and `accessibility` can be repeated. Coordinators and venue staff."
+        "requests and to give each venue the `verdict` of the SPM-62 suitability check for that event (SPM-62 "
+        "AC9); anything left out of the search comes from the event. `facility` and `accessibility` can be "
+        "repeated. Coordinators and venue staff."
     ),
-    responses=error_responses(403, 422, 503),
+    responses=error_responses(403, 404, 422, 503),
 )
 def search_venues(
     startsAt: datetime | None = Query(None, description="Start of the period, e.g. `2027-03-03T10:00:00Z`."),
     endsAt: datetime | None = Query(None, description="End of the period. Required when `startsAt` is given."),
-    minCapacity: int = Query(0, ge=0, description="Expected attendance; capacity in the layout must reach it."),
+    minCapacity: int | None = Query(
+        None, ge=0, description="Expected attendance; capacity in the layout must reach it. None means no minimum."
+    ),
     location: str | None = Query(None, description="Part of the venue's location, e.g. `HarbourFront`."),
     layout: str | None = Query(None, description="Required layout, e.g. `Theatre`."),
     facility: list[str] = Query(default=[], description="A required facility. Repeat for more than one."),
@@ -205,6 +210,7 @@ def search_venues(
         facilities=facility,
         accessibility=accessibility,
         exclude_event_id=eventId,
+        event=fetch_event_facts(eventId, authorization) if eventId else None,
     )
 
 
@@ -422,6 +428,50 @@ def cancel_booking(
     # SPM-93 AC5: whoever cancelled is not told about their own action.
     notify_venue_staff(*service.venue_staff_notice(booking, "cancelled"), authorization, skip_user_id=caller["userId"])
     return booking
+
+
+@router.post(
+    "/bookings/{booking_id}/hold",
+    response_model=VenueBookingOut,
+    summary="Place a tentative hold on a pending booking request",
+    description=(
+        "SPM-116. Venue staff only. Reserves the venue for the request's occupied window until `expiresAt`, "
+        "which must be in the future and no later than the event's start. Refused (409) when the request is not "
+        "pending, already has an active hold, or the venue is already taken for that window. The event's "
+        "assigned coordinator is told in the app until when the venue is held. An expired hold reserves nothing."
+    ),
+    responses=error_responses(403, 404, 409, 422, 503),
+)
+def place_hold(
+    body: HoldRequest,
+    booking_id: str = Path(..., description="Booking id returned by create booking."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"venue"})
+    event = fetch_event_facts(service.get_booking(booking_id).eventId, authorization)
+    booking = service.place_hold(booking_id, body.expiresAt, caller)
+    if event.coordinatorId:
+        notify_coordinator(
+            event.coordinatorId, booking.eventId, *service.hold_notice(booking, event), authorization
+        )
+    return booking
+
+
+@router.post(
+    "/bookings/{booking_id}/hold/release",
+    response_model=VenueBookingOut,
+    summary="Release a tentative hold before it expires",
+    description="SPM-116. Venue staff only. The venue is free again for that window. 409 when there is no active hold.",
+    responses=error_responses(403, 404, 409, 503),
+)
+def release_hold(
+    booking_id: str = Path(..., description="Booking id returned by create booking."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    resolve_caller(authorization, settings.user_service_url, allowed_roles={"venue"})
+    return service.release_hold(booking_id)
 
 
 @router.post(
