@@ -103,6 +103,10 @@ pattern — don't add it to `components/shared/`.
   and the venue's details list each pair with both events, their times, and the
   overlap in UTC. The list refreshes after a venue is saved. It only reads; the
   bookings and their events are kept as they are
+- Venue Staff can place a tentative hold on a venue's pending request until a
+  date and time (UTC), or release it early (SPM-116), in the venue's "Tentative
+  holds" section. The coordinator's Choose venues page shows "Held until ..."
+  on that request, or "Hold expired" once the time has passed
 
 **Venue suitability (SPM-62)**
 - `features/venue-request/` opens from "Choose a venue" on an event
@@ -116,13 +120,16 @@ pattern — don't add it to `components/shared/`.
   requirements). Searching narrows the venue list; "Show all venues" restores it
 - Each result shows its capacity in the layout and the spare places, and a
   "Contested" tag when another event's request for that time is waiting
+- After a search, each venue also shows its suitability verdict (SPM-62 AC9),
+  the same one the check gives when that venue is picked
 
 **Venue booking requests (SPM-63)**
 - On the same page, the assigned coordinator sends the request for an event
   approved for planning, with optional notes for Venue Staff. With warnings,
   they must first tick that they have read them
 - While the event has a pending request, the page shows it with a
-  "Withdraw request" button, and no other venue can be requested
+  "Withdraw request" button. The same venue cannot be requested again while
+  that booking is pending or approved; another venue can be (SPM-114)
 - The Venue Staff queue screen, the venue calendar, and the readiness view are
   other stories (SPM-8/SPM-57, SPM-108, SPM-5)
 

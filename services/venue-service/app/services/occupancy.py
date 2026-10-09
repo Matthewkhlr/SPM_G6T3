@@ -10,7 +10,12 @@ can warn about it.
 Search (SPM-61), suitability (SPM-62) and booking approval all call
 `VenueService.commitments`, which applies this rule. Venue blocking (SPM-9),
 rescheduling (SPM-87) and re-verification (SPM-86) are to call it too when they
-are built, and active tentative holds (SPM-116) are to be added to it.
+are built.
+
+SPM-116: an active tentative hold on another pending request reserves the venue
+like a confirmed booking (AC2). A hold stops counting the moment its expiry time
+passes, or when it ends early (AC3, AC4); it never makes the request a
+confirmed booking. Pending requests without an active hold still only warn.
 
 SPM-112 holds every availability and conflict check to this one window, always
 worked out from the venue's current setup and turnaround times, and booking
@@ -37,6 +42,19 @@ def reach(setup_minutes: int, turnaround_minutes: int) -> timedelta:
     return timedelta(minutes=setup_minutes + turnaround_minutes)
 
 
+def hold_state(booking: VenueBooking, now: datetime) -> str | None:
+    """SPM-116: None when the request was never held; "active" while the hold
+    reserves the venue; "expired" once its expiry has passed (AC3, AC4); else how
+    it ended: "released", "approved", "rejected", "withdrawn" or "cancelled"."""
+    if booking.holdExpiresAt is None:
+        return None
+    if booking.holdEndedAt is not None:
+        return booking.holdEndReason
+    if booking.holdExpiresAt <= now:
+        return "expired"
+    return "active"
+
+
 @dataclass
 class Commitments:
     """What already holds a venue during a period."""
@@ -44,8 +62,10 @@ class Commitments:
     confirmed: list[VenueBooking] = field(default_factory=list)
     pending: list[VenueBooking] = field(default_factory=list)
     unavailability: list[VenueUnavailability] = field(default_factory=list)
+    held: list[VenueBooking] = field(default_factory=list)
 
     @property
     def conflicts(self) -> bool:
-        """AC3 and AC4: a confirmed booking or an unavailability period means the venue is taken."""
-        return bool(self.confirmed or self.unavailability)
+        """AC3 and AC4: a confirmed booking or an unavailability period means the
+        venue is taken, and so does an active tentative hold (SPM-116 AC2)."""
+        return bool(self.confirmed or self.unavailability or self.held)

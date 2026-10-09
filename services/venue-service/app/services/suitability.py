@@ -172,10 +172,27 @@ def _event_label(booking: VenueBooking) -> str:
     return f'"{name}"' if name else f"event {booking.eventId}"
 
 
+def _moment(value: datetime) -> str:
+    return f"{value:%d %b %Y}, {_clock(value)} UTC"
+
+
 def _clashes(
-    venue: VenueOut, bookings: list[VenueBooking], unavailability: list[VenueUnavailability]
+    venue: VenueOut,
+    bookings: list[VenueBooking],
+    unavailability: list[VenueUnavailability],
+    holds: list[VenueBooking] = (),
 ) -> list[SuitabilityReason]:
     reasons = []
+    for booking in holds:
+        # SPM-116 AC2: an active tentative hold reserves the venue, so it is a failure.
+        when = _span(*occupied_window(booking.startsAt, booking.endsAt, venue.setupMinutes, venue.turnaroundMinutes))
+        reasons.append(
+            _failure(
+                "hold",
+                f"This venue is on a tentative hold for {_event_label(booking)} until "
+                f"{_moment(booking.holdExpiresAt)}, at an overlapping time ({when}, including setup and turnaround).",
+            )
+        )
     for booking in bookings:
         when = _span(*occupied_window(booking.startsAt, booking.endsAt, venue.setupMinutes, venue.turnaroundMinutes))
         if booking.status == "approved":
@@ -208,10 +225,12 @@ def assess(
     needs: Needs,
     bookings: list[VenueBooking],
     unavailability: list[VenueUnavailability],
+    holds: list[VenueBooking] = (),
 ) -> tuple[str, list[SuitabilityReason]]:
     """`bookings` are the pending or approved bookings of other events that
     overlap the event's setup-to-teardown window; `unavailability` is the
-    unavailability that overlaps it."""
+    unavailability that overlaps it; `holds` are other events' requests under an
+    active tentative hold that overlap it (SPM-116)."""
     reasons = []
     if not venue.isActive:
         reasons.append(_failure("retired", "This venue has been retired and can no longer be booked."))
@@ -228,7 +247,7 @@ def assess(
         reasons.append(problem)
     else:
         reasons += _opening_hours(venue, needs.starts_at, needs.ends_at)
-        reasons += _clashes(venue, bookings, unavailability)
+        reasons += _clashes(venue, bookings, unavailability, holds)
 
     reasons.sort(key=lambda reason: reason.severity != "failure")
     if any(reason.severity == "failure" for reason in reasons):

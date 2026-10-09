@@ -63,3 +63,23 @@ def notify_venue_staff(subject: str, body: str, authorization: str, skip_user_id
     except httpx.HTTPError as exc:
         logger.warning("could not notify Venue Staff: %r", exc)
         return 0
+
+
+def notify_coordinator(user_id: str, event_id: str, title: str, body: str, authorization: str) -> bool:
+    """SPM-116 AC5: put a notification in the coordinator's in-app inbox, through
+    notification-service with the Venue Staff member's own token (staff may
+    notify another user). Best effort: the hold is already saved."""
+    try:
+        response = httpx.post(
+            f"{settings.notification_service_url}/notifications/records",
+            json={"userId": user_id, "eventId": event_id, "type": "venue.hold", "title": title, "body": body},
+            headers={"Authorization": authorization},
+            timeout=5.0,
+        )
+    except httpx.HTTPError as exc:
+        logger.warning("could not notify coordinator %s: %r", user_id, exc)
+        return False
+    if response.status_code != 201:
+        logger.warning("notification to coordinator %s failed: status %s", user_id, response.status_code)
+        return False
+    return True
