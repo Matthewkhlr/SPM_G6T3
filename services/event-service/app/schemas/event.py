@@ -830,7 +830,8 @@ class EventIntake(BaseModel):
     proposedEndAt: datetime | None = None
     expectedAttendance: int | None = Field(default=None, ge=0)
     venueRequirements: str = ""
-    accessibilityNeeds: str = ""
+    # The organiser form sends the ticked options as a list. The event record stores one string.
+    accessibilityNeeds: str | list[str] = ""
     equipmentRequirements: str = ""
     layoutPreference: str | None = None
     registrationEnabled: bool = False
@@ -839,6 +840,9 @@ class EventIntake(BaseModel):
     capacity: int = Field(default=0, ge=0)
 
     def to_create(self) -> EventCreate:
+        needs = self.accessibilityNeeds
+        if isinstance(needs, list):
+            needs = ", ".join(str(item).strip() for item in needs if str(item).strip())
         return EventCreate(
             eventName=self.eventName,
             purpose=self.purpose,
@@ -848,7 +852,7 @@ class EventIntake(BaseModel):
             proposedEndAt=self.proposedEndAt,
             expectedAttendance=self.expectedAttendance if self.expectedAttendance is not None else 1,
             venueRequirements=self.venueRequirements,
-            accessibilityNeeds=self.accessibilityNeeds,
+            accessibilityNeeds=needs or "",
             equipmentRequirements=self.equipmentRequirements,
             layoutPreference=self.layoutPreference,
             registrationEnabled=self.registrationEnabled,

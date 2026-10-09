@@ -33,7 +33,6 @@ from app.schemas.event import (
     EventAssignmentCreate,
     EventAssignmentOut,
     EventCoordinatorOut,
-    EventCreate,
     EventDecision,
     EventIntake,
     EventConfirmOut,
@@ -168,7 +167,9 @@ async def submit_draft(
     if not raw or not raw.strip():
         return service.submit_stored_draft(event_id, organiser["userId"], authorization)
     try:
-        body = EventCreate.model_validate_json(raw)
+        # The organiser form sends accessibility options as a list. EventIntake
+        # accepts that shape and stores one string, the same as a new request.
+        body = EventIntake.model_validate_json(raw).to_create()
     except ValidationError as exc:
         raise RequestValidationError(exc.errors()) from exc
     return service.submit_draft(event_id, body, organiser["userId"], authorization)

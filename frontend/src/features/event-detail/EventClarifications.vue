@@ -299,7 +299,7 @@ select:focus, textarea:focus {
   border-color: rgba(167, 139, 250, .6);
   box-shadow: 0 0 0 3px rgba(124, 77, 255, .16);
 }
-select option { background: #150A30; color: var(--text); }
+select option { background: #1A1030; color: #F3EEFF; }
 
 .raise-form {
   border: 1px solid var(--hairline);

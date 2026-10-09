@@ -242,6 +242,52 @@ class BookingReleaseRequest(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"eventId": "e1"}})
 
 
+class UnavailabilityCreate(BaseModel):
+    """SPM-115: Venue Staff record a block. This does not change any event."""
+
+    startsAt: datetime
+    endsAt: datetime
+    reason: str = Field(min_length=1, max_length=500)
+    acknowledgeConflicts: bool = Field(
+        default=False,
+        description="Required when the block overlaps an approved booking. Those bookings stay approved.",
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "startsAt": "2030-01-07T10:00:00Z",
+                "endsAt": "2030-01-07T12:00:00Z",
+                "reason": "maintenance",
+                "acknowledgeConflicts": True,
+            }
+        }
+    )
+
+
+class UnavailabilityOut(BaseModel):
+    unavailabilityId: str
+    venueId: str
+    startsAt: datetime
+    endsAt: datetime
+    reason: str
+    createdBy: str
+    createdAt: datetime
+
+
+class ReplacementRequest(BaseModel):
+    """SPM-115: request another venue for an approved booking affected by a block.
+
+    The booking's time and the event's details are taken from what is already stored.
+    """
+
+    venueId: str = Field(min_length=1)
+    coordinatorNotes: str = ""
+    acknowledgeWarnings: bool = False
+
+    model_config = ConfigDict(json_schema_extra={"example": {"venueId": "v3"}})
+
+
 class VenueArrangementOut(BaseModel):
     eventId: str
     complete: bool = Field(
@@ -292,6 +338,10 @@ class VenueBookingOut(BaseModel):
     )
     reverificationNote: str | None = Field(default=None, description="What changed on the event.")
     hold: HoldOut | None = Field(default=None, description="SPM-116: the tentative hold, if Venue Staff placed one.")
+    affectedByUnavailability: bool = Field(
+        default=False,
+        description="True when this approved booking's occupied window overlaps a venue unavailability block.",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={

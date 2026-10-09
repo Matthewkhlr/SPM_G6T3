@@ -118,6 +118,11 @@
 | SPM-63 | A second venue while the first is pending | TC-SPM63-AC07 | `e2e/spm63.spec.js` | Automated. SPM-114: a different venue is accepted (201). The same venue is refused (409) while that booking is pending or approved. |
 | SPM-63 | Coordinator can withdraw | TC-SPM63-AC08 | `e2e/spm63.spec.js` | Automated. Withdraw returns withdrawn and the booking leaves the pending queue. |
 | SPM-63 | Arrangement not complete while pending | TC-SPM63-AC09 | `e2e/spm63.spec.js` | Automated. Choose venues shows the arrangement as pending and not complete. The event readiness panel is SPM-5. |
+| SPM-115 | Search for and request a replacement | TC-SPM115-AC01 | `e2e/spm115.spec.js` | Automated (API and browser). Search leaves out the blocked venue. Choose venues can request another venue for the affected booking. |
+| SPM-115 | Replacement checked on its own | TC-SPM115-AC02 | `e2e/spm115.spec.js` | Automated. An unsuitable venue, or one already booked for that time, is refused and the original booking stays approved. |
+| SPM-115 | Original booking remains readable | TC-SPM115-AC03 | `e2e/spm115.spec.js` | Automated. After a replacement is accepted, the original booking can still be opened and its status is cancelled. |
+| SPM-115 | Event details stay unchanged | TC-SPM115-AC04 | `e2e/spm115.spec.js` | Automated. The replacement uses the booking's existing time. The event's name, attendance, layout, times, and status are not written. |
+| SPM-115 | Recording a block leaves the event status unchanged | TC-SPM115-AC05 | `e2e/spm115.spec.js` | Automated. Venue Staff record the block. The event status stays the same, and the approved booking stays approved until a replacement is requested. |
 | SPM-64 | Shared conflict rule | TC-SPM64-AC01 | `e2e/spm64.spec.js` | Automated (search, suitability, approval); blocking, rescheduling and re-verification use it when SPM-9, SPM-87 and SPM-86 are built |
 | SPM-64 | Occupied window adds setup and turnaround | TC-SPM64-AC02 | `e2e/spm64.spec.js` | Automated |
 | SPM-64 | Confirmed bookings never overlap, also in the database | TC-SPM64-AC03 | `e2e/spm64.spec.js`; `services/venue-service/tests/integration/test_double_booking_mysql.py` | Automated |

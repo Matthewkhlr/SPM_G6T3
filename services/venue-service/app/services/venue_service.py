@@ -12,13 +12,17 @@ from app.dao.venue_dao import VenueDAO
 from app.dao.venue_unavailability_dao import VenueUnavailabilityDAO
 from app.models.venue_booking import VenueBooking
 from app.models.venue_info import VenueInfo
+from app.models.venue_unavailability import VenueUnavailability
 from app.schemas.venue import (
     BookingClashOut,
     ClashingBooking,
     EventFacts,
     HoldOut,
+    ReplacementRequest,
     SuitabilityOut,
     SuitabilityRequest,
+    UnavailabilityCreate,
+    UnavailabilityOut,
     VenueActivityLogOut,
     VenueBookingCreate,
     VenueBookingOut,
@@ -619,7 +623,7 @@ class VenueService(BaseService):
     def list_bookings(
         self, status: str | None = None, event_id: str | None = None, venue_id: str | None = None
     ) -> list[VenueBookingOut]:
-        return [_booking_to_out(row) for row in self.booking_dao.list(status, event_id, venue_id)]
+        return [self._present(row) for row in self.booking_dao.list(status, event_id, venue_id)]
 
     def public_summary(self, event_id: str) -> dict:
         """Approved booking's venue name and location, for attendees (SPM-91)."""
@@ -634,7 +638,139 @@ class VenueService(BaseService):
         }
 
     def get_booking(self, booking_id: str) -> VenueBookingOut:
-        return _booking_to_out(self._require_booking(booking_id))
+        return self._present(self._require_booking(booking_id))
+
+    def _present(self, row: VenueBooking) -> VenueBookingOut:
+        """An approved booking is affected when a block overlaps its occupied window."""
+        out = _booking_to_out(row)
+        if row.status == "approved" and self._block_overlaps(row):
+            return out.model_copy(update={"affectedByUnavailability": True})
+        return out
+
+    def _block_overlaps(self, row: VenueBooking) -> bool:
+        start, end = _occupied_window(row)
+        return bool(self.unavailability_dao.find_overlapping(row.venueId, start, end))
+
+    def record_unavailability(self, venue_id: str, data: UnavailabilityCreate, caller: dict) -> UnavailabilityOut:
+        """Save a block. Approved bookings that overlap it stay approved, and no event is read or changed."""
+        self._require_venue(venue_id)
+        starts_at, ends_at = suitability._utc(data.startsAt), suitability._utc(data.endsAt)
+        if ends_at <= starts_at:
+            raise HTTPException(status_code=422, detail="The end time must be after the start time.")
+        reason = data.reason.strip()
+        if not reason:
+            raise HTTPException(status_code=422, detail="Give a reason for this unavailability block.")
+        hits = [
+            row
+            for row in self.booking_dao.list("approved", None, venue_id)
+            if self._window_overlaps(row, starts_at, ends_at)
+        ]
+        if hits and not data.acknowledgeConflicts:
+            named = "; ".join(f"event {row.eventId}" for row in hits)
+            raise conflict(
+                "This block overlaps a confirmed booking and needs to be confirmed before it is recorded: "
+                f"{named}. The booking stays as it is until a replacement is requested."
+            )
+        row = VenueUnavailability(
+            unavailabilityId=str(uuid4()),
+            venueId=venue_id,
+            startsAt=starts_at,
+            endsAt=ends_at,
+            reason=reason,
+            createdBy=caller["userId"],
+            createdAt=datetime.utcnow(),
+        )
+        self.unavailability_dao.add(row)
+        self.db.commit()
+        self.db.refresh(row)
+        return UnavailabilityOut(
+            unavailabilityId=row.unavailabilityId,
+            venueId=row.venueId,
+            startsAt=row.startsAt,
+            endsAt=row.endsAt,
+            reason=row.reason,
+            createdBy=row.createdBy,
+            createdAt=row.createdAt,
+        )
+
+    def _window_overlaps(self, row: VenueBooking, starts_at: datetime, ends_at: datetime) -> bool:
+        window_start, window_end = _occupied_window(row)
+        return starts_at < window_end and ends_at > window_start
+
+    def request_replacement(
+        self, booking_id: str, data: ReplacementRequest, caller: dict, event: EventFacts
+    ) -> VenueBookingOut:
+        """Request another venue for one approved booking affected by a block.
+
+        The new venue is checked on its own. The original booking is cancelled only
+        after that check passes, and it stays readable. Nothing on the event is written.
+        """
+        if event.coordinatorId != caller["userId"]:
+            raise forbidden("Only the coordinator assigned to this event can request a replacement venue.")
+        if event.status not in PLANNING_STATUSES:
+            raise conflict(
+                "A venue can only be requested once the event has been approved for planning. "
+                f"This event is currently {event.status or 'not yet approved'}."
+            )
+        original = self._require_booking(booking_id)
+        if original.status != "approved":
+            raise conflict(f"Only an approved booking can be replaced. This booking is already {original.status}.")
+        if not self._block_overlaps(original):
+            raise conflict(
+                "This booking is not affected by a venue unavailability block, so it cannot be replaced."
+            )
+        live = self.booking_dao.find_live_for_event_venue(original.eventId, data.venueId)
+        if live:
+            article = "an" if live.status == "approved" else "a"
+            raise conflict(
+                f"This event already has {article} {live.status} booking for {self._venue_name(data.venueId)}. "
+                "Withdraw, reject, or cancel that booking before requesting this venue again."
+            )
+        check = self.check_suitability(
+            SuitabilityRequest(
+                eventId=original.eventId,
+                venueId=data.venueId,
+                startsAt=original.startsAt,
+                endsAt=original.endsAt,
+            ),
+            event,
+        )
+        failures = [reason.message for reason in check.reasons if reason.severity == "failure"]
+        warnings = [reason.message for reason in check.reasons if reason.severity == "warning"]
+        if failures:
+            raise conflict(
+                "This venue is not suitable for this event, so the replacement cannot be sent. " + " ".join(failures)
+            )
+        if warnings and not data.acknowledgeWarnings:
+            raise conflict(
+                "This venue has warnings. Please read them and confirm before sending the replacement. "
+                + " ".join(warnings)
+            )
+        venue = self._require_venue(data.venueId)
+        setup_from, turnaround_until = occupancy.occupied_window(
+            original.startsAt, original.endsAt, venue.setupMinutes, venue.turnaroundMinutes
+        )
+        created = VenueBooking(
+            bookingId=str(uuid4()),
+            venueId=data.venueId,
+            eventId=original.eventId,
+            requestedBy=caller["userId"],
+            status="pending",
+            startsAt=original.startsAt,
+            endsAt=original.endsAt,
+            setupStartsAt=setup_from,
+            teardownEndsAt=turnaround_until,
+            requirementsSnapshot=original.requirementsSnapshot,
+            eventSnapshot=_event_snapshot(event),
+            coordinatorNotes=data.coordinatorNotes,
+            warnings=warnings or [],
+            createdAt=datetime.utcnow(),
+        )
+        self.booking_dao.add(created)
+        original.status = "cancelled"
+        self.db.commit()
+        self.db.refresh(created)
+        return _booking_to_out(created)
 
     def flag_for_reverification(self, event_id: str, reason: str) -> list[VenueBookingOut]:
         """SPM-71 AC4: mark the event's confirmed bookings as needing

@@ -18,100 +18,107 @@
       </p>
       <p v-if="editingEventId" class="draft-banner">Editing a saved draft.</p>
 
-      <label for="eventName">Event name <span class="req">*</span></label>
-      <input
-        id="eventName"
-        v-model.trim="form.eventName"
-        type="text"
-        placeholder="e.g. Q3 Partner Summit"
-      />
-      <p v-if="submitted && !form.eventName" class="field-error">Event name is required.</p>
+      <div class="form-grid">
+        <div class="form-col">
+          <label for="eventName">Event name <span class="req">*</span></label>
+          <input
+            id="eventName"
+            v-model.trim="form.eventName"
+            type="text"
+            placeholder="e.g. Q3 Partner Summit"
+          />
+          <p v-if="submitted && !form.eventName" class="field-error">Event name is required.</p>
 
-      <div class="row">
-        <div class="col">
-          <label for="proposedStartAt">Starts <span class="req">*</span></label>
-          <input id="proposedStartAt" v-model="form.proposedStartAt" type="datetime-local" />
-          <p v-if="submitted && !form.proposedStartAt" class="field-error">Start date is required.</p>
-        </div>
-        <div class="col">
-          <label for="proposedEndAt">Ends <span class="req">*</span></label>
-          <input id="proposedEndAt" v-model="form.proposedEndAt" type="datetime-local" />
-          <p v-if="submitted && !form.proposedEndAt" class="field-error">End date is required.</p>
-          <p v-else-if="submitted && endBeforeStart" class="field-error">
-            End must be after the start.
-          </p>
-        </div>
-      </div>
+          <div class="row">
+            <div class="col">
+              <label for="proposedStartAt">Starts <span class="req">*</span></label>
+              <input id="proposedStartAt" v-model="form.proposedStartAt" type="datetime-local" />
+              <p v-if="submitted && !form.proposedStartAt" class="field-error">Start date is required.</p>
+            </div>
+            <div class="col">
+              <label for="proposedEndAt">Ends <span class="req">*</span></label>
+              <input id="proposedEndAt" v-model="form.proposedEndAt" type="datetime-local" />
+              <p v-if="submitted && !form.proposedEndAt" class="field-error">End date is required.</p>
+              <p v-else-if="submitted && endBeforeStart" class="field-error">
+                End must be after the start.
+              </p>
+            </div>
+          </div>
 
-      <div class="row">
-        <div class="col">
-          <label for="expectedAttendance">Expected attendance <span class="req">*</span></label>
-          <input id="expectedAttendance" v-model.number="form.expectedAttendance" type="number" min="0" />
-          <p v-if="submitted && !isValidAttendance" class="field-error">
-            Enter an attendance of 0 or more.
-          </p>
+          <div class="row">
+            <div class="col">
+              <label for="expectedAttendance">Expected attendance <span class="req">*</span></label>
+              <input id="expectedAttendance" v-model.number="form.expectedAttendance" type="number" min="0" />
+              <p v-if="submitted && !isValidAttendance" class="field-error">
+                Enter an attendance of 0 or more.
+              </p>
+            </div>
+            <div class="col">
+              <label for="category">Category</label>
+              <select id="category" v-model="form.category">
+                <option :value="null">Not specified</option>
+                <option v-for="option in categories" :key="option" :value="option">{{ option }}</option>
+              </select>
+            </div>
+          </div>
+
+          <label for="purpose">Purpose</label>
+          <input id="purpose" v-model.trim="form.purpose" type="text" placeholder="What is this event for?" />
+
+          <label for="description">Description</label>
+          <textarea
+            id="description"
+            v-model.trim="form.description"
+            rows="5"
+            placeholder="Any extra detail a coordinator should know"
+          ></textarea>
         </div>
-        <div class="col">
-          <label for="category">Category</label>
-          <select id="category" v-model="form.category">
-            <option :value="null">Not specified</option>
-            <option v-for="option in categories" :key="option" :value="option">{{ option }}</option>
+
+        <div class="form-col">
+          <label for="layoutPreference">Room layout</label>
+          <select id="layoutPreference" v-model="form.layoutPreference" data-testid="create-layout-preference">
+            <option v-for="layout in layouts" :key="layout" :value="layout">{{ layout }}</option>
           </select>
+
+          <label for="preferredLocation">Preferred location or region</label>
+          <input id="preferredLocation" v-model.trim="form.preferredLocation" type="text" placeholder="e.g. HarbourFront" />
+
+          <label for="venueRequirements">Venue requirements</label>
+          <input
+            id="venueRequirements"
+            v-model.trim="form.venueRequirements"
+            type="text"
+            placeholder="e.g. Large hall with a stage"
+          />
+
+          <fieldset class="checks">
+            <legend>Facilities</legend>
+            <label v-for="facility in facilities" :key="facility">
+              <input v-model="form.requiredFacilities" type="checkbox" :value="facility" />
+              {{ facility }}
+            </label>
+          </fieldset>
+
+          <fieldset class="checks">
+            <legend>Accessibility</legend>
+            <label v-for="need in accessibility" :key="need">
+              <input v-model="form.accessibilityNeeds" type="checkbox" :value="need" />
+              {{ need }}
+            </label>
+          </fieldset>
+
+          <label for="accessibilityNote">Accessibility note</label>
+          <input id="accessibilityNote" v-model.trim="form.accessibilityNote" type="text" />
+
+          <label for="equipmentRequirements">Equipment notes</label>
+          <input
+            id="equipmentRequirements"
+            v-model.trim="form.equipmentRequirements"
+            type="text"
+            placeholder="e.g. Projector and PA system"
+          />
         </div>
       </div>
-
-      <label for="purpose">Purpose</label>
-      <input id="purpose" v-model.trim="form.purpose" type="text" placeholder="What is this event for?" />
-
-      <label for="description">Description</label>
-      <textarea
-        id="description"
-        v-model.trim="form.description"
-        rows="3"
-        placeholder="Any extra detail a coordinator should know"
-      ></textarea>
-
-      <label for="venueRequirements">Venue requirements</label>
-      <input
-        id="venueRequirements"
-        v-model.trim="form.venueRequirements"
-        type="text"
-        placeholder="e.g. Large hall with a stage"
-      />
-
-      <label for="layoutPreference">Room layout</label>
-      <select id="layoutPreference" v-model="form.layoutPreference" data-testid="create-layout-preference">
-        <option v-for="layout in layouts" :key="layout" :value="layout">{{ layout }}</option>
-      </select>
-
-      <label for="preferredLocation">Preferred location or region</label>
-      <input id="preferredLocation" v-model.trim="form.preferredLocation" type="text" placeholder="e.g. HarbourFront" />
-
-      <fieldset class="checks">
-        <legend>Facilities</legend>
-        <label v-for="facility in facilities" :key="facility">
-          <input v-model="form.requiredFacilities" type="checkbox" :value="facility" />
-          {{ facility }}
-        </label>
-      </fieldset>
-
-      <fieldset class="checks">
-        <legend>Accessibility</legend>
-        <label v-for="need in accessibility" :key="need">
-          <input v-model="form.accessibilityNeeds" type="checkbox" :value="need" />
-          {{ need }}
-        </label>
-      </fieldset>
-      <label for="accessibilityNote">Accessibility note</label>
-      <input id="accessibilityNote" v-model.trim="form.accessibilityNote" type="text" />
-
-      <label for="equipmentRequirements">Equipment notes</label>
-      <input
-        id="equipmentRequirements"
-        v-model.trim="form.equipmentRequirements"
-        type="text"
-        placeholder="e.g. Projector and PA system"
-      />
 
       <p v-if="error" class="form-error">{{ error }}</p>
       <p v-if="draftError" class="form-error">{{ draftError }}</p>
@@ -173,6 +180,33 @@ function toInputDatetime(iso) {
 // backend's Optional[datetime] draft schema.
 function toPayloadDatetime(value) {
   return value || null
+}
+
+const fieldLabels = {
+  eventName: 'Event name',
+  proposedStartAt: 'Starts',
+  proposedEndAt: 'Ends',
+  expectedAttendance: 'Expected attendance',
+  purpose: 'Purpose',
+  description: 'Description',
+  category: 'Category',
+  venueRequirements: 'Venue requirements',
+  equipmentRequirements: 'Equipment notes',
+  layoutPreference: 'Room layout',
+  preferredLocation: 'Preferred location',
+  requiredFacilities: 'Facilities',
+  accessibilityNeeds: 'Accessibility',
+  accessibilityNote: 'Accessibility note'
+}
+
+function errorText(detail, fallback) {
+  if (typeof detail === 'string') return detail
+  if (!Array.isArray(detail)) return fallback
+  const item = detail.find((entry) => entry?.msg)
+  if (!item) return fallback
+  const field = (item.loc || []).filter((part) => part !== 'body').at(-1)
+  const label = fieldLabels[field]
+  return label ? `${label}: ${item.msg}` : item.msg
 }
 
 const form = reactive(blankForm())
@@ -281,8 +315,7 @@ async function saveAsDraft() {
     markSaved()
     draftSavedMessage.value = 'Draft saved.'
   } catch (err) {
-    const detail = err.response?.data?.detail
-    draftError.value = typeof detail === 'string' ? detail : 'Could not save the draft. Please try again.'
+    draftError.value = errorText(err.response?.data?.detail, 'Could not save the draft. Please try again.')
   } finally {
     draftSaving.value = false
   }
@@ -303,11 +336,7 @@ async function submit() {
     created.value = data
     markSaved()
   } catch (err) {
-    const detail = err.response?.data?.detail
-    error.value =
-      typeof detail === 'string'
-        ? detail
-        : 'Could not create the event request. Please try again.'
+    error.value = errorText(err.response?.data?.detail, 'Could not create the event request. Please try again.')
   } finally {
     saving.value = false
   }
@@ -343,7 +372,14 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.create-event { max-width: 620px; }
+.create-event { width: 100%; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 8px 40px;
+  align-items: start;
+}
 
 .form-card,
 .result-card {
@@ -355,10 +391,34 @@ onUnmounted(() => {
   padding: 26px 28px;
 }
 
-.form-intro { font-size: 13px; line-height: 1.7; color: var(--muted); margin: 0 0 14px; }
-.checks { border: 0; padding: 0; margin: 12px 0 0; }
-.checks label { display: flex; gap: 8px; align-items: center; font-size: 13px; }
-.checks input { width: auto; }
+.form-intro { font-size: 13px; line-height: 1.7; color: var(--muted); margin: 0 0 18px; }
+.checks {
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 12px 14px 8px;
+  margin: 0 0 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.checks legend {
+  padding: 0 6px;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.checks label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--body);
+}
+.checks input { width: auto; height: auto; margin: 0; }
 .draft-banner {
   font-size: 12px;
   color: var(--halo);
@@ -401,7 +461,7 @@ input:focus, select:focus, textarea:focus {
   border-color: rgba(167, 139, 250, .6);
   box-shadow: 0 0 0 3px rgba(124, 77, 255, .16);
 }
-select option { background: #150A30; color: var(--text); }
+select option { background: #1A1030; color: #F3EEFF; }
 
 .row { display: flex; gap: 16px; }
 .col { flex: 1; min-width: 0; }
@@ -442,6 +502,10 @@ select option { background: #150A30; color: var(--text); }
   border: 1px solid rgba(167, 139, 250, .3);
   border-radius: 999px;
   padding: 3px 10px;
+}
+
+@media (max-width: 900px) {
+  .form-grid { grid-template-columns: 1fr; gap: 0; }
 }
 
 @media (max-width: 560px) {

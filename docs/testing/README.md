@@ -58,6 +58,7 @@ npm run test:spm108
 npm run test:spm112
 npm run test:spm122
 npm run test:spm116
+npm run test:spm115
 npm run test:spm05
 npm run test:spm15
 npm run test:spm65
@@ -139,6 +140,7 @@ Failures: `test-results/`. HTML report: `playwright-report/`.
 | SPM-112 | TC-SPM112-AC01–AC04 (and AC02b) | `e2e/spm112.spec.js` |
 | SPM-122 | TC-SPM122-AC01–AC04 (and AC01b) | `e2e/spm122.spec.js` |
 | SPM-116 | TC-SPM116-AC01–AC06 (and AC01b, AC01c, AC02b) | `e2e/spm116.spec.js` |
+| SPM-115 | TC-SPM115-AC01–AC05 | `e2e/spm115.spec.js` |
 | SPM-5 | TC-SPM05-AC01–AC09 | `e2e/spm05.spec.js` |
 | SPM-15 | TC-SPM15-AC01–AC09 | `e2e/spm15.spec.js` |
 | SPM-65 | TC-SPM65-AC01–AC07 | `e2e/spm65.spec.js` |

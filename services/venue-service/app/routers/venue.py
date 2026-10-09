@@ -18,6 +18,9 @@ from app.schemas.venue import (
     SuitabilityOut,
     SuitabilityRequest,
     VenueActivityLogOut,
+    ReplacementRequest,
+    UnavailabilityCreate,
+    UnavailabilityOut,
     VenueBookingCreate,
     VenueBookingDecision,
     VenueArrangementOut,
@@ -286,6 +289,29 @@ def retire_venue(
     return service.retire_venue(venue_id, caller, confirm)
 
 
+@router.post(
+    "/{venue_id}/unavailability",
+    response_model=UnavailabilityOut,
+    status_code=201,
+    summary="Record a venue unavailability block",
+    description=(
+        "Venue Staff only. Saves the block and does not read or change the event. "
+        "An approved booking whose occupied window overlaps the block stays approved until the "
+        "assigned coordinator requests a replacement. That overlap must be confirmed with "
+        "`acknowledgeConflicts`."
+    ),
+    responses=error_responses(403, 404, 409, 422, 503),
+)
+def record_unavailability(
+    body: UnavailabilityCreate,
+    venue_id: str = Path(..., description="Venue id, e.g. `v1`."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"venue"})
+    return service.record_unavailability(venue_id, body, caller)
+
+
 @router.get(
     "/{venue_id}/activity-log",
     response_model=list[VenueActivityLogOut],
@@ -428,6 +454,35 @@ def cancel_booking(
     # SPM-93 AC5: whoever cancelled is not told about their own action.
     notify_venue_staff(*service.venue_staff_notice(booking, "cancelled"), authorization, skip_user_id=caller["userId"])
     return booking
+
+
+@router.post(
+    "/bookings/{booking_id}/replacement",
+    response_model=VenueBookingOut,
+    status_code=201,
+    summary="Request a replacement venue",
+    description=(
+        "The event's assigned coordinator, for an approved booking affected by an unavailability block. "
+        "The new venue is checked on its own for suitability, availability, and conflicts, using the "
+        "booking's existing time and the event's current details. The event is not changed. "
+        "When the request is accepted, the original booking is cancelled and stays readable. "
+        "The event's other bookings stay. Venue Staff are notified."
+    ),
+    responses=error_responses(403, 404, 409, 503),
+)
+def request_replacement(
+    body: ReplacementRequest,
+    booking_id: str = Path(..., description="Approved booking affected by an unavailability block."),
+    authorization: str | None = Depends(forwarded_bearer),
+    service: VenueService = Depends(get_venue_service),
+):
+    caller = resolve_caller(authorization, settings.user_service_url, allowed_roles={"coordinator"})
+    original = service.get_booking(booking_id)
+    event = fetch_event_facts(original.eventId, authorization)
+    created = service.request_replacement(booking_id, body, caller, event)
+    notify_venue_staff(*service.venue_staff_notice(created, "requested"), authorization)
+    notify_venue_staff(*service.venue_staff_notice(service.get_booking(booking_id), "cancelled"), authorization)
+    return created
 
 
 @router.post(
